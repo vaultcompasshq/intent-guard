@@ -4,18 +4,25 @@ All notable changes to Conductor will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.0.7] - 2026-07-13
+## [Unreleased]
+
+## [1.1.0] - 2026-07-29
+
+### Added
+
+- **Change Budget:** an optional `budget` block on the Intent Contract that the
+  gate enforces deterministically from changed file paths — no model, no
+  network. Fields: `allowed_paths` (work must stay inside these globs),
+  `protected_paths` (never touch; hard_block), `max_files` (cap on changed
+  files), and `allow_new_dependencies` (flag manifest/lockfile edits). A touch
+  of a protected path hard_blocks; other breaches soft_block. `conductor check`
+  and `conductor report` surface budget violations. See
+  [examples/intent-contracts/retry-with-budget.yaml](./examples/intent-contracts/retry-with-budget.yaml).
 
 ### Changed
 
-- **Public hygiene pass:** hash-only portfolio guard; generic fixtures and doc
-  names (`downstream-app-*`, `stub-detection-*`); remove internal jargon from
-  tests; trim decorative source comments; `.cursor/` gitignored.
-- **Portfolio guard:** SHA-256 hash blocklist only (vault-guard pattern); slim
-  maintainer Cursor rule and CONTRIBUTING prose.
-- **Tests:** longer timeouts on spawn-heavy doctor, report, and skill CLI cases.
-
-## [Unreleased]
+- **Docs hygiene:** README test count corrected; CHANGELOG version ordering
+  restored to descending order.
 
 ## [1.0.8] - 2026-07-16
 
@@ -34,6 +41,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **Constraints:** the constraint loader no longer treats descriptive prose
   using the bare word "require" (e.g. progress notes like "N tests require
   X") as normative rule language.
+
+## [1.0.7] - 2026-07-13
+
+### Changed
+
+- **Public hygiene pass:** hash-only portfolio guard; generic fixtures and doc
+  names (`downstream-app-*`, `stub-detection-*`); remove internal jargon from
+  tests; trim decorative source comments; `.cursor/` gitignored.
+- **Portfolio guard:** SHA-256 hash blocklist only (vault-guard pattern); slim
+  maintainer Cursor rule and CONTRIBUTING prose.
+- **Tests:** longer timeouts on spawn-heavy doctor, report, and skill CLI cases.
 
 ## [1.0.6] - 2026-07-13
 

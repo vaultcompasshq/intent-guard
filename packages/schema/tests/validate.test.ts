@@ -91,6 +91,36 @@ describe("validateIntentContract", () => {
     expect(result.valid).toBe(false);
   });
 
+  it("accepts an optional change budget", () => {
+    const result = validateIntentContract({
+      ...validContract,
+      budget: {
+        allowed_paths: ["packages/core/**"],
+        protected_paths: ["**/legacy/**"],
+        max_files: 10,
+        allow_new_dependencies: false,
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects an unknown budget field", () => {
+    const result = validateIntentContract({
+      ...validContract,
+      budget: { max_files: 10, bogus: true },
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it("rejects a non-integer max_files", () => {
+    const result = validateIntentContract({
+      ...validContract,
+      budget: { max_files: 1.5 },
+    });
+    expect(result.valid).toBe(false);
+  });
+
   it("rejects a malformed correction_log id", () => {
     const result = validateIntentContract({
       ...validContract,

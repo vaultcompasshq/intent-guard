@@ -11,7 +11,7 @@ of truth for "where are we and what's next." For granular tasks see
 
 - **Branch model:** all work lands on `main` **via PR** (never push to main). CI
   must be green before merge. See [[always-pr-to-main]] convention.
-- **Tests:** 150 passing (schema 7, core 91, skill 30, cli 11, examples/integrations 11).
+- **Tests:** 170 passing (schema 10, core 107, skill 30, cli 11, examples/integrations 12).
   Verify with `pnpm install && pnpm test` (test builds first).
 - **CI:** `.github/workflows/ci.yml` — install → build → typecheck →
   portfolio-name guard → test → release smoke, Node 22.
@@ -90,12 +90,25 @@ of truth for "where are we and what's next." For granular tasks see
     validation (dropped scope clauses, garbled prohibitions, AC bleed into
     out_of_scope, bare-reference and overbroad "require" rule matches)
     ([#46](https://github.com/vaultcompasshq/conductor/pull/46)).
+29. **v1.1.0** — **Change Budget:** optional `budget` block (allowed/protected
+    paths, max files, dependency guard) enforced deterministically from changed
+    file paths, offline. Answers the field's most-cited drift mechanism
+    ("change budget outside the model") and hardens the path-only gate. Plus
+    docs hygiene (README test count, CHANGELOG ordering). Design:
+    [plans/2026-07-28-change-budget-design.md](./plans/2026-07-28-change-budget-design.md).
 
 ## What's next (priority order)
 
-1. **Phase 3b (remaining)** — LLM-assisted rule normalization (opt-in); further
+1. **Change Budget follow-ups** — a `conductor budget set` CLI to author the
+   budget without hand-editing YAML; consider auto-suggesting `allowed_paths`
+   from the frozen contract's touched areas.
+2. **Semantic / content-level drift (opt-in)** — the remaining gap: the gate
+   still reasons over paths, not diff content. An opt-in classifier (or a
+   rule-based diff-content signal extractor) would catch out-of-scope logic
+   added inside in-scope files, while keeping the offline path-only default.
+3. **Phase 3b (remaining)** — LLM-assisted rule normalization (opt-in); further
    correction decay tuning if brief caps prove insufficient in dogfood.
-2. **Integration hardening** — Codex/Claude Code hook samples in live sessions.
+4. **Integration hardening** — Codex/Claude Code hook samples in live sessions.
 
 See [TODO.md](./TODO.md) for the file-level checklist of each.
 
@@ -128,5 +141,5 @@ Read docs/NEXT.md, docs/TODO.md, and AGENTS.md.
 All work lands on main via PR (never push to main); CI must be green.
 Pick the top unstarted item in TODO.md unless I say otherwise.
 Use writing-plans before implementing a multi-step task.
-Verify: pnpm install && pnpm test && pnpm release:smoke  (150 passing baseline).
+Verify: pnpm install && pnpm test && pnpm release:smoke  (170 passing baseline).
 ```

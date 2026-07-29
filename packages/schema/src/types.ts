@@ -44,6 +44,17 @@ export interface Approval {
   method?: "interactive" | "explicit-flag" | "forced";
 }
 
+export interface ChangeBudget {
+  /** Work must stay within these globs; a changed path outside them is drift. */
+  allowed_paths?: string[];
+  /** Globs that must never be touched. */
+  protected_paths?: string[];
+  /** Maximum number of changed files. */
+  max_files?: number;
+  /** When false, editing a manifest/lockfile is flagged as an unapproved dependency change. */
+  allow_new_dependencies?: boolean;
+}
+
 export interface CorrectionLogEntry {
   id: string;
   timestamp: string;
@@ -72,6 +83,7 @@ export interface IntentContract {
   };
   pivot_log: PivotLogEntry[];
   correction_log?: CorrectionLogEntry[];
+  budget?: ChangeBudget;
   metadata?: Record<string, string>;
 }
 
