@@ -30,12 +30,16 @@ jobs:
         shell: bash
         run: |
           git fetch origin "${{ github.base_ref }}" --depth=1
-          paths="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" | paste -sd, -)"
+          paths="$(git -c core.quotePath=false diff --name-only "origin/${{ github.base_ref }}...HEAD" | paste -sd, -)"
           echo "paths=${paths}" >> "$GITHUB_OUTPUT"
 
-      - name: Check intent drift
+      # `check` is the full gate: it scores drift AND enforces the contract's
+      # change budget (allowed/protected paths, max files, dependency guard),
+      # matching what the pre-commit hook runs. `drift` is score-only and does
+      # not enforce the budget, so use `check` in CI.
+      # Add `--no-require-frozen` if the branch may not carry a frozen contract.
+      - name: Check intent + budget
         run: |
-          pnpm dlx @vaultcompass/conductor-cli@latest drift \
-            --ci \
-            --contract .conductor/intent-contract.yaml \
+          pnpm dlx @vaultcompass/conductor-cli@latest check \
+            --project . \
             --paths "${{ steps.changed.outputs.paths }}"

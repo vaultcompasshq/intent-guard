@@ -121,6 +121,19 @@ describe("validateIntentContract", () => {
     expect(result.valid).toBe(false);
   });
 
+  it("rejects max_files below 1", () => {
+    const zero = validateIntentContract({
+      ...validContract,
+      budget: { max_files: 0 },
+    });
+    expect(zero.valid).toBe(false);
+    const negative = validateIntentContract({
+      ...validContract,
+      budget: { max_files: -3 },
+    });
+    expect(negative.valid).toBe(false);
+  });
+
   it("rejects a malformed correction_log id", () => {
     const result = validateIntentContract({
       ...validContract,

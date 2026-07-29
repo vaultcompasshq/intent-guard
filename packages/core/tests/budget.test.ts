@@ -132,6 +132,16 @@ describe("evaluateBudget", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("blocks a protected path even when the change is a deletion", () => {
+    // git diff --cached --name-only lists deleted files too, so a deleted
+    // protected file still appears as a changed path and must still block.
+    const result = evaluateBudget(
+      withBudget({ protected_paths: ["config/secrets.enc"] }),
+      ["config/secrets.enc"],
+    );
+    expect(result.action).toBe("hard_block");
+  });
+
   it("escalates to hard_block when protected and soft rules both fire", () => {
     const result = evaluateBudget(
       withBudget({ protected_paths: ["**/legacy/**"], max_files: 1 }),

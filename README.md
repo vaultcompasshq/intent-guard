@@ -26,7 +26,7 @@ User conversation
 **Version:** `1.1.0` — stable CLI/API on npm (`@vaultcompass/conductor-*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md) — July 2026  
 **Repository:** https://github.com/vaultcompasshq/conductor (public, MIT)
 
-**Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli` · **175 tests** (see [docs/NEXT.md](./docs/NEXT.md))
+**Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli` · **180 tests** (see [docs/NEXT.md](./docs/NEXT.md))
 
 **Maintainers:** [docs/NEXT.md](./docs/NEXT.md) · [docs/TODO.md](./docs/TODO.md) · [docs/cli-reference.md](./docs/cli-reference.md)
 
@@ -133,7 +133,7 @@ pnpm conductor -- rules audit --project .
 
 ```bash
 pnpm install
-pnpm test      # 175 tests (builds first, then schema + core + skill + cli + examples/integrations)
+pnpm test      # 180 tests (builds first, then schema + core + skill + cli + examples/integrations)
 pnpm dogfood:cursor-hooks   # Cursor rule + hook install pass/fail fixture
 pnpm dogfood:claude-hooks   # Claude Code SessionStart/Stop lifecycle fixture
 pnpm build

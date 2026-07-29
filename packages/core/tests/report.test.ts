@@ -52,6 +52,25 @@ describe("conductor report", () => {
     expect(markdown).toContain("acknowledged");
   });
 
+  it("surfaces change budget violations in the report", () => {
+    const dir = tmpProject();
+    writeContract(dir, {
+      ...frozenContract(),
+      budget: { protected_paths: ["**/legacy/**"] },
+    });
+
+    const report = buildConductorReport(dir, {
+      signals: { changedPaths: ["src/legacy/error-format.ts"] },
+    });
+    const markdown = renderConductorReportMarkdown(report);
+
+    expect(report.status).toBe("blocked");
+    expect(report.exitCode).toBe(1);
+    expect(report.gate.budget?.action).toBe("hard_block");
+    expect(markdown).toContain("## Change budget");
+    expect(markdown).toContain("protected");
+  });
+
   it("blocks and explains out-of-scope package drift", () => {
     const dir = tmpProject();
     writeContract(dir, frozenContract());
