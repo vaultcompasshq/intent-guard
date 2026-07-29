@@ -54,7 +54,7 @@ function parseArgs(argv: string[]) {
 
 function stagedPaths(projectRoot: string): string[] {
   try {
-    const out = execFileSync("git", ["diff", "--cached", "--name-only"], {
+    const out = execFileSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
       cwd: projectRoot,
       encoding: "utf8",
     });

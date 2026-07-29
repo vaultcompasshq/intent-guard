@@ -287,6 +287,47 @@ describe("conductor-check (enforcement gate)", () => {
     expect(out.status).toBe("ok");
   });
 
+  it("enforces a change budget through the CLI (protected path blocks)", async () => {
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".conductor", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") +
+        '\nbudget:\n  protected_paths:\n    - "**/legacy/**"\n',
+    );
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--paths", "src/legacy/error-format.ts",
+      "--json",
+    ]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("blocked");
+    expect(out.budget.action).toBe("hard_block");
+  });
+
+  it("passes through the CLI when changes stay within the budget", async () => {
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".conductor", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") + "\nbudget:\n  max_files: 5\n",
+    );
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--paths", "README.md",
+      "--json",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("ok");
+    expect(out.budget.ok).toBe(true);
+  });
+
   it("surfaces previous-contract drift as informational JSON", async () => {
     const dir = tmpProject();
     await run("extract-cli.js", [

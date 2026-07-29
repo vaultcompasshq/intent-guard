@@ -58,9 +58,11 @@ function parseArgs(argv: string[]) {
 
 function stagedPaths(projectRoot: string): string[] {
   try {
+    // core.quotePath=false keeps unicode/space paths literal instead of
+    // octal-escaped and quoted, so budget globs match the real path.
     const out = execFileSync(
       "git",
-      ["diff", "--cached", "--name-only"],
+      ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
       { cwd: projectRoot, encoding: "utf8" },
     );
     return out.split("\n").map((l) => l.trim()).filter(Boolean);

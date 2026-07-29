@@ -11,7 +11,7 @@ of truth for "where are we and what's next." For granular tasks see
 
 - **Branch model:** all work lands on `main` **via PR** (never push to main). CI
   must be green before merge. See [[always-pr-to-main]] convention.
-- **Tests:** 175 passing (schema 10, core 112, skill 30, cli 11, examples/integrations 12).
+- **Tests:** 180 passing (schema 11, core 114, skill 32, cli 11, examples/integrations 12).
   Verify with `pnpm install && pnpm test` (test builds first). Also
   `pnpm dogfood:cursor-hooks` and `pnpm dogfood:claude-hooks` for host
   integration fixtures.

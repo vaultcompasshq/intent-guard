@@ -19,11 +19,17 @@ range. The sample uses changed files from the pull request base and passes them
 to:
 
 ```bash
-conductor drift --ci --contract .conductor/intent-contract.yaml --paths "$CHANGED_PATHS"
+conductor check --project . --paths "$CHANGED_PATHS"
 ```
 
-`--ci` preserves the normal JSON output and exits `1` when the drift scorer
-returns `block: true`.
+`conductor check` is the full gate: it scores drift and enforces the contract's
+change budget (allowed/protected paths, max files, dependency guard), so CI
+blocks the same work the pre-commit hook does. It exits `1` when the gate
+blocks. Add `--no-require-frozen` if a branch may not carry a frozen contract.
+
+Note: `conductor drift --ci` is a lower-level, score-only command. It does not
+enforce the change budget, so prefer `check` in CI to keep local and CI
+enforcement identical.
 
 For Conductor plus vault-guard, copy
 [conductor-vault-guard-ci.yml.sample](./conductor-vault-guard-ci.yml.sample) to:
@@ -32,7 +38,7 @@ For Conductor plus vault-guard, copy
 .github/workflows/conductor-vault-guard.yml
 ```
 
-That workflow runs the same drift check, then runs:
+That workflow runs the same gate check, then runs:
 
 ```bash
 npx --yes @vaultcompass/vault-guard@latest -- scan . --format text

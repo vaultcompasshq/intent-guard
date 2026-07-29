@@ -140,6 +140,20 @@ so any manifest edit flags. Budget violations appear in `conductor check`
 reasons and in the `conductor report` "Change budget" section. See
 [examples/intent-contracts/retry-with-budget.yaml](../examples/intent-contracts/retry-with-budget.yaml).
 
+Notes:
+
+- The budget is enforced by `conductor check` and `conductor report` (the gate).
+  `conductor drift` is a score-only command and does not enforce the budget, so
+  wire CI to `check`/`report` to match the pre-commit hook.
+- Globs are case-sensitive, matching git's case-sensitive path tracking. On a
+  case-insensitive filesystem a `Src` glob still will not match a staged
+  `src/...` path.
+- Changed paths come from git, which lists deleted and renamed files, so a
+  deleted protected file still blocks.
+- The budget is evaluated against the current diff only. Cross-session
+  comparison (`--previous-contract`) scores drift but does not re-check the
+  budget.
+
 ## conductor report / conductor-report
 
 Emit a reviewer-friendly handoff report for PRs, CI logs, or agent resumes.
