@@ -4,7 +4,15 @@
   "type": "module",
   "description": "Unified Conductor CLI for intent contracts, drift checks, and session continuity",
   "license": "MIT",
-  "keywords": ["conductor", "cli", "intent", "drift", "cursor", "claude", "ai"],
+  "keywords": [
+    "conductor",
+    "cli",
+    "intent",
+    "drift",
+    "cursor",
+    "claude",
+    "ai"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/vaultcompasshq/conductor.git",

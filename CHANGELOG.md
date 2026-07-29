@@ -25,6 +25,51 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Docs hygiene: corrected test count and restored the CHANGELOG to descending
   version order.
 
+## [1.0.10] - 2026-07-21
+
+### Added
+
+- **`pnpm dogfood:claude-hooks`** — repeatable Claude Code lifecycle fixture
+  (settings sample + SessionStart brief + Stop-check block/pass + shared Git
+  gate). Validation note:
+  [docs/validation/claude-hook-dogfood-2026-07-21.md](./docs/validation/claude-hook-dogfood-2026-07-21.md).
+
+### Fixed
+
+- **`integrations/hooks/conductor-lib.sh` path CSV on macOS.**
+  `conductor_changed_paths_csv` used `paste <<<`, which BSD paste rejects;
+  it now pipes to `paste -sd, -` so Stop/Session hooks gather staged paths
+  correctly on macOS.
+- **Claude Code Stop hard-block:** `conductor-stop-check.sh` exits **2** when
+  the gate blocks (or `conductor-check` is missing). Claude Code treats exit 1
+  as a non-blocking Stop error; exit 2 prevents ending the turn. Git
+  pre-commit still uses `conductor-check` exit 1.
+
+## [1.0.9] - 2026-07-21
+
+### Added
+
+- **`pnpm dogfood:cursor-hooks`** — repeatable Cursor integration fixture
+  (project rule + `hook install` + out-of-scope block / in-scope commit).
+  Validation note: [docs/validation/cursor-hook-dogfood-2026-07-21.md](./docs/validation/cursor-hook-dogfood-2026-07-21.md).
+
+### Fixed
+
+- **`conductor hook install` respects machine-wide `core.hooksPath`.** When the
+  configured hooks directory is outside the repo (common with global
+  vault-guard installs), install sets local `core.hooksPath=.git/hooks` and
+  writes the Conductor hook there instead of a no-op install into `.git/hooks`
+  that Git never runs. In-repo paths such as `.githooks` are unchanged.
+
+### Changed
+
+- **Messaging:** README leads with approved Intent Contract + drift gate;
+  status line tracks the current 1.0.x release.
+- **Cursor / Claude Code integration docs** point at `hook install` and the
+  dogfood validation note; clarify that project/lifecycle rules are advisory.
+- **Prompt coach:** document the public-SaaS exemplar list used by
+  `product_stack` (not a portfolio catalog).
+
 ## [1.0.8] - 2026-07-16
 
 ### Fixed

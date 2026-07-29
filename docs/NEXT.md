@@ -1,6 +1,6 @@
 # Next - Maintainer Status
 
-**Updated:** 2026-07-16
+**Updated:** 2026-07-21
 **Read this first when resuming work.** It is the single source
 of truth for "where are we and what's next." For granular tasks see
 [TODO.md](./TODO.md); for command usage see [cli-reference.md](./cli-reference.md).
@@ -11,8 +11,10 @@ of truth for "where are we and what's next." For granular tasks see
 
 - **Branch model:** all work lands on `main` **via PR** (never push to main). CI
   must be green before merge. See [[always-pr-to-main]] convention.
-- **Tests:** 173 passing (schema 10, core 110, skill 30, cli 11, examples/integrations 12).
-  Verify with `pnpm install && pnpm test` (test builds first).
+- **Tests:** 175 passing (schema 10, core 112, skill 30, cli 11, examples/integrations 12).
+  Verify with `pnpm install && pnpm test` (test builds first). Also
+  `pnpm dogfood:cursor-hooks` and `pnpm dogfood:claude-hooks` for host
+  integration fixtures.
 - **CI:** `.github/workflows/ci.yml` — install → build → typecheck →
   portfolio-name guard → test → release smoke, Node 22.
 
@@ -90,7 +92,15 @@ of truth for "where are we and what's next." For granular tasks see
     validation (dropped scope clauses, garbled prohibitions, AC bleed into
     out_of_scope, bare-reference and overbroad "require" rule matches)
     ([#46](https://github.com/vaultcompasshq/conductor/pull/46)).
-29. **v1.1.0**: Change Budget. Optional `budget` block (allowed/protected paths,
+29. **v1.0.9** — Cursor hook dogfood (`pnpm dogfood:cursor-hooks`);
+    `hook install` localizes machine-wide `core.hooksPath`; README leads with
+    approved contract + drift; no frozen root `.conductor/` contract on `main`
+    ([cursor-hook-dogfood-2026-07-21.md](./validation/cursor-hook-dogfood-2026-07-21.md)).
+30. **v1.0.10** — Claude Code lifecycle dogfood (`pnpm dogfood:claude-hooks`);
+    macOS fix for hook path CSV (`paste -sd, -`); Stop script exits **2** on
+    block (Claude Code hard-block semantics);
+    ([claude-hook-dogfood-2026-07-21.md](./validation/claude-hook-dogfood-2026-07-21.md)).
+31. **v1.1.0**: Change Budget. Optional `budget` block (allowed/protected paths,
     max files, dependency guard) checked against changed file paths in the gate,
     deterministic and offline. Dogfooded against public repos, which caught a
     directory-glob bug (fixed). Plus docs hygiene (test count, CHANGELOG order).
@@ -100,12 +110,15 @@ of truth for "where are we and what's next." For granular tasks see
 
 1. **Change Budget follow-ups.** A small CLI to author the budget instead of
    hand-editing YAML.
-2. **Content-level drift (opt-in).** The gate still reasons over paths, not diff
-   contents, so out-of-scope logic added inside an in-scope file is not caught.
-   An opt-in check could close that while keeping the offline path-only default.
-3. **Phase 3b (remaining).** LLM-assisted rule normalization (opt-in); more
+2. **Content-level / semantic drift (opt-in).** The gate still reasons over
+   paths, not diff contents, so out-of-scope logic added inside an in-scope
+   file is not caught. Keep the offline rule scorer as the default and ship an
+   opt-in check only after real-session false-positive evidence.
+3. **Codex live session.** Exercise the `integrations/codex` sample in a real
+   CLI session (shell adapters already shared; interactive `/hooks` trust is
+   the gap).
+4. **Phase 3b (remaining).** LLM-assisted rule normalization (opt-in); more
    correction decay tuning if brief caps prove insufficient in dogfood.
-4. **Integration hardening.** Codex/Claude Code hook samples in live sessions.
 
 See [TODO.md](./TODO.md) for the file-level checklist of each.
 
@@ -122,9 +135,10 @@ See [TODO.md](./TODO.md) for the file-level checklist of each.
 - **Drift scorer is rule-based:** good signal, including path-derived API/source
   and manifest controls, but vocabulary-overlap false positives remain possible;
   LLM-assisted classification is a deferred option.
-- **Hook integrations are samples:** Codex and Claude Code hook configs plus a
-  Cursor project rule ship as integration examples. Downstream product wiring
-  should happen in those downstream repos.
+- **Host lifecycle hooks: Cursor Git gate + Claude scripts proven; Codex interactive pending:**
+  Cursor project rules remain advisory; `hook install` is dogfooded.
+  Claude Code SessionStart/Stop shell adapters are dogfooded via
+  `pnpm dogfood:claude-hooks`. Codex still needs a live `/hooks` trust session.
 - **Public repo validation learned:** init/extract/freeze/doctor/check run
   against the default public-repo matrix in `scripts/validate-public-repos.mjs`.
   The matrix now includes explicit-signal and path-only negative controls.
@@ -138,5 +152,5 @@ Read docs/NEXT.md, docs/TODO.md, and AGENTS.md.
 All work lands on main via PR (never push to main); CI must be green.
 Pick the top unstarted item in TODO.md unless I say otherwise.
 Use writing-plans before implementing a multi-step task.
-Verify: pnpm install && pnpm test && pnpm release:smoke  (173 passing baseline).
+Verify: pnpm install && pnpm test && pnpm dogfood:cursor-hooks && pnpm dogfood:claude-hooks && pnpm release:smoke
 ```

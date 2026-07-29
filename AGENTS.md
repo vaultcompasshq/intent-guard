@@ -55,7 +55,7 @@ Lifecycle: coach -> extract (draft) -> freeze (approve) -> check (gate) -> pivot
 
 The Phase 3 core build is complete: frozen contracts archive to `.conductor/contracts/`, `index.md` is generated from real data, resume emits a Session Brief, pivots are logged, and `conductor-check` can surface prior-contract drift.
 
-The unified `conductor` CLI is published to npm at **`1.1.0`** (`@vaultcompass/conductor-*`, trusted-publisher OIDC). Consuming-app dogfood + PR drift gate verified on a private downstream app repo; 1.1.0 adds the deterministic Change Budget (`budget` contract block) and earlier patches address extraction and constraint-loader false positives ([#29](https://github.com/vaultcompasshq/conductor/pull/29), [#32](https://github.com/vaultcompasshq/conductor/pull/32), [#34](https://github.com/vaultcompasshq/conductor/pull/34), [#36](https://github.com/vaultcompasshq/conductor/pull/36), [#46](https://github.com/vaultcompasshq/conductor/pull/46)). Stability policy: [docs/release/stability-policy.md](./docs/release/stability-policy.md). Public content policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md).
+The unified `conductor` CLI is published to npm at **`1.1.0`** (`@vaultcompass/conductor-*`, trusted-publisher OIDC). 1.1.0 adds the deterministic Change Budget (`budget` contract block). Host dogfood: [cursor-hook-dogfood-2026-07-21.md](./docs/validation/cursor-hook-dogfood-2026-07-21.md), [claude-hook-dogfood-2026-07-21.md](./docs/validation/claude-hook-dogfood-2026-07-21.md). Stability policy: [docs/release/stability-policy.md](./docs/release/stability-policy.md). Public content policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md).
 
 **Skills shipped:** `intent-contract`, `prompt-coach`, `drift-guard`, `capture-correction` (`packages/skill/*/SKILL.md`).
 
@@ -67,7 +67,9 @@ The unified `conductor` CLI is published to npm at **`1.1.0`** (`@vaultcompass/c
 
 ```bash
 pnpm install
-pnpm test      # 173 tests: schema (10), core (110), skill (30), cli (11), examples/integrations (12)
+pnpm test      # 175 tests: schema (10), core (112), skill (30), cli (11), examples/integrations (12)
+pnpm dogfood:cursor-hooks
+pnpm dogfood:claude-hooks
 pnpm build
 pnpm typecheck
 pnpm release:smoke
