@@ -1,105 +1,74 @@
-# Change Budget — Design (v1.1.0)
+# Change Budget design (v1.1.0)
 
 **Date:** 2026-07-28
-**Status:** Approved, in implementation
+**Status:** implemented
 **Branch:** `feat/change-budget`
 
-## Motivation
+## What it adds
 
-Market research (July 2026) shows the AI-assisted-development field converging on
-Conductor's premise ("we need intent review, not just code review") and settling
-on one dominant, proven mechanism for preventing scope drift: a **change budget**
-declared before execution and enforced by a **deterministic gate outside the
-model** — "a prompt is not a boundary."
+An optional `budget` block on the Intent Contract that the gate checks against
+the changed file paths. It is deterministic and path-only: no model, no network.
+This is separate from the 0-100 drift score. Drift is a fuzzy score; the budget
+is a plain pass/fail over paths.
 
-Canonical drift cases this addresses:
+The point is to make the paths an intentional control. Before this, the gate saw
+changed paths but only matched them loosely against the prose in `out_of_scope`.
+A budget lets a contract say plainly which paths are in bounds, which are off
+limits, how many files a change may touch, and whether it may edit a dependency
+manifest.
 
-- Asked for "retry logic in one client," got a 14-file diff with a new interface,
-  DI wiring, and bootstrap edits → `max_files` + `allowed_paths`.
-- Agent "also fixed" a handler whose inconsistency was an intentional external
-  contract → `protected_paths`.
-- Agent added an unrequested dependency → `allow_new_dependencies: false`.
+## Schema
 
-This also shores up an audited weakness: Conductor's enforcement gate (pre-commit
-/ CI) only sees changed file **paths** (`git diff --cached --name-only`). The
-Change Budget turns paths from a lexical accident into an intentional, deterministic
-control — no LLM, no network, fully offline.
-
-## Schema (additive, backward compatible)
-
-New optional `budget` object on `IntentContract`. Absent `budget` = no budget
-enforcement. Existing 1.0.x contracts stay valid; schema `version` const remains
-`1.0.0` (optional additive field).
+`budget` is optional and additive, so existing contracts stay valid and the
+schema `version` const stays `1.0.0`.
 
 ```yaml
 budget:
-  allowed_paths: ["packages/core/**"]   # work must stay inside these globs
-  protected_paths: ["**/legacy/**"]     # never touch
-  max_files: 10                         # cap on total changed files
-  allow_new_dependencies: false         # flag manifest/lockfile edits
+  allowed_paths: ["src/payments/**"]   # work must stay inside these globs
+  protected_paths: ["**/legacy/**"]    # never touch
+  max_files: 5                         # cap on changed files
+  allow_new_dependencies: false        # flag manifest/lockfile edits
 ```
 
-All four fields optional.
+## Rules
 
-## Enforcement (`packages/core/src/budget.ts`)
-
-`evaluateBudget(contract, changedPaths): BudgetResult` — deterministic, path-only,
-using a small self-contained glob matcher (no new dependency; supports `*`, `**`,
-`?`, plain segments).
+`evaluateBudget(contract, changedPaths)` in `packages/core/src/budget.ts`.
 
 | Rule | Condition | Severity |
 |------|-----------|----------|
-| `protected_paths` | any changed path matches | hard_block |
+| `protected_paths` | a changed path matches | hard_block |
 | `allowed_paths` | a changed path matches none of the globs | soft_block |
-| `max_files` | changed-file count exceeds the cap | soft_block |
+| `max_files` | changed-file count over the cap | soft_block |
 | `allow_new_dependencies: false` | a manifest/lockfile is edited | soft_block |
 
-Manifest detection reuses the lockfile/manifest regex already in `drift.ts`.
-The dependency rule is intentionally coarse: a path cannot distinguish add vs
-bump vs remove, so any manifest edit flags. Documented as conservative-by-design.
+The glob matcher is self-contained (no dependency): `*` within a segment, `**`
+across segments, `?` for one character, and a wildcard-free glob as a directory
+prefix (so `src` covers everything under `src/`). The dependency rule is coarse
+on purpose: a path cannot tell an add from a bump, so any manifest edit flags.
 
-`BudgetResult` shape:
+## Gate and report
 
-```ts
-interface BudgetViolation {
-  rule: "protected_paths" | "allowed_paths" | "max_files" | "allow_new_dependencies";
-  severity: "soft_block" | "hard_block";
-  message: string;
-  matched: string[];
-}
-interface BudgetResult {
-  ok: boolean;
-  violations: BudgetViolation[];
-  action: "ok" | "soft_block" | "hard_block";
-}
-```
+`checkGate` runs the budget when the frozen contract has one and there are
+changed paths. Violations become gate reasons and set the exit code, and
+`GateResult` carries a `budget` field. `conductor report` prints a Change budget
+section.
 
-## Gate integration
+## Left out of this version
 
-`checkGate` evaluates the budget alongside drift when the frozen contract has a
-`budget` and changed paths are present. Violations become gate `reasons` and set
-the exit code; `GateResult` gains `budget?: BudgetResult`. Budget stays SEPARATE
-from the 0-100 drift score (pass/fail, not fuzzy) so the two signals stay legible.
-`report.ts` renders a Budget section.
+- `allow_public_api_changes`: reliably detecting a public API change needs to
+  read file contents, which breaks the offline, path-only guarantee.
+- A CLI to author the budget: for now it is written by hand in the contract
+  YAML. There is an example at
+  `examples/intent-contracts/retry-with-budget.yaml`.
 
-## Out of scope for v1 (YAGNI / honesty)
+## Tests
 
-- `allow_public_api_changes` — needs AST/content parsing; breaks the offline,
-  path-only guarantee. Belongs with the deferred semantic path.
-- `conductor budget set` CLI — budget is hand-authored in YAML for v1, documented
-  with an example under `examples/`. A CLI is the natural follow-up.
-- Config-level severity overrides — presence of `budget` in the contract is the
-  opt-in; severities are fixed (protected = hard, others = soft) for v1.
+- `packages/core/tests/budget.test.ts`: the glob matcher and each rule.
+- `packages/core/tests/gate-budget.test.ts`: a frozen contract with a budget
+  through `checkGate`.
+- `packages/schema/tests/validate.test.ts`: budget validation cases.
 
-## Also in this release
-
-- Hygiene: README test count 127 → 150; CHANGELOG reorder + `[1.1.0]` section.
-- Version bump: all four `@vaultcompass/conductor-*` packages + root to `1.1.0`;
-  `scripts/release-smoke.mjs` expected version; CLI version test.
-
-## Testing (TDD)
-
-- schema: `budget` validates; optional; rejects bad types.
-- `budget.ts`: one test per rule, clean-within-budget, and glob-matcher cases.
-- gate: frozen contract + budget + staged paths → correct severity and exit code.
-- report: Budget section rendered.
+Dogfooded against public repos (`sindresorhus/is`, `chalk/chalk`) by injecting a
+budget into a frozen contract and staging real changes. That run caught a bug
+where a wildcard-free glob did not match a directory's contents, so a protected
+directory failed to protect; fixed by the directory-prefix rule above.

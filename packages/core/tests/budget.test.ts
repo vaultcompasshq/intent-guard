@@ -40,6 +40,25 @@ describe("matchesGlob", () => {
     expect(matchesGlob("v1.ts", "v?.ts")).toBe(true);
     expect(matchesGlob("v10.ts", "v?.ts")).toBe(false);
   });
+
+  it("treats a wildcard-free glob as a directory prefix", () => {
+    expect(matchesGlob("source/index.ts", "source")).toBe(true);
+    expect(matchesGlob("source/index.ts", "source/")).toBe(true);
+    expect(matchesGlob("src/a/b.ts", "src")).toBe(true);
+    expect(matchesGlob("other/x.ts", "src")).toBe(false);
+    expect(matchesGlob("srcextra/x.ts", "src")).toBe(false);
+  });
+
+  it("still exact-matches a wildcard-free file glob", () => {
+    expect(matchesGlob("package.json", "package.json")).toBe(true);
+    expect(matchesGlob("packages/core/package.json", "package.json")).toBe(false);
+  });
+
+  it("normalizes leading ./ on both path and glob", () => {
+    expect(matchesGlob("./src/index.ts", "src/**")).toBe(true);
+    expect(matchesGlob("src/index.ts", "./src/**")).toBe(true);
+    expect(matchesGlob("./src/index.ts", "src")).toBe(true);
+  });
 });
 
 describe("evaluateBudget", () => {

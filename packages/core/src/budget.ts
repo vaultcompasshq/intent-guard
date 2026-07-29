@@ -35,13 +35,28 @@ function escapeRegExp(segment: string): string {
 }
 
 /**
- * Minimal, dependency-free glob matcher. Supports:
- *   `**` — any number of path segments (including zero)
- *   `*`  — any run of characters within a single segment
- *   `?`  — a single character within a segment
- * Matching is anchored to the whole path and case-sensitive.
+ * Minimal, dependency-free glob matcher. Supports `**` (any number of path
+ * segments, including zero), `*` (any run of characters within one segment),
+ * and `?` (a single character). A glob with no wildcard is treated as a
+ * directory prefix. Matching is anchored to the whole path and case-sensitive.
  */
-export function matchesGlob(path: string, glob: string): boolean {
+/** Strip a leading `./` so contract globs and git paths compare on equal footing. */
+function normalizePath(p: string): string {
+  return p.replace(/^\.\//, "");
+}
+
+export function matchesGlob(rawPath: string, rawGlob: string): boolean {
+  const path = normalizePath(rawPath);
+  const glob = normalizePath(rawGlob);
+
+  // A glob with no wildcards is treated as a directory prefix (or an exact
+  // file). This matches how people naturally write `src` or `legacy/` and
+  // avoids a protected directory silently failing to protect.
+  if (!/[*?]/.test(glob)) {
+    const base = glob.replace(/\/+$/, "");
+    return path === base || path.startsWith(`${base}/`);
+  }
+
   let re = "";
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i];

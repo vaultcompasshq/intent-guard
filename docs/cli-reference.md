@@ -130,8 +130,11 @@ budget:
 | `max_files` | changed-file count exceeds the cap | soft_block |
 | `allow_new_dependencies: false` | a manifest/lockfile is edited | soft_block |
 
-Globs support `*` (within a segment), `**` (across segments), and `?`. Absent
-`budget` means no budget enforcement, so existing contracts are unaffected. The
+Globs support `*` (within a segment), `**` (across segments), and `?`. A glob
+with no wildcard is treated as a directory prefix, so `src` and `src/` both
+cover everything under `src/` (an exact file path still matches only itself).
+Absent `budget` means no budget enforcement, so existing contracts are
+unaffected. The
 dependency rule is intentionally coarse: a path cannot tell an add from a bump,
 so any manifest edit flags. Budget violations appear in `conductor check`
 reasons and in the `conductor report` "Change budget" section. See
