@@ -43,6 +43,14 @@ export {
   writeContract,
   type FreezeApproval,
 } from "./contract-store.js";
+export {
+  evaluateBudget,
+  matchesGlob,
+  type BudgetResult,
+  type BudgetViolation,
+  type BudgetRule,
+  type BudgetSeverity,
+} from "./budget.js";
 export { appendDriftEvent, driftLogPath, type DriftLogEvent } from "./drift-log.js";
 export { draftContract, generateContractId, type DraftContractInput } from "./extract.js";
 export { formatDriftMessage } from "./format-drift.js";

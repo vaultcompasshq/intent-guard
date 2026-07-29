@@ -6,6 +6,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-29
+
+### Added
+
+- **Change Budget.** An optional `budget` block on the Intent Contract that the
+  gate checks against the changed file paths. It is deterministic and path-only
+  (no model, no network). Fields: `allowed_paths` (work must stay inside these
+  globs), `protected_paths` (never touch), `max_files` (cap on changed files),
+  and `allow_new_dependencies` (flag manifest/lockfile edits). Touching a
+  protected path hard_blocks; the other breaches soft_block. `conductor check`
+  and `conductor report` show budget violations. Globs support `*`, `**`, `?`,
+  and a wildcard-free glob as a directory prefix. Example:
+  [examples/intent-contracts/retry-with-budget.yaml](./examples/intent-contracts/retry-with-budget.yaml).
+
+### Changed
+
+- Docs hygiene: corrected test count and restored the CHANGELOG to descending
+  version order.
+
 ## [1.0.10] - 2026-07-21
 
 ### Added

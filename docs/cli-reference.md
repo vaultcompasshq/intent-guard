@@ -108,6 +108,38 @@ Exit 0 = ok, 1 = blocked.
 When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
 this does not change the gate exit code.
 
+### Change budget
+
+If the frozen contract has an optional `budget` block, the gate also evaluates
+it against the changed paths, deterministically and offline (no model, no
+network). This is separate from the 0-100 drift score: it is a pass/fail
+overlay computed from paths alone.
+
+```yaml
+budget:
+  allowed_paths: ["src/payments/**"]   # work must stay inside these globs
+  protected_paths: ["**/legacy/**"]    # never touch
+  max_files: 5                         # cap on changed files
+  allow_new_dependencies: false        # flag manifest/lockfile edits
+```
+
+| Rule | Condition | Severity |
+|------|-----------|----------|
+| `protected_paths` | any changed path matches | hard_block |
+| `allowed_paths` | a changed path matches none of the globs | soft_block |
+| `max_files` | changed-file count exceeds the cap | soft_block |
+| `allow_new_dependencies: false` | a manifest/lockfile is edited | soft_block |
+
+Globs support `*` (within a segment), `**` (across segments), and `?`. A glob
+with no wildcard is treated as a directory prefix, so `src` and `src/` both
+cover everything under `src/` (an exact file path still matches only itself).
+Absent `budget` means no budget enforcement, so existing contracts are
+unaffected. The
+dependency rule is intentionally coarse: a path cannot tell an add from a bump,
+so any manifest edit flags. Budget violations appear in `conductor check`
+reasons and in the `conductor report` "Change budget" section. See
+[examples/intent-contracts/retry-with-budget.yaml](../examples/intent-contracts/retry-with-budget.yaml).
+
 ## conductor report / conductor-report
 
 Emit a reviewer-friendly handoff report for PRs, CI logs, or agent resumes.

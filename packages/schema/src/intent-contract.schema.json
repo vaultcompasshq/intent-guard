@@ -255,6 +255,32 @@
         }
       }
     },
+    "budget": {
+      "type": "object",
+      "description": "Deterministic, path-only change budget enforced by the gate. Absent means no budget enforcement.",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Work must stay within these globs; a changed path outside them is drift."
+        },
+        "protected_paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Globs that must never be touched."
+        },
+        "max_files": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of changed files."
+        },
+        "allow_new_dependencies": {
+          "type": "boolean",
+          "description": "When false, editing a manifest/lockfile is flagged as an unapproved dependency change."
+        }
+      }
+    },
     "metadata": {
       "type": "object",
       "properties": {

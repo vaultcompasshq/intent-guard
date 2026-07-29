@@ -6,6 +6,7 @@ export type {
   AcceptanceCriterion,
   PivotLogEntry,
   CorrectionLogEntry,
+  ChangeBudget,
   Approval,
   ValidationResult,
 } from "./types.js";

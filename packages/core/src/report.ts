@@ -262,6 +262,16 @@ export function renderConductorReportMarkdown(report: ConductorReport): string {
     section(lines, "Drift findings", list(drift.findings));
   }
 
+  if (report.gate.budget && report.gate.budget.violations.length > 0) {
+    const budget = report.gate.budget;
+    lines.push("", "## Change budget", `- action: ${budget.action}`);
+    section(
+      lines,
+      "Budget violations",
+      budget.violations.map((v) => `- ${v.severity} (${v.rule}): ${v.message}`),
+    );
+  }
+
   if (report.acceptance_coverage.length > 0) {
     const covered = report.acceptance_coverage.filter(
       (criterion) => criterion.status === "covered",

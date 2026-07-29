@@ -1,6 +1,7 @@
 import type { IntentContract } from "@vaultcompass/conductor-schema";
 import { readContract, isContractFrozen } from "./contract-store.js";
 import { scoreDrift, type DriftSignals, type DriftScore } from "./drift.js";
+import { evaluateBudget, type BudgetResult } from "./budget.js";
 import { loadConfig } from "./config.js";
 
 export type GateStatus = "ok" | "blocked";
@@ -13,6 +14,7 @@ export interface GateResult {
   contractFound: boolean;
   contractFrozen: boolean;
   drift?: DriftScore;
+  budget?: BudgetResult;
 }
 
 export interface CheckGateOptions {
@@ -94,6 +96,17 @@ export function checkGate(
     }
   }
 
+  let budget: BudgetResult | undefined;
+  const changedPaths = options.signals?.changedPaths ?? [];
+  if (contract && contract.budget && changedPaths.length > 0) {
+    budget = evaluateBudget(contract, changedPaths);
+    if (budget.action !== "ok") {
+      for (const violation of budget.violations) {
+        reasons.push(`Budget ${violation.severity}: ${violation.message}`);
+      }
+    }
+  }
+
   const blocked = reasons.length > 0;
   return {
     status: blocked ? "blocked" : "ok",
@@ -102,5 +115,6 @@ export function checkGate(
     contractFound,
     contractFrozen,
     drift,
+    budget,
   };
 }

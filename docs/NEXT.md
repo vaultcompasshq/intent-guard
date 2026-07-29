@@ -11,7 +11,7 @@ of truth for "where are we and what's next." For granular tasks see
 
 - **Branch model:** all work lands on `main` **via PR** (never push to main). CI
   must be green before merge. See [[always-pr-to-main]] convention.
-- **Tests:** 152 passing (schema 7, core 93, skill 30, cli 11, examples/integrations 11).
+- **Tests:** 175 passing (schema 10, core 112, skill 30, cli 11, examples/integrations 12).
   Verify with `pnpm install && pnpm test` (test builds first). Also
   `pnpm dogfood:cursor-hooks` and `pnpm dogfood:claude-hooks` for host
   integration fixtures.
@@ -100,14 +100,24 @@ of truth for "where are we and what's next." For granular tasks see
     macOS fix for hook path CSV (`paste -sd, -`); Stop script exits **2** on
     block (Claude Code hard-block semantics);
     ([claude-hook-dogfood-2026-07-21.md](./validation/claude-hook-dogfood-2026-07-21.md)).
+31. **v1.1.0**: Change Budget. Optional `budget` block (allowed/protected paths,
+    max files, dependency guard) checked against changed file paths in the gate,
+    deterministic and offline. Dogfooded against public repos, which caught a
+    directory-glob bug (fixed). Plus docs hygiene (test count, CHANGELOG order).
+    Design: [plans/2026-07-28-change-budget-design.md](./plans/2026-07-28-change-budget-design.md).
 
 ## What's next (priority order)
 
-1. **Codex live session** — exercise `integrations/codex` sample in a real CLI
-   session (shell adapters already shared; interactive `/hooks` trust is the gap).
-2. **Optional `drift --semantic`** — keep offline rule scorer as default; ship
-   in 1.1.0+ only after real-session false-positive evidence.
-3. **Phase 3b (remaining)** — LLM-assisted rule normalization (opt-in); further
+1. **Change Budget follow-ups.** A small CLI to author the budget instead of
+   hand-editing YAML.
+2. **Content-level / semantic drift (opt-in).** The gate still reasons over
+   paths, not diff contents, so out-of-scope logic added inside an in-scope
+   file is not caught. Keep the offline rule scorer as the default and ship an
+   opt-in check only after real-session false-positive evidence.
+3. **Codex live session.** Exercise the `integrations/codex` sample in a real
+   CLI session (shell adapters already shared; interactive `/hooks` trust is
+   the gap).
+4. **Phase 3b (remaining).** LLM-assisted rule normalization (opt-in); more
    correction decay tuning if brief caps prove insufficient in dogfood.
 
 See [TODO.md](./TODO.md) for the file-level checklist of each.

@@ -1,0 +1,49 @@
+contract_id: ic-20260728-b1c2d3
+version: "1.0.0"
+
+original_ask: "Add bounded retry logic with backoff to the payments client."
+
+in_scope:
+  - "Retry failed payment requests with exponential backoff"
+  - "Cap retries at a configurable maximum"
+
+out_of_scope:
+  - "Changes to other service clients"
+  - "New dependencies or interfaces"
+
+constraints:
+  - source: user-stated
+    rule: "Keep the diff small, payments client only"
+    priority: high
+
+acceptance_criteria:
+  - id: ac-1
+    description: "Retries stop after the configured cap"
+    testable: true
+  - id: ac-2
+    description: "Backoff grows between attempts"
+    testable: true
+
+# Change budget: a deterministic, path-only guardrail the gate enforces.
+# It needs no model and no network. The gate compares changed file paths
+# against these globs and counts.
+budget:
+  allowed_paths:
+    - "src/payments/**"
+  protected_paths:
+    - "**/legacy/**"
+  max_files: 5
+  allow_new_dependencies: false
+
+frozen_at: "2026-07-28T10:00:00Z"
+frozen_by: user
+
+approval:
+  approved_by: alice
+  approved_at: "2026-07-28T10:05:00Z"
+  method: explicit-flag
+
+pivot_log: []
+
+metadata:
+  project: payments-service
