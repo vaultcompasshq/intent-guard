@@ -1,6 +1,6 @@
 # Next - Maintainer Status
 
-**Updated:** 2026-07-21
+**Updated:** 2026-08-11
 **Read this first when resuming work.** It is the single source
 of truth for "where are we and what's next." For granular tasks see
 [TODO.md](./TODO.md); for command usage see [cli-reference.md](./cli-reference.md).
@@ -9,6 +9,8 @@ of truth for "where are we and what's next." For granular tasks see
 
 ## Where we are
 
+- **Published:** `1.1.0` on npm (Change Budget). Tagged
+  [v1.1.0](https://github.com/vaultcompasshq/conductor/releases/tag/v1.1.0).
 - **Branch model:** all work lands on `main` **via PR** (never push to main). CI
   must be green before merge. See [[always-pr-to-main]] convention.
 - **Tests:** 180 passing (schema 11, core 114, skill 32, cli 11, examples/integrations 12).
