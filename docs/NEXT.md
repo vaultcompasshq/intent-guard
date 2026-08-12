@@ -116,9 +116,10 @@ of truth for "where are we and what's next." For granular tasks see
    paths, not diff contents, so out-of-scope logic added inside an in-scope
    file is not caught. Keep the offline rule scorer as the default and ship an
    opt-in check only after real-session false-positive evidence.
-3. **Codex live session.** Exercise the `integrations/codex` sample in a real
-   CLI session (shell adapters already shared; interactive `/hooks` trust is
-   the gap).
+3. **Codex live session.** Shell preflight for the shared adapters is green
+   (SessionStart brief + Stop block exit 2 / pass exit 0). Interactive
+   `/hooks` trust + live Stop semantics still need a real Codex CLI session
+   (quota blocked until ~2026-08-17 on the dogfood machine).
 4. **Phase 3b (remaining).** LLM-assisted rule normalization (opt-in); more
    correction decay tuning if brief caps prove insufficient in dogfood.
 
@@ -140,7 +141,9 @@ See [TODO.md](./TODO.md) for the file-level checklist of each.
 - **Host lifecycle hooks: Cursor Git gate + Claude scripts proven; Codex interactive pending:**
   Cursor project rules remain advisory; `hook install` is dogfooded.
   Claude Code SessionStart/Stop shell adapters are dogfooded via
-  `pnpm dogfood:claude-hooks`. Codex still needs a live `/hooks` trust session.
+  `pnpm dogfood:claude-hooks`. Codex Stop adapter now keeps check output on
+  stderr (Codex treats plain-text stdout on exit 0 as invalid). Live `/hooks`
+  trust session still pending.
 - **Public repo validation learned:** init/extract/freeze/doctor/check run
   against the default public-repo matrix in `scripts/validate-public-repos.mjs`.
   The matrix now includes explicit-signal and path-only negative controls.

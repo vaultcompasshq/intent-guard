@@ -9,9 +9,12 @@ source "$SCRIPT_DIR/conductor-lib.sh"
 ROOT="$(conductor_git_root)"
 CHECK_CMD="$(conductor_bin "$ROOT" conductor-check || true)"
 
-# Claude Code only hard-blocks Stop hooks on exit code 2. Exit 1 is treated as
-# a non-blocking error (turn still ends). Map blocked / missing-check failures
-# to 2 for lifecycle hosts. Git pre-commit uses conductor-check directly (exit 1).
+# Lifecycle hosts map gate failure to exit 2:
+# - Claude Code: only exit 2 hard-blocks Stop (exit 1 is non-blocking).
+# - Codex: exit 2 + stderr continues the agent with that reason (not a hard
+#   reject). Codex Stop also treats plain-text stdout on exit 0 as invalid, so
+#   keep human check output on stderr and leave stdout empty on success.
+# Git pre-commit uses conductor-check directly (exit 1).
 lifecycle_block() {
   exit 2
 }
@@ -25,12 +28,16 @@ PATHS="$(conductor_changed_paths_csv "$ROOT")"
 
 set +e
 if [[ -n "$PATHS" ]]; then
-  eval "$CHECK_CMD --project \"\$ROOT\" --paths \"\$PATHS\""
+  out="$(eval "$CHECK_CMD --project \"\$ROOT\" --paths \"\$PATHS\"" 2>&1)"
 else
-  eval "$CHECK_CMD --project \"\$ROOT\""
+  out="$(eval "$CHECK_CMD --project \"\$ROOT\"" 2>&1)"
 fi
 status=$?
 set -e
+
+if [[ -n "$out" ]]; then
+  printf '%s\n' "$out" >&2
+fi
 
 if [[ "$status" -ne 0 ]]; then
   lifecycle_block

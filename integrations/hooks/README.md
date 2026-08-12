@@ -12,7 +12,10 @@ without relying on the agent to remember a markdown instruction.
 
 The scripts first look for this repo's built CLI files under
 `packages/skill/dist/`, then fall back to `conductor-resume` /
-`conductor-check` on `PATH`.
+`conductor-check` on `PATH`. Installing only `@vaultcompass/conductor-cli`
+is not enough for hooks — that package exposes `conductor` only. Use a local
+`packages/skill/dist` build, PATH wrappers, or also install
+`@vaultcompass/conductor-skill` so the legacy bins are available.
 
 ## Install
 
@@ -32,6 +35,8 @@ Then copy the relevant sample config from `integrations/codex/`,
   exists, because new projects need to bootstrap with `conductor-extract`.
 - Stop hooks fail closed when `conductor-check` is unavailable or returns a
   blocking result (exit **2**, not 1 — Claude Code treats exit 1 as
-  non-blocking on Stop). Git pre-commit still uses `conductor-check` exit 1.
+  non-blocking on Stop; Codex uses exit 2 as a Stop continuation reason).
+  Check messages go to stderr so Codex Stop does not see plain-text stdout on
+  exit 0. Git pre-commit still uses `conductor-check` exit 1.
 - Cursor has no committed lifecycle hook config here; use the project rule plus
   the Git pre-commit hook for enforcement.

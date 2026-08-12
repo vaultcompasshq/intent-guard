@@ -137,8 +137,8 @@ See [superpowers/specs/2026-06-20-correction-log-and-brief.md](./superpowers/spe
       Actions, plus `conductor doctor` awareness.
 - [x] Cursor mechanical-gate dogfood (`pnpm dogfood:cursor-hooks`) — 1.0.9.
 - [x] Claude Code lifecycle dogfood (`pnpm dogfood:claude-hooks`) — 1.0.10.
-- [ ] Codex live session — exercise `integrations/codex` in a real CLI session
-      (shell adapters shared; interactive `/hooks` trust still open).
+- [ ] Codex live session — shell preflight green; still need interactive
+      `/hooks` trust + live Stop semantics in a real Codex CLI session.
 - [ ] Gemini: confirm the contract YAML is consumed; no runtime wiring exists
       beyond reading `GEMINI.md` as a constraint file.
 - [ ] Cursor: native extension/MCP status panel, if prioritized. Current
