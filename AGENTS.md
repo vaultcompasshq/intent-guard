@@ -32,6 +32,7 @@ Phase 1 reference: [docs/superpowers/plans/2026-06-17-conductor-phase1.md](./doc
 | 3 - Memory-index persistence | 7-10 | Core complete (`history`, generated index, resume, pivot, cross-session drift) |
 | 3b - decay/dedup, LLM normalization | - | Deferred |
 | 4 - Unified CLI + public release | 11-14 | **Complete** — `1.0.0` on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.0.0)) |
+| 1.1.0 - Change Budget | - | Done — on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.1.0)) |
 
 ---
 
@@ -53,13 +54,16 @@ Lifecycle: coach -> extract (draft) -> freeze (approve) -> check (gate) -> pivot
 
 ## Current Work
 
-The Phase 3 core build is complete: frozen contracts archive to `.conductor/contracts/`, `index.md` is generated from real data, resume emits a Session Brief, pivots are logged, and `conductor-check` can surface prior-contract drift.
+1.1.0 is out — Change Budget is on npm. Next is 1.2.0: a small `conductor budget`
+CLI (`show` / `set` / `clear`) so people aren't hand-editing YAML. See
+[docs/NEXT.md](./docs/NEXT.md).
 
-The unified `conductor` CLI is published to npm at **`1.1.0`** (`@vaultcompass/conductor-*`, trusted-publisher OIDC). 1.1.0 adds the deterministic Change Budget (`budget` contract block). Host dogfood: [cursor-hook-dogfood-2026-07-21.md](./docs/validation/cursor-hook-dogfood-2026-07-21.md), [claude-hook-dogfood-2026-07-21.md](./docs/validation/claude-hook-dogfood-2026-07-21.md). Stability policy: [docs/release/stability-policy.md](./docs/release/stability-policy.md). Public content policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md).
+Skills in the tree: `intent-contract`, `prompt-coach`, `drift-guard`,
+`capture-correction`. Hook dogfood notes:
+[cursor](./docs/validation/cursor-hook-dogfood-2026-07-21.md),
+[claude](./docs/validation/claude-hook-dogfood-2026-07-21.md).
 
-**Skills shipped:** `intent-contract`, `prompt-coach`, `drift-guard`, `capture-correction` (`packages/skill/*/SKILL.md`).
-
-**Process:** Use a written plan before implementing multi-step work. All work lands on `main` via PR; never push directly to `main`. CI must be green before merge.
+PRs only onto `main`. CI green before merge. Write a plan before multi-step work.
 
 ---
 
