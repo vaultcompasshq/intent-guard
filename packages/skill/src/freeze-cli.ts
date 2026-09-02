@@ -9,7 +9,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard freeze [flags]
 
@@ -21,7 +21,8 @@ Flags:
   --approved-by <name>    Approver, required outside an interactive terminal
   --yes                   Approve as the git user without prompting
   --json                  Machine-readable output
-  --help, -h              Show this help`;
+  --help, -h              Show this help
+  --version, -v           Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -29,6 +30,7 @@ function parseArgs(argv: string[]) {
   let yes = false;
   let json = false;
   let help = false;
+  let version = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--project" && argv[i + 1]) projectRoot = argv[++i];
@@ -36,8 +38,9 @@ function parseArgs(argv: string[]) {
     else if (arg === "--yes") yes = true;
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
+    else if (isVersionFlag(arg)) version = true;
   }
-  return { projectRoot, approvedBy, yes, json, help };
+  return { projectRoot, approvedBy, yes, json, help, version };
 }
 
 function gitUser(projectRoot: string): string {
@@ -63,6 +66,7 @@ function printSummary(projectRoot: string): void {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) printUsage(USAGE);
+  if (args.version) printVersion();
 
   const contract = readContract(args.projectRoot);
   if (!contract) {

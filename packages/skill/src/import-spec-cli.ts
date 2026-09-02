@@ -5,7 +5,7 @@ import {
   loadAllConstraints,
   writeContract,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard import-spec [flags]
 
@@ -19,7 +19,8 @@ Flags:
   --design <path>           Explicit design file
   --tasks <path>            Explicit tasks file
   --dry-run                 Print the draft without writing it
-  --help, -h                Show this help`;
+  --help, -h                Show this help
+  --version, -v             Print the version`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 function badUsage(): never {
@@ -36,6 +37,7 @@ function parseArgs(argv: string[]) {
   let tasksPath = "";
   let dryRun = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -57,6 +59,8 @@ function parseArgs(argv: string[]) {
       dryRun = true;
     } else if (isHelpFlag(arg)) {
       help = true;
+    } else if (isVersionFlag(arg)) {
+      version = true;
     } else {
       badUsage();
     }
@@ -71,11 +75,13 @@ function parseArgs(argv: string[]) {
     tasksPath: tasksPath || undefined,
     dryRun,
     help,
+    version,
   };
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 try {
   const imported = importSpecContract(args.projectRoot, {

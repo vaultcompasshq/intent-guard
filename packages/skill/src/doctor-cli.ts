@@ -4,7 +4,7 @@ import {
   type DoctorFinding,
   type DoctorFindingStatus,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard doctor [flags]
 
@@ -14,12 +14,14 @@ git hook, and the guard binaries this project references.
 Flags:
   --project <root>   Project root (default: .)
   --json             Machine-readable output
-  --help, -h         Show this help`;
+  --help, -h         Show this help
+  --version, -v      Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let json = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -29,10 +31,12 @@ function parseArgs(argv: string[]) {
       json = true;
     } else if (isHelpFlag(arg)) {
       help = true;
+    } else if (isVersionFlag(arg)) {
+      version = true;
     }
   }
 
-  return { projectRoot, json, help };
+  return { projectRoot, json, help, version };
 }
 
 function marker(status: DoctorFindingStatus): string {
@@ -50,6 +54,7 @@ function renderFinding(finding: DoctorFinding): string {
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 const result = runDoctor(args.projectRoot);
 

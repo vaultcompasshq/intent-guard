@@ -8,7 +8,7 @@ import {
   scoreDrift,
 } from "@vaultcompass/intent-guard-core";
 import { assertValidIntentContract } from "@vaultcompass/intent-guard-schema";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard drift --contract <path> [flags]
 
@@ -22,7 +22,8 @@ Flags:
   --signals "x,y"      Free-text descriptions of what changed
   --message "<text>"   Latest user message
   --log                Append the result to the drift log
-  --help, -h           Show this help`;
+  --help, -h           Show this help
+  --version, -v        Print the version`;
 
 function parseArgs(argv: string[]) {
   let contractPath = "";
@@ -32,6 +33,7 @@ function parseArgs(argv: string[]) {
   let userMessage = "";
   let log = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -49,14 +51,17 @@ function parseArgs(argv: string[]) {
       log = true;
     } else if (isHelpFlag(arg)) {
       help = true;
+    } else if (isVersionFlag(arg)) {
+      version = true;
     }
   }
 
-  return { contractPath, projectRoot, paths, signals, userMessage, log, help };
+  return { contractPath, projectRoot, paths, signals, userMessage, log, help, version };
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 if (!args.contractPath) {
   console.error(

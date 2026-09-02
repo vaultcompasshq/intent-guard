@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { installPreCommitHook } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const REASONS: Record<string, string> = {
   not_a_git_repo: "No .git directory found. Run this inside a git repository.",
@@ -23,7 +23,8 @@ Flags:
   --force              Overwrite an existing hook Intent Guard did not write
   --json               Emit JSON (default)
   --human              Human-readable output
-  --help, -h           Show this help`;
+  --help, -h           Show this help
+  --version, -v        Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -31,6 +32,7 @@ function parseArgs(argv: string[]) {
   let force = false;
   let human = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -40,9 +42,10 @@ function parseArgs(argv: string[]) {
     else if (arg === "--human") human = true;
     else if (arg === "--json") human = false;
     else if (isHelpFlag(arg)) help = true;
+    else if (isVersionFlag(arg)) version = true;
   }
 
-  return { projectRoot, withVaultGuard, force, human, help };
+  return { projectRoot, withVaultGuard, force, human, help, version };
 }
 
 // Accept an optional leading "install" subcommand for a natural CLI feel.
@@ -50,6 +53,7 @@ const argv = process.argv.slice(2);
 const rest = argv[0] === "install" ? argv.slice(1) : argv;
 const args = parseArgs(rest);
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 const result = installPreCommitHook(args.projectRoot, {
   withVaultGuard: args.withVaultGuard,

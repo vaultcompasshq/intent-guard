@@ -5,7 +5,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard pivot --change <text> [flags]
 
@@ -19,7 +19,8 @@ Flags:
   --add-out-of-scope <text>    Add an out-of-scope item (repeatable)
   --acknowledge                Mark the pivot acknowledged by the user
   --project <root>             Project root (default: .)
-  --help, -h                   Show this help`;
+  --help, -h                   Show this help
+  --version, -v                Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -27,6 +28,7 @@ function parseArgs(argv: string[]) {
   let reason = "";
   let acknowledge = false;
   let help = false;
+  let version = false;
   const addScope: string[] = [];
   const removeScope: string[] = [];
   const addOutOfScope: string[] = [];
@@ -41,6 +43,7 @@ function parseArgs(argv: string[]) {
     else if (arg === "--add-out-of-scope" && argv[i + 1]) addOutOfScope.push(argv[++i]);
     else if (arg === "--acknowledge") acknowledge = true;
     else if (isHelpFlag(arg)) help = true;
+    else if (isVersionFlag(arg)) version = true;
   }
 
   return {
@@ -52,11 +55,13 @@ function parseArgs(argv: string[]) {
     removeScope,
     addOutOfScope,
     help,
+    version,
   };
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 if (!args.change) {
   console.error(

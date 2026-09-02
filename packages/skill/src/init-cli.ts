@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { initConductor } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard init [flags]
 
@@ -11,13 +11,15 @@ Flags:
   --project <root>   Project root (default: .)
   --json             Machine-readable output (default)
   --human            Human-readable output
-  --help, -h         Show this help`;
+  --help, -h         Show this help
+  --version, -v      Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let json = true;
   let human = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -31,14 +33,17 @@ function parseArgs(argv: string[]) {
       json = false;
     } else if (isHelpFlag(arg)) {
       help = true;
+    } else if (isVersionFlag(arg)) {
+      version = true;
     }
   }
 
-  return { projectRoot, json, human, help };
+  return { projectRoot, json, human, help, version };
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 const result = initConductor(args.projectRoot);
 
