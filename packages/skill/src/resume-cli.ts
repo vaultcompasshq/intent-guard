@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { renderResume } from "@vaultcompass/conductor-core";
+import { renderResume } from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor resume [flags]
+const USAGE = `Usage: intent-guard resume [flags]
 
 Emit a Session Brief plus recent history for the active Intent Contract.
 
@@ -32,7 +32,7 @@ if (args.help) printUsage(USAGE);
 const resumeMarkdown = renderResume(args.projectRoot);
 
 if (!resumeMarkdown) {
-  console.error("No .conductor/intent-contract.yaml found. Run conductor-extract first.");
+  console.error("No .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
   process.exit(1);
 }
 

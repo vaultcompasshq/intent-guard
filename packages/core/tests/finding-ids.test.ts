@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { evaluateBudget } from "../src/budget.js";
 import { scoreDrift } from "../src/drift.js";
 

@@ -27,7 +27,7 @@ to a durable rule turns a landmine into a warning sign.
 ## Capture a correction (helper CLI)
 
 ```bash
-conductor-correct --project /path/to/project \
+intent-guard-correct --project /path/to/project \
   --wrong "fetched data inside the component" \
   --right "use a useThemePreference hook" \
   --rule "Never fetch in components; use a hook" \
@@ -44,8 +44,8 @@ conductor-correct --project /path/to/project \
 ## Emit the Session Brief
 
 ```bash
-conductor-brief --project /path/to/project          # markdown
-conductor-brief --project /path/to/project --json    # machine-readable
+intent-guard-brief --project /path/to/project          # markdown
+intent-guard-brief --project /path/to/project --json    # machine-readable
 ```
 
 The brief is the minimal correct-methodology context: intent, scope, acceptance
@@ -54,12 +54,12 @@ failed code. Re-inject this after a context reset instead of the transcript.
 
 ## Boundary
 
-Conductor produces the brief; it cannot edit the model's context window — that
+Intent Guard produces the brief; it cannot edit the model's context window; that
 is the harness's job. Load the brief; let the harness drop the noise.
 
 ## Implementation
 
 `packages/core/src/correction.ts` (capture/promote) and
 `packages/core/src/brief.ts` (render). Schema: `correction_log` in
-`@vaultcompass/conductor-schema`. Design:
+`@vaultcompass/intent-guard-schema`. Design:
 `docs/superpowers/specs/2026-06-20-correction-log-and-brief.md`.

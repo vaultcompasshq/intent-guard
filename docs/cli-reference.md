@@ -192,7 +192,7 @@ The recipe, so other tools can reproduce an id without calling Conductor:
    (not by locale).
 3. Encode each field as `<length>:<value>`, where the length is the number of
    UTF-16 code units, and concatenate in this order: the literal recipe version
-   `conductor.finding.v1`, the contract id, the rule id, the decimal count of
+   `intent-guard.finding.v1`, the contract id, the rule id, the decimal count of
    matched entries, then each matched entry.
 4. `sha256` that string as UTF-8; the fingerprint is the lowercase hex digest.
 
@@ -208,7 +208,7 @@ that moved when a message was reworded would break every baseline on a copy
 edit.
 
 The recipe version is part of the hash. Changing the canonical form means
-bumping `conductor.finding.v1`, which invalidates every stored id, so it is a
+bumping `intent-guard.finding.v1`, which invalidates every stored id, so it is a
 breaking change rather than a quiet edit. A pinned test vector in
 `packages/core/tests/fingerprint.test.ts` fails if the recipe drifts.
 

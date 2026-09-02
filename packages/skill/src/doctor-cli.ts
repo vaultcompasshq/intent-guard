@@ -3,10 +3,10 @@ import {
   runDoctor,
   type DoctorFinding,
   type DoctorFindingStatus,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor doctor [flags]
+const USAGE = `Usage: intent-guard doctor [flags]
 
 Diagnose the local Conductor setup: contract, config, archive, generated index,
 git hook, and the guard binaries this project references.

@@ -4,10 +4,10 @@ import {
   importSpecContract,
   loadAllConstraints,
   writeContract,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor import-spec [flags]
+const USAGE = `Usage: intent-guard import-spec [flags]
 
 Import Spec Kit or Kiro artifacts as an unfrozen Intent Contract draft.
 
@@ -104,7 +104,7 @@ try {
       })),
       written_path: writtenPath,
       frozen: false,
-      next_step: "Review the imported draft, then approve with: conductor freeze --project <root> --approved-by <name>",
+      next_step: "Review the imported draft, then approve with: intent-guard freeze --project <root> --approved-by <name>",
       loaded_constraint_files: loaded.loadedFiles,
       contract_yaml: stringify(contract),
     }),

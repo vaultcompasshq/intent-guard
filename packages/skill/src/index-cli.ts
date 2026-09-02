@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { renderIndex, writeIndex } from "@vaultcompass/conductor-core";
+import { renderIndex, writeIndex } from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor index [flags]
+const USAGE = `Usage: intent-guard index [flags]
 
 Render .conductor/index.md, or regenerate it on disk with --write.
 

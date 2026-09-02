@@ -110,6 +110,6 @@ describe("findingFingerprint", () => {
         ruleId: "protected_paths",
         matched: ["src/b.ts", "src/a.ts"],
       }),
-    ).toBe("90e50dee783d7d8c41bb4b7b19071e4f70e5f5c77dede1a906a23e95f44e9b4a");
+    ).toBe("bc5caabc80eecdd23e1831845f187d6b07b479b861ae17305f0666e36833fd30");
   });
 });

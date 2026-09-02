@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type {
   Constraint,
   ConstraintSource,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 import {
   extractConstraintsFromMarkdown,
   normalizeConstraintRule,
@@ -264,7 +264,7 @@ export function auditRules(projectRoot: string): RulesAuditResult {
 
 export function renderRulesAuditMarkdown(result: RulesAuditResult): string {
   const lines = [
-    "# Conductor rules audit",
+    "# Intent Guard rules audit",
     "",
     `Status: ${result.status}`,
     `Files: ${result.summary.files}`,

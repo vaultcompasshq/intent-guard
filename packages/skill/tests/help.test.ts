@@ -90,7 +90,7 @@ describe("subcommand help", () => {
     const res = await run("check-cli.js", ["--help"], dir);
     expect(res.code).toBe(0);
     // The gate's own verdict lines, not the word "gate", which usage uses.
-    expect(res.stdout).not.toMatch(/Conductor gate:/);
+    expect(res.stdout).not.toMatch(/Intent Guard gate:/);
     expect(res.stderr).toBe("");
   });
 
@@ -98,7 +98,7 @@ describe("subcommand help", () => {
     const dir = mkdtempSync(join(tmpdir(), "conductor-help-report-"));
     const res = await run("report-cli.js", ["--help"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).not.toMatch(/^# Conductor report/m);
+    expect(res.stdout).not.toMatch(/^# Intent Guard report/m);
     expect(res.stderr).toBe("");
   });
 

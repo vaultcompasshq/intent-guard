@@ -7,10 +7,10 @@ import {
   formatDriftMessage,
   readArchivedContract,
   readContract,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor check [flags]
+const USAGE = `Usage: intent-guard check [flags]
 
 Run the enforcement gate against changed paths. Exits non-zero when the gate
 blocks the change.
@@ -139,14 +139,14 @@ if (args.log && result.drift) {
 if (args.json) {
   console.log(JSON.stringify({ ...result, crossSessionDrift: crossSession }));
 } else if (result.status === "blocked") {
-  console.error("✖ Conductor gate: BLOCKED");
+  console.error("✖ Intent Guard gate: BLOCKED");
   for (const reason of result.reasons) console.error(`  - ${reason}`);
   if (result.drift) {
     console.error("");
     console.error(formatDriftMessage(result.drift));
   }
 } else {
-  console.log("✓ Conductor gate: ok");
+  console.log("✓ Intent Guard gate: ok");
   if (result.drift && result.drift.action !== "proceed") {
     console.log(`  drift: ${result.drift.action} (${result.drift.overall}/100)`);
   }

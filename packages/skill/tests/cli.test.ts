@@ -117,7 +117,7 @@ describe("conductor-extract", () => {
     ]);
     expect(res.code).toBe(2);
     expect(res.stderr).toMatch(/removed/i);
-    expect(res.stderr).toMatch(/conductor-freeze/i);
+    expect(res.stderr).toMatch(/intent-guard-freeze/i);
     expect(existsSync(join(dir, ".conductor", "intent-contract.yaml"))).toBe(false);
   });
 
@@ -394,7 +394,7 @@ describe("conductor-report", () => {
       "--signals", "README documentation update",
     ]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("# Conductor report");
+    expect(res.stdout).toContain("# Intent Guard report");
     expect(res.stdout).toContain("Status: ok");
     expect(res.stdout).toContain("Acceptance criteria");
   });

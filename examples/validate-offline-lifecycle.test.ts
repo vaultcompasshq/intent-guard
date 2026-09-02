@@ -8,7 +8,7 @@ import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const cliPath = join(repoRoot, "packages/cli/dist/conductor.js");
+const cliPath = join(repoRoot, "packages/cli/dist/intent-guard.js");
 
 function run(args: string[], cwd: string) {
   const result = spawnSync(process.execPath, [cliPath, ...args], {
@@ -27,7 +27,7 @@ function parseJson(stdout: string) {
 }
 
 function setupFixture(): string {
-  const dir = mkdtempSync(join(tmpdir(), "conductor-offline-fixture-"));
+  const dir = mkdtempSync(join(tmpdir(), "intent-guard-offline-fixture-"));
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(
     join(dir, "README.md"),

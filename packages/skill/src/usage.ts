@@ -2,7 +2,7 @@
  * Shared help handling for the Conductor subcommand CLIs.
  *
  * Two rules, both learned from the 2026-09-02 run against the published 1.1.0
- * artifacts, where `conductor check --help` and `conductor report --help` ran
+ * artifacts, where `intent-guard check --help` and `intent-guard report --help` ran
  * the gate against the current directory instead of printing anything:
  *
  * 1. Help has no side effects. It prints and exits 0, before the command does

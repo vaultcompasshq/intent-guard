@@ -25,7 +25,7 @@ const COMMANDS = {
 
 type Command = keyof typeof COMMANDS;
 
-const HELP = `Usage: conductor <command> [flags]
+const HELP = `Usage: intent-guard <command> [flags]
 
 Commands:
   init      Create a .conductor project skeleton
@@ -37,7 +37,7 @@ Commands:
   drift     Score drift for a specific contract file
   correct   Record a durable correction lesson
   brief     Emit a compact Session Brief
-  doctor    Diagnose local Conductor setup
+  doctor    Diagnose local Intent Guard setup
   hook      Install the Git pre-commit gate hook
   report    Emit a PR/CI handoff report
   rules     Inspect project rule files
@@ -50,22 +50,25 @@ Global flags:
   --version, -v    Print the CLI version
 
 Every command takes --help too, and printing help never runs the command:
-  conductor check --help
+  intent-guard check --help
 
 Examples:
-  conductor init --project .
-  conductor extract --project . --text "Add CSV export. No new API endpoints."
-  conductor import-spec --project . --from kiro --spec-dir .kiro/specs/export
-  conductor freeze --project . --approved-by alice
-  conductor doctor --project .
-  conductor hook install --project . --with-vault-guard
-  conductor report --project . --staged
-  conductor rules audit --project .
-  conductor check --project . --staged
-  conductor drift --ci --contract .conductor/intent-contract.yaml --paths src/app/api/export/route.ts
+  intent-guard init --project .
+  intent-guard extract --project . --text "Add CSV export. No new API endpoints."
+  intent-guard import-spec --project . --from kiro --spec-dir .kiro/specs/export
+  intent-guard freeze --project . --approved-by alice
+  intent-guard doctor --project .
+  intent-guard hook install --project . --with-vault-guard
+  intent-guard report --project . --staged
+  intent-guard rules audit --project .
+  intent-guard check --project . --staged
+  intent-guard drift --ci --contract .conductor/intent-contract.yaml --paths src/app/api/export/route.ts
 
-For command flags, see docs/cli-reference.md. Legacy bins such as
-conductor-check and conductor-resume remain available from conductor-skill.`;
+For command flags, see docs/cli-reference.md. Per-command bins such as
+intent-guard-check and intent-guard-resume come from intent-guard-skill.
+
+This tool was published as conductor through 1.1.0. The project directory is
+still .conductor; only the package and binary names changed.`;
 
 function packageVersion(): string {
   const pkgUrl = new URL("../package.json", import.meta.url);
@@ -75,7 +78,7 @@ function packageVersion(): string {
 
 function skillCliPath(command: Command): string {
   const require = createRequire(import.meta.url);
-  const pkgJson = require.resolve("@vaultcompass/conductor-skill/package.json");
+  const pkgJson = require.resolve("@vaultcompass/intent-guard-skill/package.json");
   return join(dirname(pkgJson), "dist", COMMANDS[command]);
 }
 
@@ -94,7 +97,7 @@ function relay(result: ReturnType<typeof spawnSync>): never {
   }
 
   if (result.signal) {
-    console.error(`conductor: subcommand terminated by ${result.signal}`);
+    console.error(`intent-guard: subcommand terminated by ${result.signal}`);
     process.exit(1);
   }
 
@@ -127,7 +130,7 @@ function runDrift(commandArgs: string[]): never {
     const parsed = JSON.parse(result.stdout) as { block?: boolean };
     process.exit(parsed.block ? 1 : 0);
   } catch {
-    console.error("conductor drift --ci: failed to parse drift JSON output");
+    console.error("intent-guard drift --ci: failed to parse drift JSON output");
     process.exit(1);
   }
 }
@@ -147,8 +150,8 @@ function main(argv: string[]): never {
   }
 
   if (!isCommand(first)) {
-    console.error(`Unknown conductor command: ${first}`);
-    console.error("Run `conductor --help` for available commands.");
+    console.error(`Unknown intent-guard command: ${first}`);
+    console.error("Run `intent-guard --help` for available commands.");
     process.exit(1);
   }
 

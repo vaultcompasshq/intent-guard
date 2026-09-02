@@ -2,7 +2,7 @@ import type {
   Constraint,
   CorrectionLogEntry,
   IntentContract,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 import {
   briefCorrections,
   type BriefCorrectionOptions,

@@ -1,7 +1,7 @@
 import type {
   IntentContract,
   PivotLogEntry,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 
 export interface AddPivotInput {
   change: string;

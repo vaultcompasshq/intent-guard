@@ -4,10 +4,10 @@ import {
   readContract,
   writeContract,
   writeIndex,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor correct --wrong <text> --right <text> --rule <text> [flags]
+const USAGE = `Usage: intent-guard correct --wrong <text> --right <text> --rule <text> [flags]
 
 Record a durable correction lesson on the active Intent Contract.
 
@@ -48,7 +48,7 @@ if (args.help) printUsage(USAGE);
 
 if (!args.wrong || !args.right || !args.rule) {
   console.error(
-    "Usage: conductor-correct --wrong <text> --right <text> --rule <text> [--project <root>] [--acknowledge] [--promote]",
+    "Usage: intent-guard-correct --wrong <text> --right <text> --rule <text> [--project <root>] [--acknowledge] [--promote]",
   );
   process.exit(1);
 }

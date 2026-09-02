@@ -1,12 +1,12 @@
-name: Conductor Drift
+name: Intent Guard Drift
 
-# Post-publish sample: installs @vaultcompass/conductor-cli@latest from npm.
+# Post-publish sample: installs @vaultcompass/intent-guard@latest from npm.
 
 on:
   pull_request:
 
 jobs:
-  conductor-drift:
+  intent-guard-drift:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +22,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install Conductor
-        run: pnpm dlx @vaultcompass/conductor-cli@latest --version
+      - name: Install Intent Guard
+        run: pnpm dlx @vaultcompass/intent-guard@latest --version
 
       - name: Collect changed paths
         id: changed
@@ -40,6 +40,6 @@ jobs:
       # Add `--no-require-frozen` if the branch may not carry a frozen contract.
       - name: Check intent + budget
         run: |
-          pnpm dlx @vaultcompass/conductor-cli@latest check \
+          pnpm dlx @vaultcompass/intent-guard@latest check \
             --project . \
             --paths "${{ steps.changed.outputs.paths }}"

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const DIST = join(import.meta.dirname, "..", "dist");
-const CLI = join(DIST, "conductor.js");
+const CLI = join(DIST, "intent-guard.js");
 
 interface RunResult {
   code: number;
@@ -32,7 +32,7 @@ function run(args: string[], cwd?: string): RunResult {
 }
 
 function tmpProject(): string {
-  return mkdtempSync(join(tmpdir(), "conductor-unified-cli-"));
+  return mkdtempSync(join(tmpdir(), "intent-guard-unified-cli-"));
 }
 
 beforeAll(() => {
@@ -41,12 +41,12 @@ beforeAll(() => {
   }
 });
 
-describe("conductor", () => {
+describe("intent-guard", () => {
   it("prints top-level help", () => {
     const res = run(["--help"]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("Usage: conductor <command> [flags]");
-    expect(res.stdout).toContain("conductor check --project . --staged");
+    expect(res.stdout).toContain("Usage: intent-guard <command> [flags]");
+    expect(res.stdout).toContain("intent-guard check --project . --staged");
   });
 
   it("passes --help through to a subcommand instead of running it", () => {
@@ -56,21 +56,21 @@ describe("conductor", () => {
       const dir = tmpProject();
       const res = run([command, "--help"], dir);
       expect(res.code).toBe(0);
-      expect(res.stdout).toContain(`Usage: conductor ${command}`);
-      expect(res.stdout).not.toContain("Conductor gate:");
+      expect(res.stdout).toContain(`Usage: intent-guard ${command}`);
+      expect(res.stdout).not.toContain("Intent Guard gate:");
     }
   });
 
   it("accepts a leading pnpm argument separator", () => {
     const res = run(["--", "--help"]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("Usage: conductor <command> [flags]");
+    expect(res.stdout).toContain("Usage: intent-guard <command> [flags]");
   });
 
   it("prints the package version", () => {
     const res = run(["--version"]);
     expect(res.code).toBe(0);
-    expect(res.stdout.trim()).toBe("1.1.0");
+    expect(res.stdout.trim()).toBe("1.2.0");
   });
 
   it("dispatches to an existing subcommand", () => {

@@ -8,12 +8,19 @@ import {
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+/**
+ * Marker written into the generated hook so install can tell its own hook from
+ * a hand-written one. Deliberately NOT renamed alongside the package rename:
+ * this string is state already sitting in users' repositories, and changing it
+ * would make every hook this tool installed before 1.2.0 look foreign, so the
+ * next install would refuse to overwrite it without --force.
+ */
 export const CONDUCTOR_HOOK_MARKER = "conductor-managed-pre-commit";
 
 export interface InstallHookOptions {
   /** Also run vault-guard secret scanning in the generated hook. */
   withVaultGuard?: boolean;
-  /** Overwrite an existing pre-commit hook that Conductor did not write. */
+  /** Overwrite an existing pre-commit hook that Intent Guard did not write. */
   force?: boolean;
   /**
    * When `core.hooksPath` points outside this repository (e.g. a machine-wide
@@ -98,8 +105,8 @@ export const HOOK_MISSING_BINARY_EXIT = 127;
 
 /**
  * Render a self-contained pre-commit hook. It depends only on the installed
- * CLIs (conductor-check, optionally vault-guard) being resolvable on PATH or via
- * npx, never on the Conductor repo's integrations/ directory — which does not
+ * CLIs (intent-guard-check, optionally vault-guard) being resolvable on PATH or
+ * via npx, never on the Intent Guard repo's integrations/ directory, which does not
  * ship in the published npm packages.
  *
  * Two properties the hook is required to have:
@@ -128,7 +135,7 @@ export function renderPreCommitHook(withVaultGuard = false): string {
   const lines = [
     "#!/usr/bin/env bash",
     `# ${CONDUCTOR_HOOK_MARKER}`,
-    "# Installed by: conductor hook install",
+    "# Installed by: intent-guard hook install",
     "# Blocks the commit when no frozen Intent Contract exists or staged changes",
     "# drift past a blocking threshold. Bypass one commit with: git commit --no-verify",
     "#",
@@ -154,21 +161,21 @@ export function renderPreCommitHook(withVaultGuard = false): string {
     "  fi",
     "}",
     "",
-    "run_conductor() {",
-    '  if command -v conductor-check >/dev/null 2>&1; then',
-    '    conductor-check --project . --staged',
-    '  elif command -v conductor >/dev/null 2>&1; then',
-    '    conductor check --project . --staged',
+    "run_intent_guard() {",
+    '  if command -v intent-guard-check >/dev/null 2>&1; then',
+    '    intent-guard-check --project . --staged',
+    '  elif command -v intent-guard >/dev/null 2>&1; then',
+    '    intent-guard check --project . --staged',
     '  elif command -v npx >/dev/null 2>&1; then',
-    '    npx --no-install conductor check --project . --staged',
+    '    npx --no-install intent-guard check --project . --staged',
     "  else",
-    '    echo "pre-commit: conductor not found on PATH; refusing the commit. Install @vaultcompass/conductor-cli, or bypass once with git commit --no-verify." >&2',
+    '    echo "pre-commit: intent-guard not found on PATH; refusing the commit. Install @vaultcompass/intent-guard, or bypass once with git commit --no-verify." >&2',
     `    return ${HOOK_MISSING_BINARY_EXIT}`,
     "  fi",
     "}",
     "",
-    "run_conductor",
-    'record "conductor" "$?"',
+    "run_intent_guard",
+    'record "intent-guard" "$?"',
     "",
   ];
 
@@ -196,8 +203,8 @@ export function renderPreCommitHook(withVaultGuard = false): string {
 }
 
 /**
- * Install the Conductor pre-commit hook into the repository at projectRoot.
- * Refuses to clobber a foreign (non-Conductor) hook unless force is set.
+ * Install the Intent Guard pre-commit hook into the repository at projectRoot.
+ * Refuses to clobber a foreign hook it did not write unless force is set.
  *
  * When a machine-wide `core.hooksPath` points outside this repo, defaults to
  * setting local `core.hooksPath=.git/hooks` so install does not overwrite a

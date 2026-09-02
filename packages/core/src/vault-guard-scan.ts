@@ -51,7 +51,7 @@ function parseJson(stdout: string): VaultGuardJson | null {
  * The blocking verdict comes from `run.blocking_matches`, which already honours
  * vault-guard's `fail_on` threshold. `summary.secrets` counts every match at
  * any severity and is carried through for display only; reading it as a gate
- * makes Conductor block on findings vault-guard would let through, and it
+ * makes Intent Guard block on findings vault-guard would let through, and it
  * diverges further every time the threshold moves.
  *
  * When the run block is missing or the output is not JSON we cannot read the

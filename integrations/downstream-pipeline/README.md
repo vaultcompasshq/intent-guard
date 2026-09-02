@@ -8,7 +8,7 @@
 ## Relationship
 
 ```
-vaultcompasshq/conductor
+vaultcompasshq/intent-guard
          │
          │ git submodule / npm dep / path import
          ▼
@@ -84,9 +84,9 @@ if (fs.existsSync(contractPath)) {
 
 ```bash
 cd path/to/downstream-pipeline
-git submodule add https://github.com/vaultcompasshq/conductor.git vendor/conductor
+git submodule add https://github.com/vaultcompasshq/intent-guard.git vendor/conductor
 # or
-npm install github:vaultcompasshq/conductor#main
+npm install github:vaultcompasshq/intent-guard#main
 ```
 
 Add to `AGENTS.md`:

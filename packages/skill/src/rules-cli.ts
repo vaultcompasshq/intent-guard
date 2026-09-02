@@ -2,10 +2,10 @@
 import {
   auditRules,
   renderRulesAuditMarkdown,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor rules audit [flags]
+const USAGE = `Usage: intent-guard rules audit [flags]
 
 Inspect project rule files (AGENTS.md, CLAUDE.md, GEMINI.md, .cursor/rules,
 .continue/rules, .kiro/steering) and surface maintainability problems.
@@ -22,7 +22,7 @@ function badUsage(): never {
 
 function parseArgs(argv: string[]) {
   const [command, ...rest] = argv;
-  // Help is checked before the subcommand, so `conductor rules --help` prints
+  // Help is checked before the subcommand, so `intent-guard rules --help` prints
   // help rather than complaining that "audit" is missing.
   if (argv.some(isHelpFlag)) printUsage(USAGE);
   if (command !== "audit") badUsage();

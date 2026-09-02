@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { installPreCommitHook } from "@vaultcompass/conductor-core";
+import { installPreCommitHook } from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
 const REASONS: Record<string, string> = {
@@ -10,9 +10,9 @@ const REASONS: Record<string, string> = {
     "Could not set local core.hooksPath=.git/hooks (machine-wide hooksPath is outside this repo). Set it manually, then re-run.",
 };
 
-const USAGE = `Usage: conductor hook install [flags]
+const USAGE = `Usage: intent-guard hook install [flags]
 
-Install a self-contained Git pre-commit hook that runs the Conductor gate on
+Install a self-contained Git pre-commit hook that runs the Intent Guard gate on
 staged changes. The hook depends only on the installed CLIs, not on the
 Conductor source repo. It is fail-closed: a gate whose binary is missing
 refuses the commit rather than skipping.

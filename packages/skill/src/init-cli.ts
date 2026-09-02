@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { initConductor } from "@vaultcompass/conductor-core";
+import { initConductor } from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor init [flags]
+const USAGE = `Usage: intent-guard init [flags]
 
 Create a .conductor project skeleton: config, contracts directory, and the
 generated index.
@@ -43,7 +43,7 @@ if (args.help) printUsage(USAGE);
 const result = initConductor(args.projectRoot);
 
 if (args.human) {
-  console.log(`Conductor initialized in ${result.conductor_dir}`);
+  console.log(`Intent Guard initialized in ${result.conductor_dir}`);
   if (result.created.length > 0) {
     console.log(`Created: ${result.created.join(", ")}`);
   }

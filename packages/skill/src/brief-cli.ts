@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { buildBrief, readContract, renderBriefMarkdown } from "@vaultcompass/conductor-core";
+import { buildBrief, readContract, renderBriefMarkdown } from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor brief [flags]
+const USAGE = `Usage: intent-guard brief [flags]
 
 Emit a compact Session Brief for the active Intent Contract.
 

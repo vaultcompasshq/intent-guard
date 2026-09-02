@@ -8,14 +8,14 @@ import {
   loadConfig,
   scorePrompt,
   writeContract,
-} from "@vaultcompass/conductor-core";
-import { validateIntentContract } from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-core";
+import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor extract --text <user ask> [flags]
+const USAGE = `Usage: intent-guard extract --text <user ask> [flags]
 
 Draft an unfrozen Intent Contract from an ask. Approval is a separate step:
-review the draft, then run conductor freeze.
+review the draft, then run intent-guard freeze.
 
 Flags:
   --text <user ask>   The ask to draft a contract from (required)
@@ -39,8 +39,8 @@ function parseArgs(argv: string[]) {
       dryRun = true;
     } else if (arg === "--freeze") {
       console.error(
-        "conductor-extract --freeze was removed. Extract only writes unfrozen drafts.\n" +
-          "Review the draft, then approve with: conductor-freeze --project <root> [--approved-by <name>]",
+        "intent-guard-extract --freeze was removed. Extract only writes unfrozen drafts.\n" +
+          "Review the draft, then approve with: intent-guard-freeze --project <root> [--approved-by <name>]",
       );
       process.exit(2);
     } else if (isHelpFlag(arg)) {
@@ -56,7 +56,7 @@ if (args.help) printUsage(USAGE);
 
 if (!args.userText) {
   console.error(
-    "Usage: conductor-extract --text <user ask> [--project <root>] [--dry-run]",
+    "Usage: intent-guard-extract --text <user ask> [--project <root>] [--dry-run]",
   );
   process.exit(1);
 }
@@ -73,7 +73,7 @@ const scored = scorePrompt(args.userText, {
 });
 const coaching = coachMessage(scored, args.userText);
 // extract only ever writes an UNFROZEN draft. Approval is a separate,
-// deliberate step: conductor-freeze.
+// deliberate step: intent-guard-freeze.
 const contract = draft;
 const validation = validateIntentContract(contract);
 const needsCoaching =
@@ -90,7 +90,7 @@ console.log(
     errors: validation.errors,
     written_path: writtenPath,
     frozen: false,
-    next_step: "Review the draft, then approve with: conductor-freeze --project <root> [--approved-by <name>]",
+    next_step: "Review the draft, then approve with: intent-guard-freeze --project <root> [--approved-by <name>]",
     loaded_constraint_files: loaded.loadedFiles,
     prompt_score: scored.score,
     needs_coaching: needsCoaching,

@@ -49,13 +49,13 @@ describe("generated pre-commit hook exit codes", () => {
   it("passes when every gate passes", () => {
     const run = runHook({
       withVaultGuard: true,
-      stubs: { "conductor-check": 0, "vault-guard": 0 },
+      stubs: { "intent-guard-check": 0, "vault-guard": 0 },
     });
     expect(run.status).toBe(0);
   });
 
   it("fails closed when the intent gate binary is missing", () => {
-    // No conductor-check, no conductor, no npx anywhere on PATH.
+    // No intent-guard-check, no intent-guard, no npx anywhere on PATH.
     const run = runHook({ stubs: {} });
     expect(run.status).not.toBe(0);
     expect(run.stderr).toMatch(/not found on PATH/);
@@ -66,7 +66,7 @@ describe("generated pre-commit hook exit codes", () => {
   it("fails closed when the secret scanner binary is missing", () => {
     const run = runHook({
       withVaultGuard: true,
-      stubs: { "conductor-check": 0 },
+      stubs: { "intent-guard-check": 0 },
     });
     expect(run.status).not.toBe(0);
     expect(run.stderr).toMatch(/vault-guard/);
@@ -77,7 +77,7 @@ describe("generated pre-commit hook exit codes", () => {
     // old hook assigned status twice and reported 1 here, losing the 2.
     const run = runHook({
       withVaultGuard: true,
-      stubs: { "conductor-check": 2, "vault-guard": 1 },
+      stubs: { "intent-guard-check": 2, "vault-guard": 1 },
     });
     expect(run.status).toBe(2);
   });
@@ -85,7 +85,7 @@ describe("generated pre-commit hook exit codes", () => {
   it("still surfaces a later gate's failure when an earlier gate passed", () => {
     const run = runHook({
       withVaultGuard: true,
-      stubs: { "conductor-check": 0, "vault-guard": 1 },
+      stubs: { "intent-guard-check": 0, "vault-guard": 1 },
     });
     expect(run.status).toBe(1);
   });
@@ -93,9 +93,9 @@ describe("generated pre-commit hook exit codes", () => {
   it("runs every gate even after one fails, and reports each code", () => {
     const run = runHook({
       withVaultGuard: true,
-      stubs: { "conductor-check": 2, "vault-guard": 1 },
+      stubs: { "intent-guard-check": 2, "vault-guard": 1 },
     });
-    expect(run.stdout).toMatch(/conductor-check ran/);
+    expect(run.stdout).toMatch(/intent-guard-check ran/);
     expect(run.stdout).toMatch(/vault-guard ran/);
     // No code is lost to the single-integer exit status: both are printed.
     expect(run.stderr).toMatch(/exited 2/);

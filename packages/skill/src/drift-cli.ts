@@ -6,14 +6,14 @@ import {
   formatDriftMessage,
   loadConfig,
   scoreDrift,
-} from "@vaultcompass/conductor-core";
-import { assertValidIntentContract } from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-core";
+import { assertValidIntentContract } from "@vaultcompass/intent-guard-schema";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor drift --contract <path> [flags]
+const USAGE = `Usage: intent-guard drift --contract <path> [flags]
 
 Score drift for a specific contract file. Scoring only: this does not evaluate
-the Change Budget. Use conductor check to enforce.
+the Change Budget. Use intent-guard check to enforce.
 
 Flags:
   --contract <path>    Contract file to score (required)
@@ -60,7 +60,7 @@ if (args.help) printUsage(USAGE);
 
 if (!args.contractPath) {
   console.error(
-    "Usage: conductor-drift --contract <path> [--project <root>] [--paths a,b] [--signals x] [--message text] [--log]",
+    "Usage: intent-guard-drift --contract <path> [--project <root>] [--paths a,b] [--signals x] [--message text] [--log]",
   );
   process.exit(1);
 }

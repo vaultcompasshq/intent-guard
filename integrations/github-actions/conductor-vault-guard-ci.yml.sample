@@ -1,7 +1,7 @@
-name: Conductor and Vault Guard
+name: Intent Guard and Vault Guard
 
 # Post-publish sample: this workflow assumes
-# @vaultcompass/conductor-cli@latest is available on npm.
+# @vaultcompass/intent-guard@latest is available on npm.
 # vault-guard is installed from its published npm package.
 
 on:
@@ -24,8 +24,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install Conductor
-        run: pnpm dlx @vaultcompass/conductor-cli@latest --version
+      - name: Install Intent Guard
+        run: pnpm dlx @vaultcompass/intent-guard@latest --version
 
       - name: Collect changed paths
         id: changed
@@ -39,7 +39,7 @@ jobs:
       # the pre-commit hook. `drift` is score-only and skips the budget.
       - name: Check intent + budget
         run: |
-          pnpm dlx @vaultcompass/conductor-cli@latest check \
+          pnpm dlx @vaultcompass/intent-guard@latest check \
             --project . \
             --paths "${{ steps.changed.outputs.paths }}"
 

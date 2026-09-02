@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Constraint, ConstraintSource } from "@vaultcompass/conductor-schema";
+import type { Constraint, ConstraintSource } from "@vaultcompass/intent-guard-schema";
 
 export const DEFAULT_CONSTRAINT_FILES: ConstraintSource[] = [
   "AGENTS.md",

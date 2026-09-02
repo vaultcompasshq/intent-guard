@@ -3,7 +3,7 @@ import type {
   CorrectionLogEntry,
   IntentContract,
   PivotLogEntry,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 import {
   isContractFrozen,
   readContract,
@@ -224,7 +224,7 @@ function list(items: string[]): string[] {
 
 export function renderConductorReportMarkdown(report: ConductorReport): string {
   const lines: string[] = [
-    "# Conductor report",
+    "# Intent Guard report",
     "",
     `Status: ${report.status}`,
     `Recommendation: ${report.recommendation}`,

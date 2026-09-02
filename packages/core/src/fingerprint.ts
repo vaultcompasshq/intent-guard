@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
  * canonical form genuinely has to change, and treat that as a breaking change
  * for anything holding stored ids (a baseline file, the umbrella's dedupe).
  */
-export const FINGERPRINT_RECIPE = "conductor.finding.v1";
+export const FINGERPRINT_RECIPE = "intent-guard.finding.v1";
 
 export interface FindingFingerprintInput {
   /** The contract the finding was raised against. */

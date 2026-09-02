@@ -1,11 +1,11 @@
 {
-  "name": "@vaultcompass/conductor-skill",
-  "version": "1.1.0",
+  "name": "@vaultcompass/intent-guard-skill",
+  "version": "1.2.0",
   "type": "module",
-  "description": "Superpowers-compatible Conductor skills and helper CLIs",
+  "description": "Superpowers-compatible Intent Guard skills and helper CLIs",
   "license": "MIT",
   "keywords": [
-    "conductor",
+    "intent-guard",
     "superpowers",
     "skills",
     "ai",
@@ -13,34 +13,34 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vaultcompasshq/conductor.git",
+    "url": "https://github.com/vaultcompasshq/intent-guard.git",
     "directory": "packages/skill"
   },
   "bugs": {
-    "url": "https://github.com/vaultcompasshq/conductor/issues"
+    "url": "https://github.com/vaultcompasshq/intent-guard/issues"
   },
-  "homepage": "https://github.com/vaultcompasshq/conductor#readme",
+  "homepage": "https://github.com/vaultcompasshq/intent-guard#readme",
   "publishConfig": {
     "access": "public",
     "tag": "latest"
   },
   "bin": {
-    "conductor-coach": "./dist/coach-cli.js",
-    "conductor-drift": "./dist/drift-cli.js",
-    "conductor-extract": "./dist/extract-cli.js",
-    "conductor-import-spec": "./dist/import-spec-cli.js",
-    "conductor-freeze": "./dist/freeze-cli.js",
-    "conductor-init": "./dist/init-cli.js",
-    "conductor-index": "./dist/index-cli.js",
-    "conductor-check": "./dist/check-cli.js",
-    "conductor-correct": "./dist/correct-cli.js",
-    "conductor-brief": "./dist/brief-cli.js",
-    "conductor-doctor": "./dist/doctor-cli.js",
-    "conductor-hook": "./dist/hook-cli.js",
-    "conductor-report": "./dist/report-cli.js",
-    "conductor-rules": "./dist/rules-cli.js",
-    "conductor-pivot": "./dist/pivot-cli.js",
-    "conductor-resume": "./dist/resume-cli.js"
+    "intent-guard-coach": "./dist/coach-cli.js",
+    "intent-guard-drift": "./dist/drift-cli.js",
+    "intent-guard-extract": "./dist/extract-cli.js",
+    "intent-guard-import-spec": "./dist/import-spec-cli.js",
+    "intent-guard-freeze": "./dist/freeze-cli.js",
+    "intent-guard-init": "./dist/init-cli.js",
+    "intent-guard-index": "./dist/index-cli.js",
+    "intent-guard-check": "./dist/check-cli.js",
+    "intent-guard-correct": "./dist/correct-cli.js",
+    "intent-guard-brief": "./dist/brief-cli.js",
+    "intent-guard-doctor": "./dist/doctor-cli.js",
+    "intent-guard-hook": "./dist/hook-cli.js",
+    "intent-guard-report": "./dist/report-cli.js",
+    "intent-guard-rules": "./dist/rules-cli.js",
+    "intent-guard-pivot": "./dist/pivot-cli.js",
+    "intent-guard-resume": "./dist/resume-cli.js"
   },
   "files": [
     "dist",
@@ -56,8 +56,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vaultcompass/conductor-core": "workspace:*",
-    "@vaultcompass/conductor-schema": "workspace:*",
+    "@vaultcompass/intent-guard-core": "workspace:*",
+    "@vaultcompass/intent-guard-schema": "workspace:*",
     "yaml": "^2.8.0"
   },
   "devDependencies": {

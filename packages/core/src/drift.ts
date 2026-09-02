@@ -1,4 +1,4 @@
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { findingFingerprint } from "./fingerprint.js";
 import { DRIFT_WEIGHTS, type DriftAction } from "./rubric.js";
 import {

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { configPath, loadConfig } from "./config.js";
 import {
   contractPath,
@@ -99,12 +99,22 @@ function readText(path: string): string | null {
   }
 }
 
-function textMentionsConductor(path: string): boolean {
-  return /conductor/i.test(readText(path) ?? "");
+/**
+ * Matches the old name as well as the new one. A project wired up before the
+ * 1.2.0 rename has hooks, workflows, and rules that say "conductor", and those
+ * integrations are still real: reporting them as missing would send people to
+ * re-wire something that already works.
+ */
+function textMentionsIntentGuard(path: string): boolean {
+  return /intent[- ]guard|conductor/i.test(readText(path) ?? "");
 }
 
 function textMentionsVaultGuard(path: string): boolean {
   return /vault[- ]guard/i.test(readText(path) ?? "");
+}
+
+function textMentionsDepGuard(path: string): boolean {
+  return /dep[- ]guard/i.test(readText(path) ?? "");
 }
 
 function commandVersion(command: string): string | null {
@@ -141,7 +151,7 @@ function activeContractStatus(
       finding(
         "error",
         "active_contract_missing",
-        "No active Intent Contract found. Run conductor extract, review it, then conductor freeze.",
+        "No active Intent Contract found. Run intent-guard extract, review it, then intent-guard freeze.",
         ".conductor/intent-contract.yaml",
       ),
     );
@@ -174,7 +184,7 @@ function activeContractStatus(
         finding(
           "error",
           "active_contract_unfrozen",
-          "Active contract exists but is not approved/frozen. Run conductor freeze --approved-by <name>.",
+          "Active contract exists but is not approved/frozen. Run intent-guard freeze --approved-by <name>.",
           ".conductor/intent-contract.yaml",
         ),
       );
@@ -201,7 +211,7 @@ function configStatus(projectRoot: string, findings: DoctorFinding[]): void {
       finding(
         "error",
         "config_missing",
-        "Missing .conductor/config.yaml. Run conductor init.",
+        "Missing .conductor/config.yaml. Run intent-guard init.",
         ".conductor/config.yaml",
       ),
     );
@@ -238,7 +248,7 @@ function archiveStatus(
       finding(
         "warn",
         "contracts_dir_missing",
-        "Archived contracts directory is missing. Run conductor init or freeze the active contract again.",
+        "Archived contracts directory is missing. Run intent-guard init or freeze the active contract again.",
         ".conductor/contracts/",
       ),
     );
@@ -292,7 +302,7 @@ function indexStatus(projectRoot: string, findings: DoctorFinding[]): void {
       finding(
         "warn",
         "index_missing",
-        "Missing .conductor/index.md. Run conductor index.",
+        "Missing .conductor/index.md. Run intent-guard index.",
         ".conductor/index.md",
       ),
     );
@@ -308,7 +318,7 @@ function indexStatus(projectRoot: string, findings: DoctorFinding[]): void {
         actual === expected ? "index_current" : "index_stale",
         actual === expected
           ? "Generated index is current."
-          : "Generated index is stale. Run conductor index.",
+          : "Generated index is stale. Run intent-guard index.",
         ".conductor/index.md",
       ),
     );
@@ -352,6 +362,15 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
   const vaultGuardVersion = commandVersion("vault-guard");
   const vaultGuardEvidence: string[] = [];
 
+  const depGuardConfig = [
+    ".dep-guard.json",
+    ".dep-guard.local.json",
+    ".dep-guard.yaml",
+    ".dep-guard.yml",
+  ].find((path) => existsSync(join(projectRoot, path)));
+  const depGuardVersion = commandVersion("dep-guard");
+  const depGuardEvidence: string[] = [];
+
   if (vaultGuardConfig) {
     vaultGuardEvidence.push(vaultGuardConfig);
     findings.push(
@@ -374,6 +393,28 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
     );
   }
 
+  if (depGuardConfig) {
+    depGuardEvidence.push(depGuardConfig);
+    findings.push(
+      finding(
+        "ok",
+        "dep_guard_config_present",
+        "dep-guard config is present.",
+        depGuardConfig,
+      ),
+    );
+  }
+
+  if (depGuardVersion) {
+    findings.push(
+      finding(
+        "ok",
+        "dep_guard_binary_found",
+        `dep-guard binary found: ${depGuardVersion}`,
+      ),
+    );
+  }
+
   const gitDir = join(projectRoot, ".git");
   if (existsSync(gitDir)) {
     const preCommitHook = resolveGitPreCommitHook(projectRoot);
@@ -386,12 +427,12 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
           ".git/hooks/pre-commit",
         ),
       );
-    } else if (textMentionsConductor(preCommitHook.absolutePath)) {
+    } else if (textMentionsIntentGuard(preCommitHook.absolutePath)) {
       findings.push(
         finding(
           "ok",
           "git_pre_commit_conductor",
-          "Git pre-commit hook mentions Conductor.",
+          "Git pre-commit hook mentions Intent Guard.",
           preCommitHook.displayPath,
         ),
       );
@@ -400,7 +441,7 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
         finding(
           "warn",
           "git_pre_commit_without_conductor",
-          "Git pre-commit hook exists but does not mention Conductor.",
+          "Git pre-commit hook exists but does not mention Intent Guard.",
           preCommitHook.displayPath,
         ),
       );
@@ -420,6 +461,18 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
         ),
       );
     }
+
+    if (preCommitHook && textMentionsDepGuard(preCommitHook.absolutePath)) {
+      depGuardEvidence.push(preCommitHook.displayPath);
+      findings.push(
+        finding(
+          "ok",
+          "git_pre_commit_dep_guard",
+          "Git pre-commit hook mentions dep-guard.",
+          preCommitHook.displayPath,
+        ),
+      );
+    }
   }
 
   const workflowFiles = filesInDir(join(projectRoot, ".github", "workflows"), [
@@ -427,14 +480,14 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
     ".yaml",
   ]);
   if (workflowFiles.length > 0) {
-    const hasConductor = workflowFiles.some(textMentionsConductor);
+    const hasConductor = workflowFiles.some(textMentionsIntentGuard);
     findings.push(
       finding(
         hasConductor ? "ok" : "info",
         hasConductor ? "github_actions_conductor" : "github_actions_without_conductor",
         hasConductor
-          ? "At least one GitHub Actions workflow mentions Conductor."
-          : "GitHub Actions workflows exist but none mention Conductor.",
+          ? "At least one GitHub Actions workflow mentions Intent Guard."
+          : "GitHub Actions workflows exist but none mention Intent Guard.",
         ".github/workflows/",
       ),
     );
@@ -450,19 +503,31 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
         ),
       );
     }
+
+    if (workflowFiles.some(textMentionsDepGuard)) {
+      depGuardEvidence.push(".github/workflows/");
+      findings.push(
+        finding(
+          "ok",
+          "github_actions_dep_guard",
+          "At least one GitHub Actions workflow mentions dep-guard.",
+          ".github/workflows/",
+        ),
+      );
+    }
   }
 
   const codexHooks = join(projectRoot, ".codex", "hooks.json");
   if (existsSync(codexHooks)) {
     findings.push(
       finding(
-        textMentionsConductor(codexHooks) ? "ok" : "warn",
-        textMentionsConductor(codexHooks)
+        textMentionsIntentGuard(codexHooks) ? "ok" : "warn",
+        textMentionsIntentGuard(codexHooks)
           ? "codex_hooks_conductor"
           : "codex_hooks_without_conductor",
-        textMentionsConductor(codexHooks)
-          ? "Codex hooks mention Conductor."
-          : "Codex hooks file exists but does not mention Conductor.",
+        textMentionsIntentGuard(codexHooks)
+          ? "Codex hooks mention Intent Guard."
+          : "Codex hooks file exists but does not mention Intent Guard.",
         ".codex/hooks.json",
       ),
     );
@@ -472,13 +537,13 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
   if (existsSync(claudeSettings)) {
     findings.push(
       finding(
-        textMentionsConductor(claudeSettings) ? "ok" : "warn",
-        textMentionsConductor(claudeSettings)
+        textMentionsIntentGuard(claudeSettings) ? "ok" : "warn",
+        textMentionsIntentGuard(claudeSettings)
           ? "claude_hooks_conductor"
           : "claude_hooks_without_conductor",
-        textMentionsConductor(claudeSettings)
-          ? "Claude Code settings mention Conductor."
-          : "Claude Code settings exist but do not mention Conductor.",
+        textMentionsIntentGuard(claudeSettings)
+          ? "Claude Code settings mention Intent Guard."
+          : "Claude Code settings exist but do not mention Intent Guard.",
         ".claude/settings.json",
       ),
     );
@@ -486,14 +551,14 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
 
   const cursorRules = filesInDir(join(projectRoot, ".cursor", "rules"), [".mdc"]);
   if (cursorRules.length > 0) {
-    const hasConductor = cursorRules.some(textMentionsConductor);
+    const hasConductor = cursorRules.some(textMentionsIntentGuard);
     findings.push(
       finding(
         hasConductor ? "ok" : "info",
         hasConductor ? "cursor_rules_conductor" : "cursor_rules_without_conductor",
         hasConductor
-          ? "Cursor rules mention Conductor."
-          : "Cursor rules exist but none mention Conductor.",
+          ? "Cursor rules mention Intent Guard."
+          : "Cursor rules exist but none mention Intent Guard.",
         ".cursor/rules/",
       ),
     );
@@ -517,6 +582,28 @@ function integrationStatus(projectRoot: string, findings: DoctorFinding[]): void
       ),
     );
   }
+
+  // dep-guard gets the same treatment as vault-guard: both are optional
+  // sibling guards, and a project that references one in a hook or workflow
+  // without having the binary installed has a gate that cannot run.
+  if (depGuardEvidence.length === 0 && !depGuardVersion) {
+    findings.push(
+      finding(
+        "info",
+        "dep_guard_not_detected",
+        "Optional dep-guard dependency scanning is not detected.",
+      ),
+    );
+  } else if (depGuardEvidence.length > 0 && !depGuardVersion) {
+    findings.push(
+      finding(
+        "warn",
+        "dep_guard_binary_missing",
+        "dep-guard is referenced by project files, but the binary was not found on PATH.",
+        depGuardEvidence.join(", "),
+      ),
+    );
+  }
 }
 
 export function runDoctor(projectRoot: string): DoctorResult {
@@ -524,7 +611,7 @@ export function runDoctor(projectRoot: string): DoctorResult {
     finding(
       "ok",
       "package_version",
-      `@vaultcompass/conductor-core ${packageVersion()}`,
+      `@vaultcompass/intent-guard-core ${packageVersion()}`,
     ),
   ];
 
@@ -533,7 +620,7 @@ export function runDoctor(projectRoot: string): DoctorResult {
       finding(
         "error",
         "conductor_not_initialized",
-        "No .conductor directory found. Run conductor init.",
+        "No .conductor directory found. Run intent-guard init.",
         ".conductor/",
       ),
     );

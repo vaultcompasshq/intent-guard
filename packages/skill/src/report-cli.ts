@@ -3,12 +3,12 @@ import { execFileSync } from "node:child_process";
 import {
   buildConductorReport,
   renderConductorReportMarkdown,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor report [flags]
+const USAGE = `Usage: intent-guard report [flags]
 
-Emit a PR/CI handoff report. Runs the same gate as conductor check and exits
+Emit a PR/CI handoff report. Runs the same gate as intent-guard check and exits
 with the gate result.
 
 Flags:

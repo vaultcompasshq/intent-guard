@@ -2,10 +2,10 @@
 import {
   coachMessage,
   scorePrompt,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor coach <prompt text>
+const USAGE = `Usage: intent-guard coach <prompt text>
 
 Score a prompt for scope and clarity risks before it becomes an Intent
 Contract. Everything after the command is treated as the prompt text.
@@ -14,7 +14,7 @@ Flags:
   --help, -h   Show this help
 
 Example:
-  conductor coach "Add CSV export. No new API endpoints."`;
+  intent-guard coach "Add CSV export. No new API endpoints."`;
 
 const argv = process.argv.slice(2);
 // coach takes free text rather than flags, so a help flag only counts in the

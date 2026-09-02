@@ -8,38 +8,38 @@
 ## Recommended setup (npm)
 
 ```bash
-npx @vaultcompass/conductor-cli@latest init --project .
+npx @vaultcompass/intent-guard@latest init --project .
 mkdir -p .cursor/rules
-# From a Conductor source checkout, or paste the rule from this folder:
-cp /path/to/conductor/integrations/cursor/conductor.mdc .cursor/rules/conductor.mdc
+# From an Intent Guard source checkout, or paste the rule from this folder:
+cp /path/to/intent-guard/integrations/cursor/conductor.mdc .cursor/rules/conductor.mdc
 
-npx @vaultcompass/conductor-cli@latest extract --project . --text "<approved task>"
-npx @vaultcompass/conductor-cli@latest freeze --project . --approved-by "<you>"
-npx @vaultcompass/conductor-cli@latest hook install --project .
+npx @vaultcompass/intent-guard@latest extract --project . --text "<approved task>"
+npx @vaultcompass/intent-guard@latest freeze --project . --approved-by "<you>"
+npx @vaultcompass/intent-guard@latest hook install --project .
 ```
 
 Re-verify anytime:
 
 ```bash
-npx @vaultcompass/conductor-cli@latest doctor --project .
-npx @vaultcompass/conductor-cli@latest check --project . --staged
+npx @vaultcompass/intent-guard@latest doctor --project .
+npx @vaultcompass/intent-guard@latest check --project . --staged
 ```
 
 ### Machine-wide `core.hooksPath`
 
 If Git is configured with a global hooks directory (common with vault-guard),
-`conductor hook install` sets **local** `core.hooksPath=.git/hooks` and installs
+`intent-guard hook install` sets **local** `core.hooksPath=.git/hooks` and installs
 there so it does not overwrite the shared hooks dir. Repo-local paths such as
 `.githooks` are left alone and receive the hook directly.
 
 ---
 
-## From a Conductor source checkout
+## From an Intent Guard source checkout
 
 ### 1. Skills
 
 ```bash
-pnpm conductor:install-skills
+pnpm intent-guard:install-skills
 ```
 
 ### 2. Project rule
@@ -49,7 +49,7 @@ mkdir -p .cursor/rules
 cp integrations/cursor/conductor.mdc .cursor/rules/conductor.mdc
 ```
 
-**Conductor repo maintainers only** — also install the public-content guard:
+**Intent Guard repo maintainers only**, also install the public-content guard:
 
 ```bash
 cp integrations/cursor/no-portfolio-names.mdc .cursor/rules/no-portfolio-names.mdc
@@ -58,12 +58,12 @@ cp integrations/cursor/no-portfolio-names.mdc .cursor/rules/no-portfolio-names.m
 ### 3. Mechanical gate
 
 ```bash
-pnpm conductor -- hook install --project .
+pnpm intent-guard -- hook install --project .
 # or: pnpm dogfood:cursor-hooks   # full pass/fail fixture
 ```
 
-Do **not** copy `integrations/git-hooks/*.sample` by hand for npm users — that
-path is not in the published packages. Use `conductor hook install`.
+Do **not** copy `integrations/git-hooks/*.sample` by hand for npm users; that
+path is not in the published packages. Use `intent-guard hook install`.
 
 ### 4. Optional gitignore
 
@@ -72,7 +72,7 @@ path is not in the published packages. Use `conductor hook install`.
 ```
 
 Commit `intent-contract.yaml` on feature branches when the team should see the
-approved ask. The Conductor OSS repo itself does not keep a frozen root contract
+approved ask. The Intent Guard OSS repo itself does not keep a frozen root contract
 on `main`.
 
 ---
@@ -90,12 +90,12 @@ on `main`.
 
 ## Multi-model usage
 
-| Environment | How Conductor runs |
+| Environment | How Intent Guard runs |
 |-------------|-------------------|
 | Cursor | Project rule + skills; gate via `hook install` |
 | Codex CLI | `integrations/codex` sample + same CLI gate |
 | Claude Code | `integrations/claude-code` sample + same CLI gate |
-| CI | `conductor drift --ci` / `conductor check` |
+| CI | `intent-guard drift --ci` / `intent-guard check` |
 
 Same `intent-contract.yaml` — any model that can read a file can consume it.
 
@@ -112,8 +112,8 @@ Same `intent-contract.yaml` — any model that can read a file can consume it.
 
 | Tool | When |
 |------|------|
-| Conductor drift gate | During session / pre-commit |
+| Intent Guard drift gate | During session / pre-commit |
 | Bugbot | PR time |
-| Conductor `drift --ci` | CI optional |
+| Intent Guard `drift --ci` | CI optional |
 
 No conflict — different lifecycle stages.

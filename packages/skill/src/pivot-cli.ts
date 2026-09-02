@@ -4,10 +4,10 @@ import {
   readContract,
   writeContract,
   writeIndex,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor pivot --change <text> [flags]
+const USAGE = `Usage: intent-guard pivot --change <text> [flags]
 
 Record an intentional scope change against the active Intent Contract.
 
@@ -60,14 +60,14 @@ if (args.help) printUsage(USAGE);
 
 if (!args.change) {
   console.error(
-    "Usage: conductor-pivot --change <text> [--reason <text>] [--add-scope <text>] [--remove-scope <text>] [--add-out-of-scope <text>] [--acknowledge] [--project <root>]",
+    "Usage: intent-guard-pivot --change <text> [--reason <text>] [--add-scope <text>] [--remove-scope <text>] [--add-out-of-scope <text>] [--acknowledge] [--project <root>]",
   );
   process.exit(1);
 }
 
 const contract = readContract(args.projectRoot);
 if (!contract) {
-  console.error("No .conductor/intent-contract.yaml found. Run conductor-extract first.");
+  console.error("No .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
   process.exit(1);
 }
 

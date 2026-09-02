@@ -3,7 +3,7 @@
  * Cursor integration dogfood — mechanical gate path.
  *
  * Cursor project rules are advisory. Enforcement is the Git pre-commit hook
- * installed via `conductor hook install`, which is what this script proves:
+ * installed via `intent-guard hook install`, which is what this script proves:
  *
  *   1. Copy integrations/cursor/conductor.mdc → .cursor/rules/
  *   2. init → extract → freeze
@@ -32,7 +32,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const cli = join(root, "packages/cli/dist/conductor.js");
+const cli = join(root, "packages/cli/dist/intent-guard.js");
 const checkCli = join(root, "packages/skill/dist/check-cli.js");
 const ruleSrc = join(root, "integrations/cursor/conductor.mdc");
 
@@ -49,21 +49,21 @@ if (!existsSync(cli) || !existsSync(checkCli)) {
   fail("build missing — run `pnpm build` first");
 }
 
-const work = mkdtempSync(join(tmpdir(), "conductor-cursor-dogfood-"));
+const work = mkdtempSync(join(tmpdir(), "intent-guard-cursor-dogfood-"));
 const bin = join(work, "bin");
 mkdirSync(bin);
 
-// Wrappers so the installed pre-commit hook finds conductor on PATH.
+// Wrappers so the installed pre-commit hook finds intent-guard on PATH.
 writeFileSync(
-  join(bin, "conductor"),
+  join(bin, "intent-guard"),
   `#!/usr/bin/env bash\nexec node "${cli}" "$@"\n`,
 );
 writeFileSync(
-  join(bin, "conductor-check"),
+  join(bin, "intent-guard-check"),
   `#!/usr/bin/env bash\nexec node "${checkCli}" "$@"\n`,
 );
-chmodSync(join(bin, "conductor"), 0o755);
-chmodSync(join(bin, "conductor-check"), 0o755);
+chmodSync(join(bin, "intent-guard"), 0o755);
+chmodSync(join(bin, "intent-guard-check"), 0o755);
 
 const env = {
   ...process.env,
@@ -84,7 +84,7 @@ function run(cmd, args, opts = {}) {
   return result;
 }
 
-function conductor(args) {
+function intentGuard(args) {
   return run("node", [cli, ...args]);
 }
 
@@ -110,18 +110,18 @@ try {
   copyFileSync(ruleSrc, join(work, ".cursor", "rules", "conductor.mdc"));
   ok("installed Cursor project rule (.cursor/rules/conductor.mdc)");
 
-  let r = conductor(["init", "--project", "."]);
+  let r = intentGuard(["init", "--project", "."]);
   if (r.status !== 0) fail(`init: ${r.stderr || r.stdout}`);
-  ok("conductor init");
+  ok("intent-guard init");
 
   // README-only ask — same pattern as packed-install dogfood; source edits drift.
   const ask =
     "Add README install example only. Do not change source or package.json.";
-  r = conductor(["extract", "--project", ".", "--text", ask]);
+  r = intentGuard(["extract", "--project", ".", "--text", ask]);
   if (r.status !== 0) fail(`extract: ${r.stderr || r.stdout}`);
-  ok("conductor extract");
+  ok("intent-guard extract");
 
-  r = conductor([
+  r = intentGuard([
     "freeze",
     "--project",
     ".",
@@ -129,24 +129,24 @@ try {
     "cursor-dogfood",
   ]);
   if (r.status !== 0) fail(`freeze: ${r.stderr || r.stdout}`);
-  ok("conductor freeze");
+  ok("intent-guard freeze");
 
-  r = conductor(["hook", "install", "--project", "."]);
+  r = intentGuard(["hook", "install", "--project", "."]);
   if (r.status !== 0) fail(`hook install: ${r.stderr || r.stdout}`);
   const hookPath = join(work, ".git", "hooks", "pre-commit");
   if (!existsSync(hookPath)) fail("pre-commit hook missing after install");
   if (!readFileSync(hookPath, "utf8").includes("conductor-managed-pre-commit")) {
     fail("pre-commit hook missing Conductor marker");
   }
-  ok("conductor hook install");
+  ok("intent-guard hook install");
 
-  r = conductor(["doctor", "--project", ".", "--json"]);
+  r = intentGuard(["doctor", "--project", ".", "--json"]);
   if (r.status !== 0) fail(`doctor: ${r.stderr || r.stdout}`);
   const doctorJson = JSON.stringify(JSON.parse(r.stdout)).toLowerCase();
   if (!doctorJson.includes("pre-commit") && !doctorJson.includes("hook")) {
     fail(`doctor did not report pre-commit hook: ${r.stdout.slice(0, 400)}`);
   }
-  ok("conductor doctor sees pre-commit hook");
+  ok("intent-guard doctor sees pre-commit hook");
 
   run("git", ["add", "."]);
   r = run("git", [
@@ -162,7 +162,7 @@ try {
   writeFileSync(join(work, "src", "app.ts"), "export const n = 2;\n");
   run("git", ["add", "src/app.ts"]);
 
-  r = conductor(["check", "--project", ".", "--staged", "--json"]);
+  r = intentGuard(["check", "--project", ".", "--staged", "--json"]);
   let gate;
   try {
     gate = JSON.parse(r.stdout);
@@ -176,7 +176,7 @@ try {
   }
   ok(`out-of-scope check blocks (status=${gate.status})`);
 
-  r = run("git", ["commit", "-qm", "should be blocked by conductor hook"]);
+  r = run("git", ["commit", "-qm", "should be blocked by intent-guard hook"]);
   if (r.status === 0) fail("pre-commit allowed out-of-scope commit");
   ok("pre-commit blocks out-of-scope commit");
 
@@ -190,7 +190,7 @@ try {
   );
   run("git", ["add", "README.md"]);
 
-  r = conductor(["check", "--project", ".", "--staged", "--json"]);
+  r = intentGuard(["check", "--project", ".", "--staged", "--json"]);
   try {
     gate = JSON.parse(r.stdout);
   } catch {
@@ -211,7 +211,7 @@ try {
 
   console.log("\ndogfood-cursor-hooks: OK");
   console.log(
-    "Cursor rule is advisory; mechanical enforcement = conductor hook install.",
+    "Cursor rule is advisory; mechanical enforcement = intent-guard hook install.",
   );
 } finally {
   rmSync(work, { recursive: true, force: true });

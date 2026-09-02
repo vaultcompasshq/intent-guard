@@ -8,10 +8,10 @@ import {
   readContract,
   writeContract,
   writeIndex,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, printUsage } from "./usage.js";
 
-const USAGE = `Usage: conductor freeze [flags]
+const USAGE = `Usage: intent-guard freeze [flags]
 
 Approve and freeze the active draft contract. A non-interactive run must pass
 --approved-by: an agent cannot self-approve.
@@ -66,7 +66,7 @@ async function main() {
 
   const contract = readContract(args.projectRoot);
   if (!contract) {
-    console.error("No draft .conductor/intent-contract.yaml found. Run conductor-extract first.");
+    console.error("No draft .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
     process.exit(1);
   }
   if (isContractFrozen(contract)) {

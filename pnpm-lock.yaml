@@ -13,7 +13,7 @@ importers:
 
   .:
     devDependencies:
-      '@vaultcompass/conductor-schema':
+      '@vaultcompass/intent-guard-schema':
         specifier: workspace:*
         version: link:packages/schema
       vitest:
@@ -25,7 +25,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@vaultcompass/conductor-skill':
+      '@vaultcompass/intent-guard-skill':
         specifier: workspace:*
         version: link:../skill
     devDependencies:
@@ -41,7 +41,7 @@ importers:
 
   packages/core:
     dependencies:
-      '@vaultcompass/conductor-schema':
+      '@vaultcompass/intent-guard-schema':
         specifier: workspace:*
         version: link:../schema
       yaml:
@@ -76,10 +76,10 @@ importers:
 
   packages/skill:
     dependencies:
-      '@vaultcompass/conductor-core':
+      '@vaultcompass/intent-guard-core':
         specifier: workspace:*
         version: link:../core
-      '@vaultcompass/conductor-schema':
+      '@vaultcompass/intent-guard-schema':
         specifier: workspace:*
         version: link:../schema
       yaml:

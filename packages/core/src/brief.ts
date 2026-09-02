@@ -1,4 +1,4 @@
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import {
   briefAcknowledgedCorrections,
   type BriefCorrectionOptions,

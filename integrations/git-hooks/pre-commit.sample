@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Conductor pre-commit gate. Blocks the commit when no frozen Intent Contract
+# Intent Guard pre-commit gate. Blocks the commit when no frozen Intent Contract
 # exists or when staged changes drift past a blocking threshold.
 #
 # Install:
@@ -10,17 +10,24 @@
 # Bypass for a single commit (e.g. an acknowledged pivot you log separately):
 #   git commit --no-verify
 #
-# Requires conductor-check on PATH, or adjust CONDUCTOR_CHECK below.
+# Requires intent-guard-check on PATH, or adjust INTENT_GUARD_CHECK below.
+# CONDUCTOR_CHECK is still read as a fallback: this tool was called conductor
+# through 1.1.0, and a hook copied from an older checkout keeps working.
+#
+# This sample skips the gate when the binary is missing, so a team can adopt it
+# gradually. "intent-guard hook install" generates a fail-closed hook instead,
+# which refuses the commit when the binary is not there. Prefer that one once
+# the tool is genuinely installed.
 
 set -euo pipefail
 
-CONDUCTOR_CHECK="${CONDUCTOR_CHECK:-conductor-check}"
+INTENT_GUARD_CHECK="${INTENT_GUARD_CHECK:-${CONDUCTOR_CHECK:-intent-guard-check}}"
 
-if ! command -v "$CONDUCTOR_CHECK" >/dev/null 2>&1; then
-  echo "conductor-check not found on PATH; skipping Conductor gate." >&2
-  echo "Set CONDUCTOR_CHECK to the binary path to enforce." >&2
+if ! command -v "$INTENT_GUARD_CHECK" >/dev/null 2>&1; then
+  echo "intent-guard-check not found on PATH; skipping Intent Guard gate." >&2
+  echo "Set INTENT_GUARD_CHECK to the binary path to enforce." >&2
   exit 0
 fi
 
 # --staged auto-collects staged paths via 'git diff --cached --name-only'.
-exec "$CONDUCTOR_CHECK" --project . --staged
+exec "$INTENT_GUARD_CHECK" --project . --staged

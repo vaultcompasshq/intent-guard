@@ -38,13 +38,13 @@ Options:
 
 Defaults:
   repos: ${DEFAULT_REPOS.join(", ")}
-  workdir: ${join(tmpdir(), "conductor-public-repo-validation")}
+  workdir: ${join(tmpdir(), "intent-guard-public-repo-validation")}
   report: <workdir>/report-${date}.md`);
 }
 
 function parseArgs(argv) {
   const repos = [];
-  let workdir = join(tmpdir(), "conductor-public-repo-validation");
+  let workdir = join(tmpdir(), "intent-guard-public-repo-validation");
   let report = "";
   let keepWorkdir = false;
   let skipBuild = false;
@@ -205,7 +205,7 @@ function validateRepo(repo, options) {
     stdio: ["ignore", "inherit", "inherit"],
   }), `clone ${repo}`);
   run("git", ["config", "user.name", "Conductor Validation"], { cwd: repoPath });
-  run("git", ["config", "user.email", "conductor-validation@example.invalid"], { cwd: repoPath });
+  run("git", ["config", "user.email", "intent-guard-validation@example.invalid"], { cwd: repoPath });
 
   const files = gitFiles(repoPath);
   const readme = pickReadme(files);
@@ -213,7 +213,7 @@ function validateRepo(repo, options) {
   if (!readme) throw new Error(`${repo}: no README file found`);
   if (!sourceOrPackage) throw new Error(`${repo}: no source/package file found`);
 
-  const cliPath = join(repoRoot, "packages/cli/dist/conductor.js");
+  const cliPath = join(repoRoot, "packages/cli/dist/intent-guard.js");
   const ask = [
     "Update README usage documentation for the package.",
     "Do not change source code, package metadata, build configuration, dependency manifests, or runtime behavior.",
@@ -320,7 +320,7 @@ function renderReport({ revision, results }) {
     "- Positive control: staged README-only change against a contract that allows README usage documentation and disallows source/package changes.",
     "- Negative control: staged source/package change with an explicit signal describing implementation drift.",
     "- Path-only negative control: staged source/package change with no explicit signal.",
-    "- Setup diagnostic: `conductor doctor --json` runs after freeze and before drift controls.",
+    "- Setup diagnostic: `intent-guard doctor --json` runs after freeze and before drift controls.",
     "",
     "## Notes",
     "",
@@ -343,7 +343,7 @@ function renderReport({ revision, results }) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const cliPath = join(repoRoot, "packages/cli/dist/conductor.js");
+  const cliPath = join(repoRoot, "packages/cli/dist/intent-guard.js");
 
   mkdirSync(options.workdir, { recursive: true });
   if (!options.skipBuild || !existsSync(cliPath)) {

@@ -1,4 +1,4 @@
-import type { ChangeBudget, IntentContract } from "@vaultcompass/conductor-schema";
+import type { ChangeBudget, IntentContract } from "@vaultcompass/intent-guard-schema";
 import { findingFingerprint } from "./fingerprint.js";
 
 export type BudgetRule =

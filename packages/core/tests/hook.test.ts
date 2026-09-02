@@ -37,7 +37,7 @@ describe("renderPreCommitHook", () => {
     const script = renderPreCommitHook();
     expect(script.startsWith("#!/usr/bin/env bash")).toBe(true);
     expect(script).toContain(CONDUCTOR_HOOK_MARKER);
-    expect(script).toContain("conductor check --project . --staged");
+    expect(script).toContain("intent-guard check --project . --staged");
     expect(script).not.toContain("integrations/");
   });
 
