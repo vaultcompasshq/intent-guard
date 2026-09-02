@@ -1,4 +1,5 @@
 import type { ChangeBudget, IntentContract } from "@vaultcompass/conductor-schema";
+import { findingFingerprint } from "./fingerprint.js";
 
 export type BudgetRule =
   | "protected_paths"
@@ -9,6 +10,13 @@ export type BudgetRule =
 export type BudgetSeverity = "soft_block" | "hard_block";
 
 export interface BudgetViolation {
+  /**
+   * Deterministic id for this violation: sha256 over the contract id, the rule,
+   * and the sorted normalized matched paths. Stable across runs and machines,
+   * and unchanged by the order git happened to list the paths in. See
+   * fingerprint.ts and docs/cli-reference.md.
+   */
+  fingerprint: string;
   rule: BudgetRule;
   severity: BudgetSeverity;
   message: string;
@@ -102,17 +110,36 @@ export function evaluateBudget(
     return { ok: true, action: "ok", violations };
   }
 
+  const violation = (
+    rule: BudgetRule,
+    severity: BudgetSeverity,
+    message: string,
+    matched: string[],
+  ): BudgetViolation => ({
+    fingerprint: findingFingerprint({
+      contractId: contract.contract_id,
+      ruleId: rule,
+      matched,
+    }),
+    rule,
+    severity,
+    message,
+    matched,
+  });
+
   if (budget.protected_paths && budget.protected_paths.length > 0) {
     const matched = changedPaths.filter((p) =>
       matchesAny(p, budget.protected_paths!),
     );
     if (matched.length > 0) {
-      violations.push({
-        rule: "protected_paths",
-        severity: "hard_block",
-        message: `Touched protected path(s): ${matched.join(", ")}`,
-        matched,
-      });
+      violations.push(
+        violation(
+          "protected_paths",
+          "hard_block",
+          `Touched protected path(s): ${matched.join(", ")}`,
+          matched,
+        ),
+      );
     }
   }
 
@@ -121,35 +148,41 @@ export function evaluateBudget(
       (p) => !matchesAny(p, budget.allowed_paths!),
     );
     if (matched.length > 0) {
-      violations.push({
-        rule: "allowed_paths",
-        severity: "soft_block",
-        message: `Changed path(s) outside allowed_paths: ${matched.join(", ")}`,
-        matched,
-      });
+      violations.push(
+        violation(
+          "allowed_paths",
+          "soft_block",
+          `Changed path(s) outside allowed_paths: ${matched.join(", ")}`,
+          matched,
+        ),
+      );
     }
   }
 
   if (typeof budget.max_files === "number") {
     if (changedPaths.length > budget.max_files) {
-      violations.push({
-        rule: "max_files",
-        severity: "soft_block",
-        message: `Changed ${changedPaths.length} files, budget allows ${budget.max_files}`,
-        matched: changedPaths,
-      });
+      violations.push(
+        violation(
+          "max_files",
+          "soft_block",
+          `Changed ${changedPaths.length} files, budget allows ${budget.max_files}`,
+          changedPaths,
+        ),
+      );
     }
   }
 
   if (budget.allow_new_dependencies === false) {
     const matched = changedPaths.filter(isManifestPath);
     if (matched.length > 0) {
-      violations.push({
-        rule: "allow_new_dependencies",
-        severity: "soft_block",
-        message: `Edited dependency manifest(s) while allow_new_dependencies is false: ${matched.join(", ")}`,
-        matched,
-      });
+      violations.push(
+        violation(
+          "allow_new_dependencies",
+          "soft_block",
+          `Edited dependency manifest(s) while allow_new_dependencies is false: ${matched.join(", ")}`,
+          matched,
+        ),
+      );
     }
   }
 

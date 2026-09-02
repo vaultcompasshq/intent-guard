@@ -161,6 +161,57 @@ Notes:
   comparison (`--previous-contract`) scores drift but does not re-check the
   budget.
 
+## Finding fingerprints
+
+Every finding Conductor emits in JSON carries a `fingerprint`: a deterministic
+id for that finding. The same finding on the same input produces the same id on
+every run and on every machine, so a baseline file can record "this one is
+known" and a tool aggregating several guards can tell a repeat from something
+new.
+
+Where they appear:
+
+- budget violations: `budget.violations[].fingerprint` (`conductor check --json`
+  and `conductor report --json`);
+- drift findings: `drift.finding_details[].fingerprint`, which pairs each
+  human-readable `findings[]` string with its `category`, `rule_id`, and
+  `matched` set. `findings[]` is unchanged and stays the prose rendering.
+- `crossSessionDrift.findings` is prose only. Its fingerprinted form is
+  `crossSessionDrift.previous.finding_details`, already keyed to the contract
+  each finding was raised against.
+
+The recipe, so other tools can reproduce an id without calling Conductor:
+
+1. Take three inputs. The **contract id** (`contract_id` of the contract the
+   finding was raised against), the **rule id** (the budget `rule` such as
+   `protected_paths`; for drift, the `rule_id` field, which is the category, and
+   for per-item findings the category plus the contract text that raised it),
+   and the **matched set** (`matched`).
+2. Normalize each matched entry: trim whitespace, convert `\` to `/`, drop a
+   leading `./`. Discard empties, deduplicate, and sort by Unicode codepoint
+   (not by locale).
+3. Encode each field as `<length>:<value>`, where the length is the number of
+   UTF-16 code units, and concatenate in this order: the literal recipe version
+   `conductor.finding.v1`, the contract id, the rule id, the decimal count of
+   matched entries, then each matched entry.
+4. `sha256` that string as UTF-8; the fingerprint is the lowercase hex digest.
+
+Length prefixes rather than a separator, because a separator lets content move
+across a field boundary and collide: `("ab", "c")` and `("a", "bc")` would hash
+the same under a plain join.
+
+Nothing positional and nothing time-based is hashed. A finding's index in the
+list, timestamps, run ids, the drift score, the constraint's priority, and the
+human message text are all deliberately excluded: reordering findings is not a
+new finding, the same problem found tomorrow is the same problem, and an id
+that moved when a message was reworded would break every baseline on a copy
+edit.
+
+The recipe version is part of the hash. Changing the canonical form means
+bumping `conductor.finding.v1`, which invalidates every stored id, so it is a
+breaking change rather than a quiet edit. A pinned test vector in
+`packages/core/tests/fingerprint.test.ts` fails if the recipe drifts.
+
 ## conductor report / conductor-report
 
 Emit a reviewer-friendly handoff report for PRs, CI logs, or agent resumes.
