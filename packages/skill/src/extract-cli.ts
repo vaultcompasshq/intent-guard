@@ -10,7 +10,7 @@ import {
   writeContract,
 } from "@vaultcompass/intent-guard-core";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard extract --text <user ask> [flags]
 
@@ -21,13 +21,15 @@ Flags:
   --text <user ask>   The ask to draft a contract from (required)
   --project <root>    Project root (default: .)
   --dry-run           Print the draft without writing it
-  --help, -h          Show this help`;
+  --help, -h          Show this help
+  --version, -v       Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let userText = "";
   let dryRun = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -45,14 +47,17 @@ function parseArgs(argv: string[]) {
       process.exit(2);
     } else if (isHelpFlag(arg)) {
       help = true;
+    } else if (isVersionFlag(arg)) {
+      version = true;
     }
   }
 
-  return { projectRoot, userText, dryRun, help };
+  return { projectRoot, userText, dryRun, help, version };
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 if (!args.userText) {
   console.error(

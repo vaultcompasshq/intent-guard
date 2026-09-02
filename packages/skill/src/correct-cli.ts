@@ -5,7 +5,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard correct --wrong <text> --right <text> --rule <text> [flags]
 
@@ -18,7 +18,8 @@ Flags:
   --project <root>   Project root (default: .)
   --acknowledge      Mark the correction acknowledged by the user
   --promote          Promote the rule to a contract constraint
-  --help, -h         Show this help`;
+  --help, -h         Show this help
+  --version, -v      Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -28,6 +29,7 @@ function parseArgs(argv: string[]) {
   let acknowledge = false;
   let promote = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -38,13 +40,15 @@ function parseArgs(argv: string[]) {
     else if (arg === "--acknowledge") acknowledge = true;
     else if (arg === "--promote") promote = true;
     else if (isHelpFlag(arg)) help = true;
+    else if (isVersionFlag(arg)) version = true;
   }
 
-  return { projectRoot, wrong, right, rule, acknowledge, promote, help };
+  return { projectRoot, wrong, right, rule, acknowledge, promote, help, version };
 }
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 if (!args.wrong || !args.right || !args.rule) {
   console.error(

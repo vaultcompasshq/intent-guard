@@ -4,7 +4,7 @@ import {
   buildConductorReport,
   renderConductorReportMarkdown,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, printUsage } from "./usage.js";
+import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard report [flags]
 
@@ -21,7 +21,8 @@ Flags:
   --no-require-frozen         Allow a missing or unfrozen contract
   --with-secrets              Append a vault-guard staged scan when installed
   --json                      Machine-readable output
-  --help, -h                  Show this help`;
+  --help, -h                  Show this help
+  --version, -v               Print the version`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -34,6 +35,7 @@ function parseArgs(argv: string[]) {
   let previousContract = "";
   let withSecrets = false;
   let help = false;
+  let version = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -57,6 +59,8 @@ function parseArgs(argv: string[]) {
       previousContract = argv[++i];
     } else if (isHelpFlag(arg)) {
       help = true;
+    } else if (isVersionFlag(arg)) {
+      version = true;
     }
   }
 
@@ -71,6 +75,7 @@ function parseArgs(argv: string[]) {
     previousContract,
     withSecrets,
     help,
+    version,
   };
 }
 
@@ -88,6 +93,7 @@ function stagedPaths(projectRoot: string): string[] {
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
+if (args.version) printVersion();
 
 const changedPaths = [...args.paths];
 if (args.staged) changedPaths.push(...stagedPaths(args.projectRoot));

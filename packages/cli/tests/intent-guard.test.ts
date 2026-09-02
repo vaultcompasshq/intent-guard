@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -68,9 +68,21 @@ describe("intent-guard", () => {
   });
 
   it("prints the package version", () => {
-    const res = run(["--version"]);
+    const dir = tmpProject();
+    const res = run(["--version"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout.trim()).toBe("1.2.0");
+    expect(res.stdout).toBe("1.2.0\n");
+    expect(res.stderr).toBe("");
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("prints the package version for -v too", () => {
+    const dir = tmpProject();
+    const res = run(["-v"], dir);
+    expect(res.code).toBe(0);
+    expect(res.stdout).toBe("1.2.0\n");
+    expect(res.stderr).toBe("");
+    expect(readdirSync(dir)).toEqual([]);
   });
 
   it("dispatches to an existing subcommand", () => {
