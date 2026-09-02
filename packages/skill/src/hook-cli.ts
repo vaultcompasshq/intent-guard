@@ -5,7 +5,7 @@ import { isHelpFlag, printUsage } from "./usage.js";
 const REASONS: Record<string, string> = {
   not_a_git_repo: "No .git directory found. Run this inside a git repository.",
   existing_hook_not_managed:
-    "A pre-commit hook already exists and was not created by Conductor. Re-run with --force to overwrite it.",
+    "A pre-commit hook already exists and was not created by Intent Guard. Re-run with --force to overwrite it.",
   hooks_path_localize_failed:
     "Could not set local core.hooksPath=.git/hooks (machine-wide hooksPath is outside this repo). Set it manually, then re-run.",
 };
@@ -14,13 +14,13 @@ const USAGE = `Usage: intent-guard hook install [flags]
 
 Install a self-contained Git pre-commit hook that runs the Intent Guard gate on
 staged changes. The hook depends only on the installed CLIs, not on the
-Conductor source repo. It is fail-closed: a gate whose binary is missing
+Intent Guard source repo. It is fail-closed: a gate whose binary is missing
 refuses the commit rather than skipping.
 
 Flags:
   --project <dir>      Project root (default: .)
   --with-vault-guard   Also run vault-guard secret scanning in the hook
-  --force              Overwrite an existing non-Conductor pre-commit hook
+  --force              Overwrite an existing hook Intent Guard did not write
   --json               Emit JSON (default)
   --human              Human-readable output
   --help, -h           Show this help`;
@@ -58,7 +58,7 @@ const result = installPreCommitHook(args.projectRoot, {
 
 if (args.human) {
   if (result.installed) {
-    console.log(`Installed Conductor pre-commit hook at ${result.path}`);
+    console.log(`Installed Intent Guard pre-commit hook at ${result.path}`);
     if (result.localizedHooksPath) {
       console.log(
         "Set local core.hooksPath=.git/hooks so a machine-wide hooks directory is not overwritten.",

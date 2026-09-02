@@ -1,5 +1,5 @@
 /**
- * Shared help handling for the Conductor subcommand CLIs.
+ * Shared help handling for the Intent Guard subcommand CLIs.
  *
  * Two rules, both learned from the 2026-09-02 run against the published 1.1.0
  * artifacts, where `intent-guard check --help` and `intent-guard report --help` ran

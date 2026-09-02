@@ -8,7 +8,7 @@ import { isHelpFlag, printUsage } from "./usage.js";
 
 const USAGE = `Usage: intent-guard doctor [flags]
 
-Diagnose the local Conductor setup: contract, config, archive, generated index,
+Diagnose the local Intent Guard setup: contract, config, archive, generated index,
 git hook, and the guard binaries this project references.
 
 Flags:
@@ -56,7 +56,7 @@ const result = runDoctor(args.projectRoot);
 if (args.json) {
   console.log(JSON.stringify(result));
 } else {
-  console.log(`Conductor doctor: ${result.status}`);
+  console.log(`Intent Guard doctor: ${result.status}`);
   console.log(
     `Summary: ${result.summary.ok} ok, ${result.summary.info} info, ${result.summary.warn} warn, ${result.summary.error} error`,
   );

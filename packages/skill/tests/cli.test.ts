@@ -378,7 +378,7 @@ describe("conductor-doctor", () => {
     await run("freeze-cli.js", ["--project", dir, "--approved-by", "tester"]);
     const res = await run("doctor-cli.js", ["--project", dir]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("Conductor doctor: ok");
+    expect(res.stdout).toContain("Intent Guard doctor: ok");
     expect(res.stdout).toContain("Active contract is frozen");
   });
 });
