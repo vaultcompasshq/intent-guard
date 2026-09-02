@@ -10,24 +10,46 @@
 #
 # Requires conductor-check and vault-guard on PATH, or set CONDUCTOR_CHECK /
 # VAULT_GUARD to explicit binary paths. Missing tools are reported and skipped
-# so teams can adopt the gates incrementally.
+# so teams can adopt the gates incrementally. That is the one difference from
+# the hook "conductor hook install" generates, which is fail-closed and refuses
+# the commit when a gate binary is missing. Prefer the generated hook once both
+# tools are actually installed.
+#
+# Exit codes: both gates run even after one fails, and the script exits with the
+# FIRST non-zero code, so a later gate cannot overwrite an earlier gate's code.
+# Exit 2 ("could not complete, treat as blocking") and exit 1 ("policy
+# violation") are different answers and must not collapse into whichever gate
+# happened to run last.
 
-set -euo pipefail
+# No -e on purpose: each gate's exit code is captured and composed by hand.
+set -uo pipefail
 
 CONDUCTOR_CHECK="${CONDUCTOR_CHECK:-conductor-check}"
 VAULT_GUARD="${VAULT_GUARD:-vault-guard}"
 
 status=0
 
+record() {
+  # record <gate name> <exit code>
+  if [ "$2" -ne 0 ]; then
+    echo "pre-commit: $1 exited $2" >&2
+    if [ "$status" -eq 0 ]; then
+      status="$2"
+    fi
+  fi
+}
+
 if command -v "$CONDUCTOR_CHECK" >/dev/null 2>&1; then
-  "$CONDUCTOR_CHECK" --project . --staged || status=$?
+  "$CONDUCTOR_CHECK" --project . --staged
+  record "conductor-check" "$?"
 else
   echo "conductor-check not found on PATH; skipping Conductor gate." >&2
   echo "Set CONDUCTOR_CHECK to the binary path to enforce." >&2
 fi
 
 if command -v "$VAULT_GUARD" >/dev/null 2>&1; then
-  "$VAULT_GUARD" scan --staged || status=$?
+  "$VAULT_GUARD" scan --staged
+  record "vault-guard" "$?"
 else
   echo "vault-guard not found on PATH; skipping secret scan." >&2
   echo "Set VAULT_GUARD to the binary path to enforce." >&2

@@ -93,11 +93,36 @@ export function resolveGitHooksDir(projectRoot: string): ResolvedHooksDir {
   };
 }
 
+/** Exit code the hook uses when a gate's binary is not installed. */
+export const HOOK_MISSING_BINARY_EXIT = 127;
+
 /**
  * Render a self-contained pre-commit hook. It depends only on the installed
  * CLIs (conductor-check, optionally vault-guard) being resolvable on PATH or via
  * npx, never on the Conductor repo's integrations/ directory — which does not
  * ship in the published npm packages.
+ *
+ * Two properties the hook is required to have:
+ *
+ * Fail-closed. A gate whose binary is missing is a failure, not a skip. This is
+ * a guard-family hook; a hook that waves the commit through because the scanner
+ * is not installed is the exact inversion of what it exists to do, and it fails
+ * silently on the machine least likely to notice (a fresh clone, CI without the
+ * dev dependencies). Missing binaries exit 127, the shell's own convention for
+ * "command not found".
+ *
+ * First non-zero wins. Every gate runs even after one fails, so a single commit
+ * attempt shows every problem rather than one per attempt, and each gate's own
+ * exit code is printed to stderr. The hook then exits with the first non-zero
+ * code it saw. A shell exit status is one integer, so some code has to be
+ * chosen; taking the first means a later gate can never overwrite an earlier
+ * one's code. That matters because the codes are not interchangeable: a
+ * scanner's exit 2 ("could not complete, treat as blocking") says something
+ * different from exit 1 ("policy violation"), and the previous last-wins
+ * composition quietly downgraded the former to the latter whenever a cheaper
+ * gate failed afterwards. Nothing is actually lost either way, because the
+ * per-gate stderr lines report every code regardless of which one the process
+ * exits with.
  */
 export function renderPreCommitHook(withVaultGuard = false): string {
   const lines = [
@@ -106,8 +131,28 @@ export function renderPreCommitHook(withVaultGuard = false): string {
     "# Installed by: conductor hook install",
     "# Blocks the commit when no frozen Intent Contract exists or staged changes",
     "# drift past a blocking threshold. Bypass one commit with: git commit --no-verify",
+    "#",
+    "# Fail-closed: a gate whose binary is missing exits 127, it is never skipped.",
+    "# Every gate runs even after an earlier one fails, and every gate's exit code",
+    "# is printed below. The hook exits with the FIRST non-zero code it saw, so a",
+    "# later gate cannot overwrite an earlier gate's code (exit 2 'could not",
+    "# complete' means something different from exit 1 'policy violation').",
     "",
-    "set -euo pipefail",
+    "# No -e on purpose: every gate's exit code is captured and composed by hand,",
+    "# and -e would abort the run at the first failing gate.",
+    "set -uo pipefail",
+    "",
+    "status=0",
+    "",
+    "record() {",
+    "  # record <gate name> <exit code>",
+    '  if [ "$2" -ne 0 ]; then',
+    '    echo "pre-commit: $1 exited $2" >&2',
+    '    if [ "$status" -eq 0 ]; then',
+    '      status="$2"',
+    "    fi",
+    "  fi",
+    "}",
     "",
     "run_conductor() {",
     '  if command -v conductor-check >/dev/null 2>&1; then',
@@ -117,13 +162,13 @@ export function renderPreCommitHook(withVaultGuard = false): string {
     '  elif command -v npx >/dev/null 2>&1; then',
     '    npx --no-install conductor check --project . --staged',
     "  else",
-    '    echo "conductor not found on PATH; skipping intent gate." >&2',
-    "    return 0",
+    '    echo "pre-commit: conductor not found on PATH; refusing the commit. Install @vaultcompass/conductor-cli, or bypass once with git commit --no-verify." >&2',
+    `    return ${HOOK_MISSING_BINARY_EXIT}`,
     "  fi",
     "}",
     "",
-    "status=0",
-    "run_conductor || status=$?",
+    "run_conductor",
+    'record "conductor" "$?"',
     "",
   ];
 
@@ -135,12 +180,13 @@ export function renderPreCommitHook(withVaultGuard = false): string {
       '  elif command -v npx >/dev/null 2>&1; then',
       '    npx --no-install vault-guard scan --staged',
       "  else",
-      '    echo "vault-guard not found on PATH; skipping secret scan." >&2',
-      "    return 0",
+      '    echo "pre-commit: vault-guard not found on PATH; refusing the commit. Install vault-guard, or bypass once with git commit --no-verify." >&2',
+      `    return ${HOOK_MISSING_BINARY_EXIT}`,
       "  fi",
       "}",
       "",
-      "run_vault_guard || status=$?",
+      "run_vault_guard",
+      'record "vault-guard" "$?"',
       "",
     );
   }
