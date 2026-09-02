@@ -204,7 +204,7 @@ function validateRepo(repo, options) {
   requireOk(run("git", ["clone", "--depth", "1", cloneUrl(repo), repoPath], {
     stdio: ["ignore", "inherit", "inherit"],
   }), `clone ${repo}`);
-  run("git", ["config", "user.name", "Conductor Validation"], { cwd: repoPath });
+  run("git", ["config", "user.name", "Intent Guard Validation"], { cwd: repoPath });
   run("git", ["config", "user.email", "intent-guard-validation@example.invalid"], { cwd: repoPath });
 
   const files = gitFiles(repoPath);
@@ -236,7 +236,7 @@ function validateRepo(repo, options) {
     repoPath,
     cliPath,
     file: readme,
-    text: "\n\nConductor validation probe: README usage documentation.\n",
+    text: "\n\nIntent Guard validation probe: README usage documentation.\n",
     signal: "README documentation update",
   });
   const sourceCheck = stageAndCheck({
@@ -296,7 +296,7 @@ function renderReport({ revision, results }) {
   const lines = [
     `# Public Repo Validation - ${date}`,
     "",
-    `**Conductor revision:** \`${revision}\``,
+    `**Intent Guard revision:** \`${revision}\``,
     "**Mode:** local built CLI, public repos cloned into a temporary workdir, no upstream changes.",
     "",
     "## Repos",
