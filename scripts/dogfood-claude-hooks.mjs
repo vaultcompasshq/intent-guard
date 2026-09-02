@@ -9,9 +9,9 @@
  *   2. Copy integrations/hooks into the fixture (CLAUDE_PROJECT_DIR layout)
  *   3. init → extract → freeze
  *   4. SessionStart script prints a resume brief
- *   5. out-of-scope staged change → Stop script (conductor-stop-check) blocks
+ *   5. out-of-scope staged change → Stop script (conductor-stop-check.sh) blocks
  *   6. in-scope staged change → Stop script passes
- *   7. (secondary) conductor hook install still works for the shared Git gate
+ *   7. (secondary) intent-guard hook install still works for the shared Git gate
  *
  * Usage (from repo root, after build):
  *   node scripts/dogfood-claude-hooks.mjs
@@ -34,7 +34,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const cli = join(root, "packages/cli/dist/conductor.js");
+const cli = join(root, "packages/cli/dist/intent-guard.js");
 const checkCli = join(root, "packages/skill/dist/check-cli.js");
 const resumeCli = join(root, "packages/skill/dist/resume-cli.js");
 const settingsSrc = join(
@@ -60,25 +60,25 @@ if (!existsSync(settingsSrc) || !existsSync(hooksSrc)) {
   fail("Claude Code sample or integrations/hooks missing");
 }
 
-const work = mkdtempSync(join(tmpdir(), "conductor-claude-dogfood-"));
+const work = mkdtempSync(join(tmpdir(), "intent-guard-claude-dogfood-"));
 const bin = join(work, "bin");
 mkdirSync(bin);
 
 writeFileSync(
-  join(bin, "conductor"),
+  join(bin, "intent-guard"),
   `#!/usr/bin/env bash\nexec node "${cli}" "$@"\n`,
 );
 writeFileSync(
-  join(bin, "conductor-check"),
+  join(bin, "intent-guard-check"),
   `#!/usr/bin/env bash\nexec node "${checkCli}" "$@"\n`,
 );
 writeFileSync(
-  join(bin, "conductor-resume"),
+  join(bin, "intent-guard-resume"),
   `#!/usr/bin/env bash\nexec node "${resumeCli}" "$@"\n`,
 );
-chmodSync(join(bin, "conductor"), 0o755);
-chmodSync(join(bin, "conductor-check"), 0o755);
-chmodSync(join(bin, "conductor-resume"), 0o755);
+chmodSync(join(bin, "intent-guard"), 0o755);
+chmodSync(join(bin, "intent-guard-check"), 0o755);
+chmodSync(join(bin, "intent-guard-resume"), 0o755);
 
 const env = {
   ...process.env,
@@ -99,7 +99,7 @@ function run(cmd, args, opts = {}) {
   });
 }
 
-function conductor(args) {
+function intentGuard(args) {
   return run("node", [cli, ...args]);
 }
 
@@ -144,17 +144,17 @@ try {
   }
   ok("copied integrations/hooks into fixture");
 
-  let r = conductor(["init", "--project", "."]);
+  let r = intentGuard(["init", "--project", "."]);
   if (r.status !== 0) fail(`init: ${r.stderr || r.stdout}`);
-  ok("conductor init");
+  ok("intent-guard init");
 
   const ask =
     "Add README install example only. Do not change source or package.json.";
-  r = conductor(["extract", "--project", ".", "--text", ask]);
+  r = intentGuard(["extract", "--project", ".", "--text", ask]);
   if (r.status !== 0) fail(`extract: ${r.stderr || r.stdout}`);
-  ok("conductor extract");
+  ok("intent-guard extract");
 
-  r = conductor([
+  r = intentGuard([
     "freeze",
     "--project",
     ".",
@@ -162,7 +162,7 @@ try {
     "claude-dogfood",
   ]);
   if (r.status !== 0) fail(`freeze: ${r.stderr || r.stdout}`);
-  ok("conductor freeze");
+  ok("intent-guard freeze");
 
   const sessionStart = join(
     work,
@@ -229,18 +229,18 @@ try {
   ok("Stop script allows in-scope README change");
 
   // Secondary: shared Git mechanical gate still installs.
-  r = conductor(["hook", "install", "--project", "."]);
+  r = intentGuard(["hook", "install", "--project", "."]);
   if (r.status !== 0) fail(`hook install: ${r.stderr || r.stdout}`);
   const hookPath = join(work, ".git", "hooks", "pre-commit");
   if (!existsSync(hookPath)) fail("pre-commit hook missing after install");
   if (!readFileSync(hookPath, "utf8").includes("conductor-managed-pre-commit")) {
     fail("pre-commit hook missing Conductor marker");
   }
-  ok("shared Git gate: conductor hook install");
+  ok("shared Git gate: intent-guard hook install");
 
   console.log("\ndogfood-claude-hooks: OK");
   console.log(
-    "Claude lifecycle samples call SessionStart/Stop scripts; blocking gate = conductor-check.",
+    "Claude lifecycle samples call SessionStart/Stop scripts; blocking gate = intent-guard-check.",
   );
 } finally {
   rmSync(work, { recursive: true, force: true });

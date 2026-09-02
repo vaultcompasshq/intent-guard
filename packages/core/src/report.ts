@@ -3,7 +3,7 @@ import type {
   CorrectionLogEntry,
   IntentContract,
   PivotLogEntry,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 import {
   isContractFrozen,
   readContract,
@@ -224,7 +224,7 @@ function list(items: string[]): string[] {
 
 export function renderConductorReportMarkdown(report: ConductorReport): string {
   const lines: string[] = [
-    "# Conductor report",
+    "# Intent Guard report",
     "",
     `Status: ${report.status}`,
     `Recommendation: ${report.recommendation}`,
@@ -331,7 +331,9 @@ export function renderConductorReportMarkdown(report: ConductorReport): string {
     } else {
       section(lines, "Secrets (vault-guard)", [
         `- version: ${scan.version ?? "unknown"}`,
-        `- staged secrets: ${scan.secrets}`,
+        `- blocking matches: ${scan.blockingMatches} (threshold ${scan.failOn ?? "unknown"})`,
+        `- verdict: ${scan.blocked ? "would block" : "would pass"}`,
+        `- staged matches at any severity: ${scan.secrets} (informational)`,
         `- staged files with matches: ${scan.files}`,
         `- scan exit: ${scan.exitCode}`,
       ]);

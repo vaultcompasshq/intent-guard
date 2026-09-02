@@ -17,9 +17,9 @@ Then start Codex in the project and review/trust the hooks with `/hooks`.
 
 - `SessionStart` on `startup|resume|compact`: runs
   `integrations/hooks/conductor-session-start.sh`, which prints the current
-  `conductor-resume` brief when an active contract exists.
+  `intent-guard-resume` brief when an active contract exists.
 - `Stop`: runs `integrations/hooks/conductor-stop-check.sh`, which invokes
-  `conductor-check` against changed paths and fails the hook when the gate is
+  `intent-guard-check` against changed paths and fails the hook when the gate is
   blocked.
 
 ## Source Notes

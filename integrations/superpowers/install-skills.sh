@@ -13,4 +13,4 @@ for skill in intent-contract prompt-coach drift-guard capture-correction; do
   echo "Installed $skill -> $DEST/$skill"
 done
 
-echo "Done. Run pnpm build in conductor repo before using CLIs."
+echo "Done. Run pnpm build in the intent-guard repo before using CLIs."

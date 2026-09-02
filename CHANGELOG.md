@@ -1,10 +1,91 @@
 # Changelog
 
-All notable changes to Conductor will be documented in this file.
+All notable changes to Intent Guard (published as Conductor through 1.1.0) will
+be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [1.2.0] - 2026-09-02
+
+Minor bump on all four packages. The rename is the headline, but it renames
+package and binary names only: the Intent Contract schema, the exported API, and
+everything under `.conductor/` are unchanged, so an existing project keeps
+working once its hooks and imports point at the new names.
+
+### Changed
+
+- **Renamed to Intent Guard.** `@vaultcompass/conductor-cli` is now
+  `@vaultcompass/intent-guard`, and `-core`, `-schema`, and `-skill` are now
+  `@vaultcompass/intent-guard-core`, `-schema`, and `-skill`. The unified binary
+  `conductor` is now `intent-guard`, and each `conductor-<command>` binary is now
+  `intent-guard-<command>`. The repository moves to
+  `github.com/vaultcompasshq/intent-guard`.
+
+  The old binary names are **not** kept as aliases. A pre-commit hook or agent
+  hook that calls `conductor-check` will fail after upgrading; re-run
+  `intent-guard hook install --project .`, and see the upgrade steps in the
+  README. Because the generated hook is fail-closed as of this release, that
+  failure blocks the commit rather than passing silently.
+
+  Not renamed, deliberately: the `.conductor/` project directory and everything
+  in it, the `conductor-managed-pre-commit` marker inside generated hooks, the
+  lifecycle hook adapter scripts under `integrations/hooks/` (referenced by path
+  from users' own editor settings), and the exported TypeScript symbol names.
+
+- The pre-commit samples now read `INTENT_GUARD_CHECK`, falling back to
+  `CONDUCTOR_CHECK`, so a hook copied from an older checkout keeps working.
+
+### Added
+
+- **Stable finding fingerprints.** Every finding emitted in JSON carries a
+  `fingerprint`: sha256, hex, over a canonical string of the contract id, the
+  rule or category id, and the sorted normalized matched paths. Nothing
+  positional and nothing time-based is hashed, so the same finding on the same
+  input has the same id across runs and machines, and reordering the matched
+  paths does not change it. Budget violations gain the field directly; drift
+  findings gain a parallel `finding_details` array carrying the fingerprint,
+  category, rule id, message, and matched set, leaving `findings` a plain string
+  array. The recipe is documented in `docs/cli-reference.md` so a baseline tool
+  can reproduce an id without calling Intent Guard.
+
+- `doctor` now detects the `dep-guard` binary and reports its version the way it
+  already did for `vault-guard`: config-file check, hook and workflow evidence,
+  and a warning when a project references dep-guard but the binary is not on
+  PATH.
+
+### Fixed
+
+- **vault-guard scans read the right field.** `scanVaultGuardStaged` read
+  `summary.secrets`, which counts every match at any severity and ignores the
+  `fail_on` threshold vault-guard actually enforces, so Intent Guard could report
+  a blocking result on findings vault-guard would let through. The verdict now
+  comes from `run.blocking_matches`, the field vault-guard documents for
+  integrators. `secrets` is still reported, labelled informational.
+
+- **The generated pre-commit hook fails closed.** It returned 0 when a gate
+  binary was missing, so a fresh clone or a CI box without the dev dependencies
+  committed straight through the guard it had just installed. A missing binary
+  now exits 127 with a one-line message. Nothing is skipped.
+
+- **The hook keeps the first non-zero exit code.** It composed exit codes
+  last-failure-wins, so a cheap gate failing after an expensive one masked the
+  earlier code, in particular a scanner's exit 2 (could not complete, treat as
+  blocking) being downgraded to exit 1 (policy violation). Every gate still runs
+  after a failure and every gate's code is printed; the hook exits with the
+  first non-zero one.
+
+- **`--help` prints help.** `check --help` and `report --help` ran the gate
+  against the current directory and exited with its result. Twelve other
+  subcommands printed nothing at all, and two printed usage to stderr with exit
+  1. Every subcommand now prints usage to stdout and exits 0 without reading a
+  contract, running the gate, or writing a file. `--help` is read as a flag, not
+  as a flag's value, so `check --message --help` still checks the literal
+  message.
+
+- `release:smoke` reads the expected version from the root manifest instead of
+  hardcoding it, removing a fifth place a release had to remember to bump.
 
 ## [1.1.0] - 2026-07-29
 

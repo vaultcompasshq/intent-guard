@@ -1,4 +1,4 @@
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { readContract, isContractFrozen } from "./contract-store.js";
 import { scoreDrift, type DriftSignals, type DriftScore } from "./drift.js";
 import { evaluateBudget, type BudgetResult } from "./budget.js";
@@ -59,7 +59,7 @@ export function checkGate(
   if (!contractFound) {
     if (requireFrozen) {
       reasons.push(
-        "No .conductor/intent-contract.yaml found. Draft intent with conductor-extract, then approve with conductor-freeze before implementing.",
+        "No .conductor/intent-contract.yaml found. Draft intent with intent-guard-extract, then approve with intent-guard-freeze before implementing.",
       );
     }
     return {

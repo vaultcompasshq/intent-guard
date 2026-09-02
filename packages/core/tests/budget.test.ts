@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { evaluateBudget, matchesGlob } from "../src/budget.js";
 
 const base: IntentContract = {

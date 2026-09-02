@@ -1,11 +1,11 @@
 {
-  "name": "@vaultcompass/conductor-cli",
-  "version": "1.1.0",
+  "name": "@vaultcompass/intent-guard",
+  "version": "1.2.0",
   "type": "module",
-  "description": "Unified Conductor CLI for intent contracts, drift checks, and session continuity",
+  "description": "Unified Intent Guard CLI for intent contracts, drift checks, and session continuity",
   "license": "MIT",
   "keywords": [
-    "conductor",
+    "intent-guard",
     "cli",
     "intent",
     "drift",
@@ -15,19 +15,19 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vaultcompasshq/conductor.git",
+    "url": "https://github.com/vaultcompasshq/intent-guard.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/vaultcompasshq/conductor/issues"
+    "url": "https://github.com/vaultcompasshq/intent-guard/issues"
   },
-  "homepage": "https://github.com/vaultcompasshq/conductor#readme",
+  "homepage": "https://github.com/vaultcompasshq/intent-guard#readme",
   "publishConfig": {
     "access": "public",
     "tag": "latest"
   },
   "bin": {
-    "conductor": "./dist/conductor.js"
+    "intent-guard": "./dist/intent-guard.js"
   },
   "files": [
     "dist",
@@ -39,7 +39,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@vaultcompass/conductor-skill": "workspace:*"
+    "@vaultcompass/intent-guard-skill": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

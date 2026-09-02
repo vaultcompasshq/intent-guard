@@ -4,7 +4,7 @@ import { parse, stringify } from "yaml";
 import {
   assertValidIntentContract,
   type IntentContract,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 import { archiveContract } from "./history.js";
 
 export const CONDUCTOR_DIR = ".conductor";

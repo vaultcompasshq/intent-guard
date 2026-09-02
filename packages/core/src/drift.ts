@@ -1,4 +1,5 @@
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
+import { findingFingerprint } from "./fingerprint.js";
 import { DRIFT_WEIGHTS, type DriftAction } from "./rubric.js";
 import {
   driftActionForScore,
@@ -31,6 +32,35 @@ export interface ScoreDriftOptions {
   hard_block_on_critical_constraints?: boolean;
 }
 
+export type DriftCategory =
+  | "scope_creep"
+  | "constraint_violation"
+  | "ac_divergence"
+  | "undocumented_pivot";
+
+export interface DriftFinding {
+  /**
+   * Deterministic id: sha256 over the contract id, the rule id below, and the
+   * sorted normalized matched set. Stable across runs and machines, and
+   * unchanged by the order findings or matched tokens came out in. See
+   * fingerprint.ts and docs/cli-reference.md.
+   */
+  fingerprint: string;
+  category: DriftCategory;
+  /**
+   * What raised the finding, as a stable identifier rather than prose: the
+   * category for the whole-score findings, and category plus the contract text
+   * (the out-of-scope item, the constraint rule) for the per-item ones. It is
+   * part of the fingerprint, so it must not carry a score, a count, or
+   * anything else that moves between runs on the same input.
+   */
+  rule_id: string;
+  /** Human-readable text. Not part of the fingerprint: rewording is not a new finding. */
+  message: string;
+  /** Tokens or paths the finding matched on. Order does not affect the fingerprint. */
+  matched: string[];
+}
+
 export interface DriftScore {
   overall: number;
   action: DriftAction;
@@ -40,7 +70,10 @@ export interface DriftScore {
     ac_divergence: number;
     undocumented_pivot: number;
   };
+  /** Human-readable finding text, one per entry in finding_details. */
   findings: string[];
+  /** The same findings with a stable fingerprint, category, and matched set. */
+  finding_details: DriftFinding[];
 }
 
 export interface CrossSessionDriftScore {
@@ -48,6 +81,12 @@ export interface CrossSessionDriftScore {
   current_contract_id: string;
   previous: DriftScore;
   current: DriftScore;
+  /**
+   * Prose only. These are the prior contract's findings re-rendered with a
+   * prefix, plus a summary line; the fingerprinted versions live on
+   * `previous.finding_details` and `current.finding_details`, already keyed to
+   * the contract each was raised against.
+   */
   findings: string[];
 }
 
@@ -126,7 +165,26 @@ export function scoreDrift(
   input: DriftSignals,
   options: ScoreDriftOptions = {},
 ): DriftScore {
-  const findings: string[] = [];
+  const details: DriftFinding[] = [];
+  const addFinding = (
+    category: DriftCategory,
+    ruleId: string,
+    message: string,
+    matched: string[],
+  ): void => {
+    details.push({
+      fingerprint: findingFingerprint({
+        contractId: contract.contract_id,
+        ruleId,
+        matched,
+      }),
+      category,
+      rule_id: ruleId,
+      message,
+      matched,
+    });
+  };
+
   const thresholds = options.thresholds ?? DEFAULT_THRESHOLDS;
   const hardBlockCritical = options.hard_block_on_critical_constraints ?? true;
 
@@ -146,8 +204,11 @@ export function scoreDrift(
     const matched = outOfScopeTouch(discriminating, target, pathSegs);
     if (matched.length > 0) {
       scopeHits += 1;
-      findings.push(
+      addFinding(
+        "scope_creep",
+        `scope_creep:${item}`,
         `Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})`,
+        matched,
       );
       // Overlap with an acceptance criterion amplifies divergence.
       if (
@@ -171,15 +232,26 @@ export function scoreDrift(
     const severity = PRIORITY_SEVERITY[c.priority] ?? PRIORITY_SEVERITY.low;
     if (severity > constraintViolation) constraintViolation = severity;
     if (c.priority === "critical") criticalViolated = true;
-    findings.push(
+    // The priority is in the message but not in the rule id: raising a
+    // constraint from high to critical is the same finding about the same
+    // rule, and a stored id should survive that edit.
+    addFinding(
+      "constraint_violation",
+      `constraint_violation:${c.rule}`,
       `${c.priority} constraint at risk: "${c.rule}" (matched: ${matched.join(", ")})`,
+      matched,
     );
   }
 
   // Acceptance-criteria divergence.
   const acDivergence = Math.min(100, touchedAcWhileOutOfScope * 80);
   if (acDivergence > 0) {
-    findings.push("Out-of-scope change overlaps defined acceptance criteria");
+    addFinding(
+      "ac_divergence",
+      "ac_divergence",
+      "Out-of-scope change overlaps defined acceptance criteria",
+      [],
+    );
   }
 
   // Undocumented pivot from user message.
@@ -190,7 +262,12 @@ export function scoreDrift(
     contract.pivot_log.every((p) => p.acknowledged_by !== "user")
   ) {
     undocumentedPivot = 70;
-    findings.push("User message suggests a pivot with no acknowledged pivot_log entry");
+    addFinding(
+      "undocumented_pivot",
+      "undocumented_pivot",
+      "User message suggests a pivot with no acknowledged pivot_log entry",
+      [],
+    );
   }
 
   const categories = {
@@ -223,7 +300,13 @@ export function scoreDrift(
     action = "hard_block";
   }
 
-  return { overall, action, categories, findings };
+  return {
+    overall,
+    action,
+    categories,
+    findings: details.map((detail) => detail.message),
+    finding_details: details,
+  };
 }
 
 export function crossSessionDrift(

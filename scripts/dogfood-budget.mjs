@@ -21,7 +21,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const cli = join(repoRoot, "packages/cli/dist/conductor.js");
+const cli = join(repoRoot, "packages/cli/dist/intent-guard.js");
 const work = join(tmpdir(), "conductor-budget-dogfood");
 const REPOS = ["sindresorhus/is", "chalk/chalk"];
 

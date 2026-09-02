@@ -47,7 +47,7 @@ describe("conductor report", () => {
     expect(report.exitCode).toBe(0);
     expect(report.contract?.approved_by).toBe("tester");
     expect(report.acceptance_coverage.some((item) => item.status === "covered")).toBe(true);
-    expect(markdown).toContain("# Conductor report");
+    expect(markdown).toContain("# Intent Guard report");
     expect(markdown).toContain("Recommendation: Proceed with normal review.");
     expect(markdown).toContain("acknowledged");
   });

@@ -29,7 +29,7 @@ description: >-
 ## Score drift (helper CLI)
 
 ```bash
-pnpm --filter @vaultcompass/conductor-skill exec conductor-drift \
+pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-drift \
   --contract /path/to/project/.conductor/intent-contract.yaml \
   --project /path/to/project \
   --paths "src/api/new-route.ts,src/hooks/useWebSocket.ts" \
@@ -67,7 +67,7 @@ the change in plain words. The scorer subtracts tokens that also appear in
 | 71–85 | Soft block: confirm to continue |
 | 86–100 | Hard block on critical constraints |
 
-Configurable via `.conductor/config.yaml` — see `examples/conductor.config.example.yaml`.
+Configurable via `.conductor/config.yaml`; see `examples/intent-guard.config.example.yaml`.
 
 ## When blocked
 
@@ -95,14 +95,14 @@ Do not mutate frozen fields without a `pivot_log` entry.
 ## Hard enforcement (outside the agent)
 
 A SKILL.md is advisory — an agent can ignore it. For a gate that *cannot* be
-ignored, use `conductor-check`, which exits non-zero when no frozen contract
+ignored, use `intent-guard-check`, which exits non-zero when no frozen contract
 exists or staged changes drift past a blocking threshold:
 
 ```bash
-conductor-check --project . --staged
+intent-guard-check --project . --staged
 ```
 
-Install it as a git pre-commit hook with `conductor hook install` (add
+Install it as a git pre-commit hook with `intent-guard hook install` (add
 `--with-vault-guard` to pair secret scanning), or wire a CI step.
 
 ## Implementation

@@ -3,11 +3,23 @@ import {
   runDoctor,
   type DoctorFinding,
   type DoctorFindingStatus,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: intent-guard doctor [flags]
+
+Diagnose the local Intent Guard setup: contract, config, archive, generated index,
+git hook, and the guard binaries this project references.
+
+Flags:
+  --project <root>   Project root (default: .)
+  --json             Machine-readable output
+  --help, -h         Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let json = false;
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -15,10 +27,12 @@ function parseArgs(argv: string[]) {
       projectRoot = argv[++i];
     } else if (arg === "--json") {
       json = true;
+    } else if (isHelpFlag(arg)) {
+      help = true;
     }
   }
 
-  return { projectRoot, json };
+  return { projectRoot, json, help };
 }
 
 function marker(status: DoctorFindingStatus): string {
@@ -35,12 +49,14 @@ function renderFinding(finding: DoctorFinding): string {
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 const result = runDoctor(args.projectRoot);
 
 if (args.json) {
   console.log(JSON.stringify(result));
 } else {
-  console.log(`Conductor doctor: ${result.status}`);
+  console.log(`Intent Guard doctor: ${result.status}`);
   console.log(
     `Summary: ${result.summary.ok} ok, ${result.summary.info} info, ${result.summary.warn} warn, ${result.summary.error} error`,
   );

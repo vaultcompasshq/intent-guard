@@ -1,4 +1,4 @@
-import type { CorrectionLogEntry } from "@vaultcompass/conductor-schema";
+import type { CorrectionLogEntry } from "@vaultcompass/intent-guard-schema";
 import { tokenize, tokensMatch } from "./tokenize.js";
 
 /** Default max acknowledged corrections in a Session Brief or index summary. */

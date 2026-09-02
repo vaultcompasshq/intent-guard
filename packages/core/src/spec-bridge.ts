@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { draftContract } from "./extract.js";
 
 export type SpecBridgeFormat = "auto" | "spec-kit" | "kiro";
@@ -210,7 +210,7 @@ function buildImportText(
   files: SpecBridgeFile[],
 ): string {
   const parts = [
-    `Import ${format} spec "${basename(specDir)}" into a Conductor Intent Contract.`,
+    `Import ${format} spec "${basename(specDir)}" into an Intent Guard Intent Contract.`,
   ];
 
   for (const file of files) {

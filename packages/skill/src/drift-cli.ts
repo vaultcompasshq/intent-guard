@@ -6,8 +6,23 @@ import {
   formatDriftMessage,
   loadConfig,
   scoreDrift,
-} from "@vaultcompass/conductor-core";
-import { assertValidIntentContract } from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-core";
+import { assertValidIntentContract } from "@vaultcompass/intent-guard-schema";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: intent-guard drift --contract <path> [flags]
+
+Score drift for a specific contract file. Scoring only: this does not evaluate
+the Change Budget. Use intent-guard check to enforce.
+
+Flags:
+  --contract <path>    Contract file to score (required)
+  --project <root>     Project root for config and logs (default: .)
+  --paths a,b          Changed paths
+  --signals "x,y"      Free-text descriptions of what changed
+  --message "<text>"   Latest user message
+  --log                Append the result to the drift log
+  --help, -h           Show this help`;
 
 function parseArgs(argv: string[]) {
   let contractPath = "";
@@ -16,6 +31,7 @@ function parseArgs(argv: string[]) {
   const signals: string[] = [];
   let userMessage = "";
   let log = false;
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -31,16 +47,20 @@ function parseArgs(argv: string[]) {
       userMessage = argv[++i];
     } else if (arg === "--log") {
       log = true;
+    } else if (isHelpFlag(arg)) {
+      help = true;
     }
   }
 
-  return { contractPath, projectRoot, paths, signals, userMessage, log };
+  return { contractPath, projectRoot, paths, signals, userMessage, log, help };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 if (!args.contractPath) {
   console.error(
-    "Usage: conductor-drift --contract <path> [--project <root>] [--paths a,b] [--signals x] [--message text] [--log]",
+    "Usage: intent-guard-drift --contract <path> [--project <root>] [--paths a,b] [--signals x] [--message text] [--log]",
   );
   process.exit(1);
 }

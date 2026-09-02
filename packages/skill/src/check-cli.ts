@@ -7,7 +7,25 @@ import {
   formatDriftMessage,
   readArchivedContract,
   readContract,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: intent-guard check [flags]
+
+Run the enforcement gate against changed paths. Exits non-zero when the gate
+blocks the change.
+
+Flags:
+  --project <root>            Project root (default: .)
+  --staged                    Collect staged paths from git
+  --paths a,b                 Explicit changed paths
+  --signals "x,y"             Free-text descriptions of what changed
+  --message "<text>"          Latest user message
+  --previous-contract <id>    Include prior-contract drift context
+  --no-require-frozen         Allow a missing or unfrozen contract
+  --log                       Append the result to the drift log
+  --json                      Machine-readable output
+  --help, -h                  Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -19,6 +37,7 @@ function parseArgs(argv: string[]) {
   let json = false;
   let log = false;
   let previousContract = "";
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -40,6 +59,8 @@ function parseArgs(argv: string[]) {
       log = true;
     } else if (arg === "--previous-contract" && argv[i + 1]) {
       previousContract = argv[++i];
+    } else if (isHelpFlag(arg)) {
+      help = true;
     }
   }
 
@@ -53,6 +74,7 @@ function parseArgs(argv: string[]) {
     json,
     log,
     previousContract,
+    help,
   };
 }
 
@@ -72,6 +94,8 @@ function stagedPaths(projectRoot: string): string[] {
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 const changedPaths = [...args.paths];
 if (args.staged) changedPaths.push(...stagedPaths(args.projectRoot));
 
@@ -115,14 +139,14 @@ if (args.log && result.drift) {
 if (args.json) {
   console.log(JSON.stringify({ ...result, crossSessionDrift: crossSession }));
 } else if (result.status === "blocked") {
-  console.error("✖ Conductor gate: BLOCKED");
+  console.error("✖ Intent Guard gate: BLOCKED");
   for (const reason of result.reasons) console.error(`  - ${reason}`);
   if (result.drift) {
     console.error("");
     console.error(formatDriftMessage(result.drift));
   }
 } else {
-  console.log("✓ Conductor gate: ok");
+  console.log("✓ Intent Guard gate: ok");
   if (result.drift && result.drift.action !== "proceed") {
     console.log(`  drift: ${result.drift.action} (${result.drift.overall}/100)`);
   }

@@ -8,7 +8,7 @@
 ## Relationship
 
 ```
-vaultcompasshq/conductor
+vaultcompasshq/intent-guard
          │
          │ git submodule / npm dep / path import
          ▼
@@ -18,13 +18,13 @@ downstream pipeline repo
    product projects
 ```
 
-Conductor is the upstream governance layer. The downstream pipeline owns product-specific automation, credentials, and runtime orchestration.
+Intent Guard is the upstream governance layer. The downstream pipeline owns product-specific automation, credentials, and runtime orchestration.
 
 ---
 
 ## Pipeline Mapping
 
-| Pipeline step | Today | With Conductor |
+| Pipeline step | Today | With Intent Guard |
 |---------------|-------|----------------|
 | Intake | Product-specific go/no-go only | Adds session mode -> Intent Contract |
 | Ideation | Generates/scores ideas | Reads contract context if linked |
@@ -32,7 +32,7 @@ Conductor is the upstream governance layer. The downstream pipeline owns product
 | Implementation | Builds code | Plans tied to `acceptance_criteria` |
 | Audits | Code/UX/business | Unchanged |
 | Alignment review | Guesses spec from README | Uses `.conductor/intent-contract.yaml` as primary spec |
-| Aggregator | Existing audit scores | Optional extra Conductor drift score |
+| Aggregator | Existing audit scores | Optional extra Intent Guard drift score |
 
 ---
 
@@ -57,7 +57,7 @@ Conductor is the upstream governance layer. The downstream pipeline owns product
 }
 ```
 
-Pipeline-specific modes stay in the downstream repo. Session mode can call the public Conductor package.
+Pipeline-specific modes stay in the downstream repo. Session mode can call the public Intent Guard package.
 
 ---
 
@@ -68,10 +68,10 @@ Pipeline-specific modes stay in the downstream repo. Session mode can call the p
 **Upgrade:**
 
 ```javascript
-// Priority 1: Conductor contract
+// Priority 1: Intent Guard contract
 const contractPath = path.join(projectPath, ".conductor", "intent-contract.yaml");
 if (fs.existsSync(contractPath)) {
-  return parseConductorContract(contractPath);
+  return parseIntentContract(contractPath);
 }
 // Priority 2: fallback to existing spec search
 ```
@@ -84,15 +84,15 @@ if (fs.existsSync(contractPath)) {
 
 ```bash
 cd path/to/downstream-pipeline
-git submodule add https://github.com/vaultcompasshq/conductor.git vendor/conductor
+git submodule add https://github.com/vaultcompasshq/intent-guard.git vendor/intent-guard
 # or
-npm install github:vaultcompasshq/conductor#main
+npm install github:vaultcompasshq/intent-guard#main
 ```
 
 Add to `AGENTS.md`:
 
 ```markdown
-## Conductor
+## Intent Guard
 Before implementation, ensure `.conductor/intent-contract.yaml` exists and is frozen.
 Run drift check before review handoff.
 ```
@@ -116,15 +116,15 @@ Run drift check before review handoff.
 
 ---
 
-## Future: Conductor score in aggregator
+## Future: Intent Guard score in aggregator
 
 ```javascript
 // Optional aggregation enhancement
 overallScore = (
-  codeScore + uxScore + businessScore + alignmentScore + conductorDriftScore
+  codeScore + uxScore + businessScore + alignmentScore + intentGuardDriftScore
 ) / 5;
 ```
 
-`conductorDriftScore = 100 - driftScore` (invert so higher is better).
+`intentGuardDriftScore = 100 - driftScore` (invert so higher is better).
 
 Threshold: drift score > 70 at review should flag the handoff for review.

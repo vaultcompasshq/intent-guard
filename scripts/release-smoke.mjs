@@ -6,12 +6,17 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const expectedVersion = "1.1.0";
+// Read the version rather than pinning it here. A hardcoded copy is a fifth
+// place a release has to remember to bump, and it went stale on the 1.2.0
+// rename: the root manifest is the single source of truth.
+const expectedVersion = JSON.parse(
+  readFileSync(join(root, "package.json"), "utf8"),
+).version;
 
 const packages = [
   {
     dir: "packages/schema",
-    name: "@vaultcompass/conductor-schema",
+    name: "@vaultcompass/intent-guard-schema",
     requiredFiles: [
       "package/dist/index.js",
       "package/dist/intent-contract.schema.json",
@@ -20,12 +25,12 @@ const packages = [
   },
   {
     dir: "packages/core",
-    name: "@vaultcompass/conductor-core",
+    name: "@vaultcompass/intent-guard-core",
     requiredFiles: ["package/dist/index.js", "package/README.md"],
   },
   {
     dir: "packages/skill",
-    name: "@vaultcompass/conductor-skill",
+    name: "@vaultcompass/intent-guard-skill",
     requiredFiles: [
       "package/dist/check-cli.js",
       "package/dist/import-spec-cli.js",
@@ -40,8 +45,8 @@ const packages = [
   },
   {
     dir: "packages/cli",
-    name: "@vaultcompass/conductor-cli",
-    requiredFiles: ["package/dist/conductor.js", "package/README.md"],
+    name: "@vaultcompass/intent-guard",
+    requiredFiles: ["package/dist/intent-guard.js", "package/README.md"],
   },
 ];
 
@@ -109,7 +114,7 @@ function readPackedManifest(tarball) {
   return JSON.parse(raw);
 }
 
-const destination = mkdtempSync(join(tmpdir(), "conductor-release-smoke-"));
+const destination = mkdtempSync(join(tmpdir(), "intent-guard-release-smoke-"));
 
 try {
   for (const pkg of packages) {

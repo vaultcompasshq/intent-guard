@@ -52,7 +52,7 @@ describe("integration hook samples", () => {
     const workflow = readText(
       "integrations/github-actions/conductor-drift-ci.yml.sample",
     );
-    expect(workflow).toContain("@vaultcompass/conductor-cli@latest");
+    expect(workflow).toContain("@vaultcompass/intent-guard@latest");
     // CI must run the full gate (`check`), which enforces the change budget,
     // not the score-only `drift` command.
     expect(workflow).toContain("check");
@@ -61,7 +61,7 @@ describe("integration hook samples", () => {
     const pairedWorkflow = readText(
       "integrations/github-actions/conductor-vault-guard-ci.yml.sample",
     );
-    expect(pairedWorkflow).toContain("@vaultcompass/conductor-cli@latest");
+    expect(pairedWorkflow).toContain("@vaultcompass/intent-guard@latest");
     expect(pairedWorkflow).toContain("@vaultcompass/vault-guard@latest");
     expect(pairedWorkflow).toContain("scan . --format text");
   });

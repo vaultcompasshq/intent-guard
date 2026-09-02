@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
+#
+# Shared helpers for the Intent Guard lifecycle hook adapters.
+#
+# The file names in this directory still say "conductor". They are referenced by
+# paths inside users' own .claude/settings.json and .codex/hooks.json, so
+# renaming them would break every project that already wired them up. The
+# commands they invoke are the new intent-guard-* binaries.
 
 set -euo pipefail
 
-conductor_git_root() {
+intent_guard_git_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
-conductor_bin() {
+intent_guard_bin() {
   local root="$1"
   local name="$2"
-  local dist="$root/packages/skill/dist/${name#conductor-}-cli.js"
+  local dist="$root/packages/skill/dist/${name#intent-guard-}-cli.js"
 
   if [[ -f "$dist" ]]; then
     printf 'node %q' "$dist"
@@ -24,7 +31,7 @@ conductor_bin() {
   return 1
 }
 
-conductor_changed_paths_csv() {
+intent_guard_changed_paths_csv() {
   local root="$1"
   local paths
 

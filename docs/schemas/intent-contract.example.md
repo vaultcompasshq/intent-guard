@@ -73,7 +73,7 @@ metadata:
 | Constraint violation | New `/api/export` route added | critical |
 | Undocumented pivot | "Actually let's also sync live" | high |
 
-**Conductor message (soft block):**
+**Intent Guard message (soft block):**
 
 > Session drift detected. Contract `ic-20260617-a3f9k2` says client-side CSV only, no new API.  
 > Current diff adds `api/export/route.ts` and WebSocket hook.  

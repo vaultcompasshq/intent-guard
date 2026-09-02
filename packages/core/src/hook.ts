@@ -8,12 +8,19 @@ import {
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
+/**
+ * Marker written into the generated hook so install can tell its own hook from
+ * a hand-written one. Deliberately NOT renamed alongside the package rename:
+ * this string is state already sitting in users' repositories, and changing it
+ * would make every hook this tool installed before 1.2.0 look foreign, so the
+ * next install would refuse to overwrite it without --force.
+ */
 export const CONDUCTOR_HOOK_MARKER = "conductor-managed-pre-commit";
 
 export interface InstallHookOptions {
   /** Also run vault-guard secret scanning in the generated hook. */
   withVaultGuard?: boolean;
-  /** Overwrite an existing pre-commit hook that Conductor did not write. */
+  /** Overwrite an existing pre-commit hook that Intent Guard did not write. */
   force?: boolean;
   /**
    * When `core.hooksPath` points outside this repository (e.g. a machine-wide
@@ -93,37 +100,82 @@ export function resolveGitHooksDir(projectRoot: string): ResolvedHooksDir {
   };
 }
 
+/** Exit code the hook uses when a gate's binary is not installed. */
+export const HOOK_MISSING_BINARY_EXIT = 127;
+
 /**
  * Render a self-contained pre-commit hook. It depends only on the installed
- * CLIs (conductor-check, optionally vault-guard) being resolvable on PATH or via
- * npx, never on the Conductor repo's integrations/ directory — which does not
+ * CLIs (intent-guard-check, optionally vault-guard) being resolvable on PATH or
+ * via npx, never on the Intent Guard repo's integrations/ directory, which does not
  * ship in the published npm packages.
+ *
+ * Two properties the hook is required to have:
+ *
+ * Fail-closed. A gate whose binary is missing is a failure, not a skip. This is
+ * a guard-family hook; a hook that waves the commit through because the scanner
+ * is not installed is the exact inversion of what it exists to do, and it fails
+ * silently on the machine least likely to notice (a fresh clone, CI without the
+ * dev dependencies). Missing binaries exit 127, the shell's own convention for
+ * "command not found".
+ *
+ * First non-zero wins. Every gate runs even after one fails, so a single commit
+ * attempt shows every problem rather than one per attempt, and each gate's own
+ * exit code is printed to stderr. The hook then exits with the first non-zero
+ * code it saw. A shell exit status is one integer, so some code has to be
+ * chosen; taking the first means a later gate can never overwrite an earlier
+ * one's code. That matters because the codes are not interchangeable: a
+ * scanner's exit 2 ("could not complete, treat as blocking") says something
+ * different from exit 1 ("policy violation"), and the previous last-wins
+ * composition quietly downgraded the former to the latter whenever a cheaper
+ * gate failed afterwards. Nothing is actually lost either way, because the
+ * per-gate stderr lines report every code regardless of which one the process
+ * exits with.
  */
 export function renderPreCommitHook(withVaultGuard = false): string {
   const lines = [
     "#!/usr/bin/env bash",
     `# ${CONDUCTOR_HOOK_MARKER}`,
-    "# Installed by: conductor hook install",
+    "# Installed by: intent-guard hook install",
     "# Blocks the commit when no frozen Intent Contract exists or staged changes",
     "# drift past a blocking threshold. Bypass one commit with: git commit --no-verify",
+    "#",
+    "# Fail-closed: a gate whose binary is missing exits 127, it is never skipped.",
+    "# Every gate runs even after an earlier one fails, and every gate's exit code",
+    "# is printed below. The hook exits with the FIRST non-zero code it saw, so a",
+    "# later gate cannot overwrite an earlier gate's code (exit 2 'could not",
+    "# complete' means something different from exit 1 'policy violation').",
     "",
-    "set -euo pipefail",
+    "# No -e on purpose: every gate's exit code is captured and composed by hand,",
+    "# and -e would abort the run at the first failing gate.",
+    "set -uo pipefail",
     "",
-    "run_conductor() {",
-    '  if command -v conductor-check >/dev/null 2>&1; then',
-    '    conductor-check --project . --staged',
-    '  elif command -v conductor >/dev/null 2>&1; then',
-    '    conductor check --project . --staged',
-    '  elif command -v npx >/dev/null 2>&1; then',
-    '    npx --no-install conductor check --project . --staged',
-    "  else",
-    '    echo "conductor not found on PATH; skipping intent gate." >&2',
-    "    return 0",
+    "status=0",
+    "",
+    "record() {",
+    "  # record <gate name> <exit code>",
+    '  if [ "$2" -ne 0 ]; then',
+    '    echo "pre-commit: $1 exited $2" >&2',
+    '    if [ "$status" -eq 0 ]; then',
+    '      status="$2"',
+    "    fi",
     "  fi",
     "}",
     "",
-    "status=0",
-    "run_conductor || status=$?",
+    "run_intent_guard() {",
+    '  if command -v intent-guard-check >/dev/null 2>&1; then',
+    '    intent-guard-check --project . --staged',
+    '  elif command -v intent-guard >/dev/null 2>&1; then',
+    '    intent-guard check --project . --staged',
+    '  elif command -v npx >/dev/null 2>&1; then',
+    '    npx --no-install intent-guard check --project . --staged',
+    "  else",
+    '    echo "pre-commit: intent-guard not found on PATH; refusing the commit. Install @vaultcompass/intent-guard, or bypass once with git commit --no-verify." >&2',
+    `    return ${HOOK_MISSING_BINARY_EXIT}`,
+    "  fi",
+    "}",
+    "",
+    "run_intent_guard",
+    'record "intent-guard" "$?"',
     "",
   ];
 
@@ -135,12 +187,13 @@ export function renderPreCommitHook(withVaultGuard = false): string {
       '  elif command -v npx >/dev/null 2>&1; then',
       '    npx --no-install vault-guard scan --staged',
       "  else",
-      '    echo "vault-guard not found on PATH; skipping secret scan." >&2',
-      "    return 0",
+      '    echo "pre-commit: vault-guard not found on PATH; refusing the commit. Install vault-guard, or bypass once with git commit --no-verify." >&2',
+      `    return ${HOOK_MISSING_BINARY_EXIT}`,
       "  fi",
       "}",
       "",
-      "run_vault_guard || status=$?",
+      "run_vault_guard",
+      'record "vault-guard" "$?"',
       "",
     );
   }
@@ -150,8 +203,8 @@ export function renderPreCommitHook(withVaultGuard = false): string {
 }
 
 /**
- * Install the Conductor pre-commit hook into the repository at projectRoot.
- * Refuses to clobber a foreign (non-Conductor) hook unless force is set.
+ * Install the Intent Guard pre-commit hook into the repository at projectRoot.
+ * Refuses to clobber a foreign hook it did not write unless force is set.
  *
  * When a machine-wide `core.hooksPath` points outside this repo, defaults to
  * setting local `core.hooksPath=.git/hooks` so install does not overwrite a

@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { briefAcknowledgedCorrections } from "./correction.js";
 import { conductorDir, readContract } from "./contract-store.js";
 import { listContracts } from "./history.js";
@@ -23,14 +23,14 @@ function summarizeContract(contract: IntentContract): string {
 export function renderIndex(projectRoot: string): string {
   const active = readContract(projectRoot);
   const archived = listContracts(projectRoot).slice(0, 8);
-  const lines: string[] = ["# Conductor Index", ""];
+  const lines: string[] = ["# Intent Guard Index", ""];
 
   lines.push("## Active");
   if (active) {
     lines.push(bullet(summarizeContract(active)));
   } else {
     lines.push(
-      "- No frozen contract yet — run conductor-extract, review, then conductor-freeze",
+      "- No frozen contract yet — run intent-guard-extract, review, then intent-guard-freeze",
     );
   }
 

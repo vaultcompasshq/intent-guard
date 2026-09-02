@@ -6,37 +6,37 @@
 
 ## Overview
 
-Conductor extends Superpowers; it does not replace any existing skill.
+Intent Guard extends Superpowers; it does not replace any existing skill.
 
 **Install path (v0.2):**
 
 ```bash
-# From conductor repo root
-pnpm conductor:install-skills
+# From intent-guard repo root
+pnpm intent-guard:install-skills
 # or:
 bash integrations/superpowers/install-skills.sh ~/.cursor/skills
 ```
 
-**Option B:** Superpowers plugin declares conductor as dependency (future)
+**Option B:** Superpowers plugin declares intent-guard as dependency (future)
 
 ---
 
 ## Quickstart: the enforcement gate
 
-SKILL.md files are advisory — an agent can ignore them. `conductor-check` is the
+SKILL.md files are advisory; an agent can ignore them. `intent-guard-check` is the
 gate that can't be ignored: it returns a non-zero exit code when no frozen
 contract exists or staged changes drift past a blocking threshold.
 
 ```bash
 # 1. Draft intent for the task (writes an UNFROZEN draft)
-conductor-extract --project . --text "…the ask…"
+intent-guard-extract --project . --text "…the ask…"
 
 # 2. Approve it — a deliberate step; an agent must not self-approve
-conductor-freeze --project .                  # interactive confirm, or:
-conductor-freeze --project . --approved-by "alice"
+intent-guard-freeze --project .                  # interactive confirm, or:
+intent-guard-freeze --project . --approved-by "alice"
 
 # 3. Check staged work before committing (used by the pre-commit hook)
-conductor-check --project . --staged
+intent-guard-check --project . --staged
 #   exit 0 → ok    exit 1 → blocked (missing/unapproved contract or drift)
 ```
 
@@ -97,11 +97,11 @@ metadata:
 Per Superpowers `using-superpowers` skill:
 
 1. User instructions (AGENTS.md, CLAUDE.md) — highest
-2. **Conductor skills** (intent-contract, drift-guard)
+2. **Intent Guard skills** (intent-contract, drift-guard)
 3. Superpowers process skills (brainstorming, TDD, etc.)
 4. Default system prompt
 
-Document this in skill frontmatter so users know Conductor overrides casual implementation.
+Document this in skill frontmatter so users know Intent Guard overrides casual implementation.
 
 ---
 
@@ -109,7 +109,7 @@ Document this in skill frontmatter so users know Conductor overrides casual impl
 
 **Target repo:** [obra/superpowers](https://github.com/obra/superpowers)
 
-**Proposed PR:** Add optional `intent-contract` and `drift-guard` skills with link to vaultcompasshq/conductor schema.
+**Proposed PR:** Add optional `intent-contract` and `drift-guard` skills with link to vaultcompasshq/intent-guard schema.
 
 **Prerequisite:** v0.3 beta stable, with at least two weeks of validation.
 

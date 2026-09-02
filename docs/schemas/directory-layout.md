@@ -3,7 +3,7 @@
 **Version:** 1.0.0  
 **Phase:** 2
 
-Per-project Conductor state lives at the repository root of the app being governed (not necessarily the Conductor OSS repo).
+Per-project Intent Guard state lives at the repository root of the app being governed (not necessarily the Intent Guard OSS repo). The directory is still named `.conductor/`: it was not renamed in 1.2.0, so existing projects keep working untouched.
 
 ## Layout
 
@@ -30,7 +30,7 @@ Per-project Conductor state lives at the repository root of the app being govern
 ## Init
 
 ```bash
-pnpm conductor:init
+pnpm intent-guard:init
 # or: node packages/skill/dist/init-cli.js --project /path/to/project
 ```
 
@@ -38,7 +38,7 @@ Creates `config.yaml`, `index.md`, and `contracts/` if missing.
 
 ## Example config
 
-See [examples/conductor.config.example.yaml](../../examples/conductor.config.example.yaml).
+See [examples/intent-guard.config.example.yaml](../../examples/intent-guard.config.example.yaml).
 
 ## Contract schema
 

@@ -117,7 +117,7 @@ describe("conductor-extract", () => {
     ]);
     expect(res.code).toBe(2);
     expect(res.stderr).toMatch(/removed/i);
-    expect(res.stderr).toMatch(/conductor-freeze/i);
+    expect(res.stderr).toMatch(/intent-guard-freeze/i);
     expect(existsSync(join(dir, ".conductor", "intent-contract.yaml"))).toBe(false);
   });
 
@@ -378,7 +378,7 @@ describe("conductor-doctor", () => {
     await run("freeze-cli.js", ["--project", dir, "--approved-by", "tester"]);
     const res = await run("doctor-cli.js", ["--project", dir]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("Conductor doctor: ok");
+    expect(res.stdout).toContain("Intent Guard doctor: ok");
     expect(res.stdout).toContain("Active contract is frozen");
   });
 });
@@ -394,7 +394,7 @@ describe("conductor-report", () => {
       "--signals", "README documentation update",
     ]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("# Conductor report");
+    expect(res.stdout).toContain("# Intent Guard report");
     expect(res.stdout).toContain("Status: ok");
     expect(res.stdout).toContain("Acceptance criteria");
   });

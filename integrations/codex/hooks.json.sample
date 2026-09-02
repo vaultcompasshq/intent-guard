@@ -8,7 +8,7 @@
             "type": "command",
             "command": "\"$(git rev-parse --show-toplevel)/integrations/hooks/conductor-session-start.sh\"",
             "timeout": 30,
-            "statusMessage": "Loading Conductor session brief"
+            "statusMessage": "Loading Intent Guard session brief"
           }
         ]
       }
@@ -20,7 +20,7 @@
             "type": "command",
             "command": "\"$(git rev-parse --show-toplevel)/integrations/hooks/conductor-stop-check.sh\"",
             "timeout": 60,
-            "statusMessage": "Checking Conductor intent drift"
+            "statusMessage": "Checking Intent Guard intent drift"
           }
         ]
       }

@@ -1,33 +1,57 @@
 #!/usr/bin/env bash
 #
 # Combined pre-commit guard for repositories that want both:
-#   - Conductor: block intent drift against the approved Intent Contract
+#   - Intent Guard: block intent drift against the approved Intent Contract
 #   - vault-guard: block staged secrets
 #
 # Install:
 #   cp integrations/git-hooks/pre-commit-with-vault-guard.sample .git/hooks/pre-commit
 #   chmod +x .git/hooks/pre-commit
 #
-# Requires conductor-check and vault-guard on PATH, or set CONDUCTOR_CHECK /
-# VAULT_GUARD to explicit binary paths. Missing tools are reported and skipped
-# so teams can adopt the gates incrementally.
+# Requires intent-guard-check and vault-guard on PATH, or set
+# INTENT_GUARD_CHECK / VAULT_GUARD to explicit binary paths. CONDUCTOR_CHECK is
+# still read as a fallback: this tool was called conductor through 1.1.0, and a
+# hook copied from an older checkout keeps working. Missing tools are reported
+# and skipped so teams can adopt the gates incrementally. That is the one
+# difference from the hook "intent-guard hook install" generates, which is
+# fail-closed and refuses the commit when a gate binary is missing. Prefer the
+# generated hook once both tools are actually installed.
+#
+# Exit codes: both gates run even after one fails, and the script exits with the
+# FIRST non-zero code, so a later gate cannot overwrite an earlier gate's code.
+# Exit 2 ("could not complete, treat as blocking") and exit 1 ("policy
+# violation") are different answers and must not collapse into whichever gate
+# happened to run last.
 
-set -euo pipefail
+# No -e on purpose: each gate's exit code is captured and composed by hand.
+set -uo pipefail
 
-CONDUCTOR_CHECK="${CONDUCTOR_CHECK:-conductor-check}"
+INTENT_GUARD_CHECK="${INTENT_GUARD_CHECK:-${CONDUCTOR_CHECK:-intent-guard-check}}"
 VAULT_GUARD="${VAULT_GUARD:-vault-guard}"
 
 status=0
 
-if command -v "$CONDUCTOR_CHECK" >/dev/null 2>&1; then
-  "$CONDUCTOR_CHECK" --project . --staged || status=$?
+record() {
+  # record <gate name> <exit code>
+  if [ "$2" -ne 0 ]; then
+    echo "pre-commit: $1 exited $2" >&2
+    if [ "$status" -eq 0 ]; then
+      status="$2"
+    fi
+  fi
+}
+
+if command -v "$INTENT_GUARD_CHECK" >/dev/null 2>&1; then
+  "$INTENT_GUARD_CHECK" --project . --staged
+  record "intent-guard-check" "$?"
 else
-  echo "conductor-check not found on PATH; skipping Conductor gate." >&2
-  echo "Set CONDUCTOR_CHECK to the binary path to enforce." >&2
+  echo "intent-guard-check not found on PATH; skipping Intent Guard gate." >&2
+  echo "Set INTENT_GUARD_CHECK to the binary path to enforce." >&2
 fi
 
 if command -v "$VAULT_GUARD" >/dev/null 2>&1; then
-  "$VAULT_GUARD" scan --staged || status=$?
+  "$VAULT_GUARD" scan --staged
+  record "vault-guard" "$?"
 else
   echo "vault-guard not found on PATH; skipping secret scan." >&2
   echo "Set VAULT_GUARD to the binary path to enforce." >&2

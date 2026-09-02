@@ -31,7 +31,7 @@ describe("rules audit", () => {
     expect(result.findings.some((finding) => finding.id === "duplicate_rule")).toBe(true);
     expect(result.findings.some((finding) => finding.id === "critical_candidate")).toBe(true);
     expect(result.findings.some((finding) => finding.id === "possibly_stale_rule")).toBe(true);
-    expect(markdown).toContain("# Conductor rules audit");
+    expect(markdown).toContain("# Intent Guard rules audit");
   });
 
   it("loads Cursor, Continue, and Kiro rule directories", () => {

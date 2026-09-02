@@ -1,11 +1,11 @@
 {
-  "name": "@vaultcompass/conductor-schema",
-  "version": "1.1.0",
+  "name": "@vaultcompass/intent-guard-schema",
+  "version": "1.2.0",
   "type": "module",
   "description": "Intent Contract schema, TypeScript types, and AJV validation",
   "license": "MIT",
   "keywords": [
-    "conductor",
+    "intent-guard",
     "intent-contract",
     "schema",
     "ajv",
@@ -13,13 +13,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vaultcompasshq/conductor.git",
+    "url": "https://github.com/vaultcompasshq/intent-guard.git",
     "directory": "packages/schema"
   },
   "bugs": {
-    "url": "https://github.com/vaultcompasshq/conductor/issues"
+    "url": "https://github.com/vaultcompasshq/intent-guard/issues"
   },
-  "homepage": "https://github.com/vaultcompasshq/conductor#readme",
+  "homepage": "https://github.com/vaultcompasshq/intent-guard#readme",
   "publishConfig": {
     "access": "public",
     "tag": "latest"

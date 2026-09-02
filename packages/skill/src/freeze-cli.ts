@@ -8,21 +8,36 @@ import {
   readContract,
   writeContract,
   writeIndex,
-} from "@vaultcompass/conductor-core";
+} from "@vaultcompass/intent-guard-core";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: intent-guard freeze [flags]
+
+Approve and freeze the active draft contract. A non-interactive run must pass
+--approved-by: an agent cannot self-approve.
+
+Flags:
+  --project <root>        Project root (default: .)
+  --approved-by <name>    Approver, required outside an interactive terminal
+  --yes                   Approve as the git user without prompting
+  --json                  Machine-readable output
+  --help, -h              Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let approvedBy = "";
   let yes = false;
   let json = false;
+  let help = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--project" && argv[i + 1]) projectRoot = argv[++i];
     else if (arg === "--approved-by" && argv[i + 1]) approvedBy = argv[++i];
     else if (arg === "--yes") yes = true;
     else if (arg === "--json") json = true;
+    else if (isHelpFlag(arg)) help = true;
   }
-  return { projectRoot, approvedBy, yes, json };
+  return { projectRoot, approvedBy, yes, json, help };
 }
 
 function gitUser(projectRoot: string): string {
@@ -47,10 +62,11 @@ function printSummary(projectRoot: string): void {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.help) printUsage(USAGE);
 
   const contract = readContract(args.projectRoot);
   if (!contract) {
-    console.error("No draft .conductor/intent-contract.yaml found. Run conductor-extract first.");
+    console.error("No draft .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
     process.exit(1);
   }
   if (isContractFrozen(contract)) {

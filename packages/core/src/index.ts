@@ -69,10 +69,17 @@ export {
   crossSessionDrift,
   scoreDrift,
   type CrossSessionDriftScore,
+  type DriftCategory,
+  type DriftFinding,
   type DriftScore,
   type DriftSignals,
   type ScoreDriftOptions,
 } from "./drift.js";
+export {
+  findingFingerprint,
+  FINGERPRINT_RECIPE,
+  type FindingFingerprintInput,
+} from "./fingerprint.js";
 export {
   tokenize,
   tokensMatch,
@@ -138,6 +145,7 @@ export {
 } from "./report.js";
 export {
   scanVaultGuardStaged,
+  summarizeVaultGuardRun,
   type VaultGuardScanSummary,
 } from "./vault-guard-scan.js";
 export {

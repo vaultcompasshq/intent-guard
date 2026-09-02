@@ -15,7 +15,7 @@ description: >-
 
 This skill runs **before** `brainstorming`, `writing-plans`, and `test-driven-development`.
 
-Skill order: user instructions (AGENTS.md) → **Conductor skills** → Superpowers process skills.
+Skill order: user instructions (AGENTS.md) → **Intent Guard skills** → Superpowers process skills.
 
 ## Hard gate
 
@@ -44,10 +44,10 @@ Read from project root when present:
 
 ### 3. Draft contract (helper CLI)
 
-From the conductor repo (after `pnpm build`):
+From the intent-guard repo (after `pnpm build`):
 
 ```bash
-pnpm --filter @vaultcompass/conductor-skill exec conductor-extract \
+pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-extract \
   --project /path/to/target-project \
   --text "USER'S ORIGINAL ASK HERE" \
   --dry-run
@@ -73,7 +73,7 @@ Ask **one question at a time** for gaps. Update the draft mentally before writin
 ### 6. Write the draft
 
 ```bash
-pnpm --filter @vaultcompass/conductor-skill exec conductor-extract \
+pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-extract \
   --project /path/to/target-project \
   --text "FINAL ASK"
 ```
@@ -85,14 +85,14 @@ This writes an **unfrozen draft**. The gate still blocks until it is approved.
 Freezing is a separate, deliberate step — the agent must **not** self-approve.
 
 ```bash
-pnpm --filter @vaultcompass/conductor-skill exec conductor-freeze \
+pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-freeze \
   --project /path/to/target-project
 # Interactive TTY → shows a summary and asks to confirm.
 # Non-interactive → requires --approved-by "<name>".
 ```
 
 The approver and timestamp are recorded in the contract's `approval` block;
-the gate (`conductor-check`) only treats the contract as frozen once that
+the gate (`intent-guard-check`) only treats the contract as frozen once that
 record exists. Confirm `written_path` is `.conductor/intent-contract.yaml`.
 
 Set `metadata.superpowers_spec_path` when a design spec will follow (e.g. `docs/superpowers/specs/YYYY-MM-DD-topic-design.md`).
@@ -115,4 +115,4 @@ Also copy sibling skill folders from `packages/skill/`.
 
 ## Schema
 
-Validated by `@vaultcompass/conductor-schema`. Examples: `examples/intent-contracts/`.
+Validated by `@vaultcompass/intent-guard-schema`. Examples: `examples/intent-contracts/`.

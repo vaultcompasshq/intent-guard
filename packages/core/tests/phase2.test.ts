@@ -8,7 +8,7 @@ import { initConductor } from "../src/init.js";
 import { conductorDir } from "../src/contract-store.js";
 import { loadCursorRules } from "../src/constraints.js";
 import { scoreDrift } from "../src/drift.js";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 
 describe("loadConfig", () => {
   it("returns defaults when config missing", () => {
@@ -39,7 +39,7 @@ describe("initConductor", () => {
     expect(result.created).toContain(".conductor/index.md");
     expect(result.created).toContain(".conductor/contracts/");
     expect(readFileSync(join(conductorDir(dir), "index.md"), "utf8")).toContain(
-      "Conductor Index",
+      "Intent Guard Index",
     );
   });
 });

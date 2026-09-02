@@ -9,7 +9,7 @@ PACKAGES=(
   "packages/cli"
 )
 
-echo "Bootstrap first publish for @vaultcompass/conductor-*"
+echo "Bootstrap first publish for @vaultcompass/intent-guard*"
 echo "Requires: npm login with publish access to @vaultcompass"
 echo ""
 
@@ -34,7 +34,7 @@ cat <<'EOF'
 Next on npmjs.com (each package -> Settings -> Trusted Publisher):
   Publisher: GitHub Actions
   Organization or user: vaultcompasshq
-  Repository: conductor
+  Repository: intent-guard
   Workflow filename: release.yml
 
 Then re-run the Release workflow or push the tag again:

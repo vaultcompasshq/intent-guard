@@ -5,11 +5,11 @@ import { defaultConfigYaml, configPath } from "./config.js";
 import { renderIndex } from "./memory-index.js";
 
 export const INIT_NEXT_STEPS = [
-  "conductor extract --project . --text \"<your ask>\"",
-  "conductor freeze --project . --approved-by <you>",
-  "conductor doctor --project .",
-  "conductor check --project . --staged",
-  "Optional: conductor hook install --project . (add --with-vault-guard to pair secret scanning)",
+  "intent-guard extract --project . --text \"<your ask>\"",
+  "intent-guard freeze --project . --approved-by <you>",
+  "intent-guard doctor --project .",
+  "intent-guard check --project . --staged",
+  "Optional: intent-guard hook install --project . (add --with-vault-guard to pair secret scanning)",
 ] as const;
 
 export interface InitResult {

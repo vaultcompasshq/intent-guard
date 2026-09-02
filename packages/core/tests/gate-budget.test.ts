@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { initConductor } from "../src/init.js";
 import { freezeContract, writeContract } from "../src/contract-store.js";
 import { checkGate } from "../src/gate.js";
-import type { IntentContract } from "@vaultcompass/conductor-schema";
+import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 
 function draftContract(budget: IntentContract["budget"]): IntentContract {
   return {

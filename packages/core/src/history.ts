@@ -11,7 +11,7 @@ import { parse, stringify } from "yaml";
 import {
   assertValidIntentContract,
   type IntentContract,
-} from "@vaultcompass/conductor-schema";
+} from "@vaultcompass/intent-guard-schema";
 
 const CONDUCTOR_DIR = ".conductor";
 const CONTRACTS_DIR = "contracts";
