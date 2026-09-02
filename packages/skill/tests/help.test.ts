@@ -106,9 +106,30 @@ describe("subcommand help", () => {
     // `--message --help` means the message is the literal string "--help".
     // That is a real run, so it must not print usage. A naive
     // argv.includes("--help") would get this wrong.
-    const dir = mkdtempSync(join(tmpdir(), "conductor-help-value-"));
+    const dir = mkdtempSync(join(tmpdir(), "intent-guard-help-value-"));
     const res = await run("check-cli.js", ["--message", "--help"], dir);
     expect(res.stdout).not.toMatch(/^Usage: /m);
     expect(res.stderr).not.toMatch(/^Usage: /m);
+  });
+
+  it("rules audit treats --help after --project as the project value", async () => {
+    // Same property as the case above, for the one command that still scanned
+    // argv instead of reading its own loop. `--project --help` names a
+    // directory called "--help"; that is a real run that should fail to find
+    // it, not a help request.
+    const dir = mkdtempSync(join(tmpdir(), "intent-guard-help-rules-"));
+    const res = await run("rules-cli.js", ["audit", "--project", "--help"], dir);
+    expect(res.stdout).not.toMatch(/^Usage: /m);
+    expect(res.stderr).not.toMatch(/^Usage: /m);
+  });
+
+  it("rules audit still prints help for a bare --help", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "intent-guard-help-rules-bare-"));
+    for (const argv of [["--help"], ["audit", "--help"], ["-h"]]) {
+      const res = await run("rules-cli.js", argv, dir);
+      expect(res.code).toBe(0);
+      expect(res.stdout).toMatch(/^Usage: intent-guard rules audit/m);
+    }
+    expect(readdirSync(dir)).toEqual([]);
   });
 });

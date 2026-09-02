@@ -22,13 +22,19 @@ function badUsage(): never {
 
 function parseArgs(argv: string[]) {
   const [command, ...rest] = argv;
-  // Help is checked before the subcommand, so `intent-guard rules --help` prints
-  // help rather than complaining that "audit" is missing.
-  if (argv.some(isHelpFlag)) printUsage(USAGE);
+
+  // A bare leading help flag is a help request, checked before the subcommand
+  // so `intent-guard rules --help` prints help rather than complaining that
+  // "audit" is missing. Everything after that is decided by the loop below,
+  // which is the only place that knows whether a token is a flag or the value
+  // of the flag before it: `--project --help` names a directory called
+  // "--help", and scanning argv would read it as a help request.
+  if (command !== undefined && isHelpFlag(command)) printUsage(USAGE);
   if (command !== "audit") badUsage();
 
   let projectRoot = ".";
   let json = false;
+  let help = false;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
@@ -36,13 +42,17 @@ function parseArgs(argv: string[]) {
       projectRoot = rest[++i];
     } else if (arg === "--json") {
       json = true;
+    } else if (isHelpFlag(arg)) {
+      help = true;
     }
   }
 
-  return { projectRoot, json };
+  return { projectRoot, json, help };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 const result = auditRules(args.projectRoot);
 
 if (args.json) {
