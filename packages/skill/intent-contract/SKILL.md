@@ -15,7 +15,7 @@ description: >-
 
 This skill runs **before** `brainstorming`, `writing-plans`, and `test-driven-development`.
 
-Skill order: user instructions (AGENTS.md) → **Conductor skills** → Superpowers process skills.
+Skill order: user instructions (AGENTS.md) → **Intent Guard skills** → Superpowers process skills.
 
 ## Hard gate
 

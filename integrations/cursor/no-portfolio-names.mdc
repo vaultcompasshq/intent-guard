@@ -3,9 +3,9 @@ description: Public OSS hygiene — no portfolio codenames in tracked files
 alwaysApply: true
 ---
 
-# Public repo hygiene (Conductor maintainers)
+# Public repo hygiene (Intent Guard maintainers)
 
-Conductor is **public OSS**. Tracked files must not name Vault & Compass portfolio
+Intent Guard is **public OSS**. Tracked files must not name Vault & Compass portfolio
 products, private application repos, or links to private downstream work.
 
 ## Never commit

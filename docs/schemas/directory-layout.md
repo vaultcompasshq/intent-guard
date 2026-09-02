@@ -38,7 +38,7 @@ Creates `config.yaml`, `index.md`, and `contracts/` if missing.
 
 ## Example config
 
-See [examples/conductor.config.example.yaml](../../examples/conductor.config.example.yaml).
+See [examples/intent-guard.config.example.yaml](../../examples/intent-guard.config.example.yaml).
 
 ## Contract schema
 

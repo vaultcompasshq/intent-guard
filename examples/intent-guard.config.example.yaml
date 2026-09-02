@@ -1,4 +1,4 @@
-# Conductor project config (example)
+# Intent Guard project config (example)
 # Copy to .conductor/config.yaml in your project
 
 version: "1.0.0"

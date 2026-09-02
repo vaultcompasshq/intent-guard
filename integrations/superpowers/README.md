@@ -6,7 +6,7 @@
 
 ## Overview
 
-Conductor extends Superpowers; it does not replace any existing skill.
+Intent Guard extends Superpowers; it does not replace any existing skill.
 
 **Install path (v0.2):**
 
@@ -97,11 +97,11 @@ metadata:
 Per Superpowers `using-superpowers` skill:
 
 1. User instructions (AGENTS.md, CLAUDE.md) — highest
-2. **Conductor skills** (intent-contract, drift-guard)
+2. **Intent Guard skills** (intent-contract, drift-guard)
 3. Superpowers process skills (brainstorming, TDD, etc.)
 4. Default system prompt
 
-Document this in skill frontmatter so users know Conductor overrides casual implementation.
+Document this in skill frontmatter so users know Intent Guard overrides casual implementation.
 
 ---
 

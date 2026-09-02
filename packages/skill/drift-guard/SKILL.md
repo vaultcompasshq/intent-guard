@@ -67,7 +67,7 @@ the change in plain words. The scorer subtracts tokens that also appear in
 | 71–85 | Soft block: confirm to continue |
 | 86–100 | Hard block on critical constraints |
 
-Configurable via `.conductor/config.yaml` — see `examples/conductor.config.example.yaml`.
+Configurable via `.conductor/config.yaml`; see `examples/intent-guard.config.example.yaml`.
 
 ## When blocked
 
