@@ -175,6 +175,12 @@ Markdown includes the active contract, gate reasons, drift score, acceptance
 criteria coverage inferred from paths/signals, pivots, corrections, changed
 paths, signals, and a recommended next action.
 
+With `--with-secrets`, the `vault_guard` block reports `blockingMatches` and a
+`blocked` verdict taken from vault-guard's own `run.blocking_matches`, which
+already honours the active `fail_on` threshold. The `secrets` count is every
+match at any severity and is informational only, so do not gate on it: it
+ignores the threshold and will disagree with vault-guard's own verdict.
+
 ## conductor rules audit / conductor-rules audit
 
 Inspect project rule files and surface maintainability problems before they

@@ -331,7 +331,9 @@ export function renderConductorReportMarkdown(report: ConductorReport): string {
     } else {
       section(lines, "Secrets (vault-guard)", [
         `- version: ${scan.version ?? "unknown"}`,
-        `- staged secrets: ${scan.secrets}`,
+        `- blocking matches: ${scan.blockingMatches} (threshold ${scan.failOn ?? "unknown"})`,
+        `- verdict: ${scan.blocked ? "would block" : "would pass"}`,
+        `- staged matches at any severity: ${scan.secrets} (informational)`,
         `- staged files with matches: ${scan.files}`,
         `- scan exit: ${scan.exitCode}`,
       ]);

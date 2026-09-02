@@ -138,6 +138,7 @@ export {
 } from "./report.js";
 export {
   scanVaultGuardStaged,
+  summarizeVaultGuardRun,
   type VaultGuardScanSummary,
 } from "./vault-guard-scan.js";
 export {
