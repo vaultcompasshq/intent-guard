@@ -1,29 +1,33 @@
 # CLI reference
 
-The public entrypoint is the unified `conductor` binary in `packages/cli`.
-Legacy per-command bins still ship from `packages/skill` for compatibility.
+The public entrypoint is the unified `intent-guard` binary in `packages/cli`.
+Per-command bins ship alongside it from `packages/skill`.
 
 ```bash
 pnpm build
-pnpm conductor -- check --project . --staged        # root script form
+pnpm intent-guard -- check --project . --staged        # root script form
 # after package install:
-conductor check --project . --staged
-# legacy package bin:
-conductor-check --project . --staged
+intent-guard check --project . --staged
+# per-command package bin:
+intent-guard-check --project . --staged
 ```
+
+Renamed in 1.2.0: the binary was `conductor` and the per-command bins were
+`conductor-*` through 1.1.0. The old names are gone, so update any hook or
+script that still calls them. The `.conductor/` project directory is unchanged.
 
 The session lifecycle: **coach → extract/import-spec (draft) → freeze
 (approve) → check (gate) → report/rules → pivot/correct → brief/resume**.
 
 ---
 
-## Unified `conductor`
+## Unified `intent-guard`
 
 ```bash
-conductor --help
-conductor --version
-conductor <command> [flags]
-conductor <command> --help
+intent-guard --help
+intent-guard --version
+intent-guard <command> [flags]
+intent-guard <command> --help
 ```
 
 Commands: `init`, `coach`, `extract`, `import-spec`, `freeze`, `check`,
@@ -33,21 +37,21 @@ Commands: `init`, `coach`, `extract`, `import-spec`, `freeze`, `check`,
 Every command accepts `--help` (and `-h`). Help prints usage to stdout and
 exits `0` without doing any work: it never runs the gate, reads a contract, or
 writes a file. `--help` is read as a flag, not as a flag's value, so
-`conductor check --message --help` scores the literal message `--help` rather
+`intent-guard check --message --help` scores the literal message `--help` rather
 than printing usage.
 
-`conductor drift --ci` runs the lower-level drift scorer and exits `1` when the
+`intent-guard drift --ci` runs the lower-level drift scorer and exits `1` when the
 JSON result has `block: true`; otherwise it preserves the normal command output.
 
-## conductor coach `<prompt text>` / conductor-coach `<prompt text>`
+## intent-guard coach `<prompt text>` / intent-guard-coach `<prompt text>`
 
 Scores a prompt for scope/clarity issues. JSON: `score`, `issues`,
 `coaching`, `needs_coaching`. Never blocks.
 
-## conductor extract / conductor-extract
+## intent-guard extract / intent-guard-extract
 
 Draft an Intent Contract from an ask. **Writes an UNFROZEN draft** — approval is
-separate (`conductor-freeze`).
+separate (`intent-guard-freeze`).
 
 | Flag | Meaning |
 |------|---------|
@@ -58,11 +62,11 @@ separate (`conductor-freeze`).
 JSON: `valid`, `written_path`, `frozen` (always false), `next_step`,
 `prompt_score`, `needs_coaching`, `coaching`, `contract_yaml`.
 
-## conductor import-spec / conductor-import-spec
+## intent-guard import-spec / intent-guard-import-spec
 
 Import Spec Kit or Kiro-style artifacts into an unfrozen Intent Contract draft.
-This is a bridge into Conductor's approval flow, not a second spec system:
-review the draft, edit if needed, then run `conductor freeze`.
+This is a bridge into Intent Guard's approval flow, not a second spec system:
+review the draft, edit if needed, then run `intent-guard freeze`.
 
 | Flag | Meaning |
 |------|---------|
@@ -80,7 +84,7 @@ Discovery checks Spec Kit-style `specs/<feature>/spec.md`, `plan.md`,
 `tasks.md`. JSON includes `format`, `spec_dir`, `imported_files`,
 `written_path`, `frozen: false`, `next_step`, and `contract_yaml`.
 
-## conductor freeze / conductor-freeze
+## intent-guard freeze / intent-guard-freeze
 
 Approve a draft. A deliberate, attributable step — an agent must not self-approve.
 
@@ -95,7 +99,7 @@ Behavior: on a TTY, shows a summary and asks to confirm. Non-interactively,
 **refuses unless `--approved-by` is given**. Records an `approval` block
 (`approved_by` / `approved_at` / `method`). Idempotent if already frozen.
 
-## conductor check / conductor-check (the gate)
+## intent-guard check / intent-guard-check (the gate)
 
 Exits non-zero when no **approved** contract exists or staged changes drift past
 a blocking threshold. Used by the pre-commit hook / CI.
@@ -143,14 +147,14 @@ cover everything under `src/` (an exact file path still matches only itself).
 Absent `budget` means no budget enforcement, so existing contracts are
 unaffected. The
 dependency rule is intentionally coarse: a path cannot tell an add from a bump,
-so any manifest edit flags. Budget violations appear in `conductor check`
-reasons and in the `conductor report` "Change budget" section. See
+so any manifest edit flags. Budget violations appear in `intent-guard check`
+reasons and in the `intent-guard report` "Change budget" section. See
 [examples/intent-contracts/retry-with-budget.yaml](../examples/intent-contracts/retry-with-budget.yaml).
 
 Notes:
 
-- The budget is enforced by `conductor check` and `conductor report` (the gate).
-  `conductor drift` is a score-only command and does not enforce the budget, so
+- The budget is enforced by `intent-guard check` and `intent-guard report` (the gate).
+  `intent-guard drift` is a score-only command and does not enforce the budget, so
   wire CI to `check`/`report` to match the pre-commit hook.
 - Globs are case-sensitive, matching git's case-sensitive path tracking. On a
   case-insensitive filesystem a `Src` glob still will not match a staged
@@ -163,7 +167,7 @@ Notes:
 
 ## Finding fingerprints
 
-Every finding Conductor emits in JSON carries a `fingerprint`: a deterministic
+Every finding Intent Guard emits in JSON carries a `fingerprint`: a deterministic
 id for that finding. The same finding on the same input produces the same id on
 every run and on every machine, so a baseline file can record "this one is
 known" and a tool aggregating several guards can tell a repeat from something
@@ -171,8 +175,8 @@ new.
 
 Where they appear:
 
-- budget violations: `budget.violations[].fingerprint` (`conductor check --json`
-  and `conductor report --json`);
+- budget violations: `budget.violations[].fingerprint` (`intent-guard check --json`
+  and `intent-guard report --json`);
 - drift findings: `drift.finding_details[].fingerprint`, which pairs each
   human-readable `findings[]` string with its `category`, `rule_id`, and
   `matched` set. `findings[]` is unchanged and stays the prose rendering.
@@ -180,7 +184,7 @@ Where they appear:
   `crossSessionDrift.previous.finding_details`, already keyed to the contract
   each finding was raised against.
 
-The recipe, so other tools can reproduce an id without calling Conductor:
+The recipe, so other tools can reproduce an id without calling Intent Guard:
 
 1. Take three inputs. The **contract id** (`contract_id` of the contract the
    finding was raised against), the **rule id** (the budget `rule` such as
@@ -212,10 +216,10 @@ bumping `intent-guard.finding.v1`, which invalidates every stored id, so it is a
 breaking change rather than a quiet edit. A pinned test vector in
 `packages/core/tests/fingerprint.test.ts` fails if the recipe drifts.
 
-## conductor report / conductor-report
+## intent-guard report / intent-guard-report
 
 Emit a reviewer-friendly handoff report for PRs, CI logs, or agent resumes.
-It runs the same gate as `conductor check` and exits with the gate result.
+It runs the same gate as `intent-guard check` and exits with the gate result.
 
 | Flag | Meaning |
 |------|---------|
@@ -239,7 +243,7 @@ already honours the active `fail_on` threshold. The `secrets` count is every
 match at any severity and is informational only, so do not gate on it: it
 ignores the threshold and will disagree with vault-guard's own verdict.
 
-## conductor rules audit / conductor-rules audit
+## intent-guard rules audit / intent-guard-rules audit
 
 Inspect project rule files and surface maintainability problems before they
 become noisy task constraints.
@@ -255,9 +259,9 @@ potential conflicts, stale or temporary wording, overbroad rules, and rules that
 may deserve critical priority. The audit exits `0`; `status: warn` means the
 maintainer should review findings.
 
-## conductor doctor / conductor-doctor
+## intent-guard doctor / intent-guard-doctor
 
-Diagnose whether a project is ready to use Conductor before a gate fails.
+Diagnose whether a project is ready to use Intent Guard before a gate fails.
 
 | Flag | Meaning |
 |------|---------|
@@ -268,25 +272,25 @@ Checks include `.conductor/config.yaml`, active contract validity, frozen
 approval state, archived contracts, generated index freshness, package version,
 visible hook/workflow integrations, and optional vault-guard pairing signals.
 Missing setup or an invalid/unfrozen contract exits `1`; warnings such as stale
-index, non-Conductor hooks, or a referenced vault-guard setup without a local
+index, foreign hooks it did not write, or a referenced vault-guard setup without a local
 `vault-guard` binary exit `0`.
 
-## conductor hook install / conductor-hook
+## intent-guard hook install / intent-guard-hook
 
 Install a self-contained Git pre-commit hook that runs the enforcement gate on
-staged changes. The generated hook resolves `conductor-check`/`conductor` (or
-`npx`) at commit time and depends on no files from the Conductor source repo, so
+staged changes. The generated hook resolves `intent-guard-check`/`intent-guard` (or
+`npx`) at commit time and depends on no files from the Intent Guard source repo, so
 it works from an `npx`/npm install.
 
 | Flag | Meaning |
 |------|---------|
 | `--project <root>` | target project (must contain `.git`) |
 | `--with-vault-guard` | also run `vault-guard scan --staged` in the hook |
-| `--force` | overwrite an existing non-Conductor `pre-commit` hook |
+| `--force` | overwrite an existing `pre-commit` hook Intent Guard did not write |
 | `--json` / `--human` | output format (default JSON) |
 
 Exits `1` when the target is not a git repo or a foreign hook exists without
-`--force`. Re-installing a Conductor-managed hook is idempotent. Bypass a single
+`--force`. Re-installing a managed hook is idempotent. Bypass a single
 commit with `git commit --no-verify`.
 
 When `core.hooksPath` points **outside** this repository (machine-wide hooks),
@@ -294,7 +298,7 @@ install sets local `core.hooksPath=.git/hooks` and writes there so Git actually
 runs the gate without overwriting a shared hooks directory. In-repo custom
 paths such as `.githooks` receive the hook directly.
 
-## conductor drift / conductor-drift
+## intent-guard drift / intent-guard-drift
 
 Scores drift for a given contract path (lower-level than `check`; does not gate
 on contract presence).
@@ -307,7 +311,7 @@ on contract presence).
 
 JSON: `overall`, `action`, `categories`, `findings`, `message`, `block`.
 
-## conductor correct / conductor-correct
+## intent-guard correct / intent-guard-correct
 
 Record a user correction as a durable lesson on the contract.
 
@@ -320,7 +324,7 @@ Record a user correction as a durable lesson on the contract.
 | `--acknowledge` | user-confirmed (authoritative); else `pending` |
 | `--promote` | also add to `constraints[]` (requires `--acknowledge`) so drift-guard enforces it |
 
-## conductor pivot / conductor-pivot
+## intent-guard pivot / intent-guard-pivot
 
 Record an intentional scope change and update the active contract through the
 append-only `pivot_log`.
@@ -337,7 +341,7 @@ append-only `pivot_log`.
 
 JSON: `written_path`, `index_path`, `pivot`, `pending`.
 
-## conductor brief / conductor-brief
+## intent-guard brief / intent-guard-brief
 
 Emit the minimal correct-methodology context (intent, scope, AC, critical/high
 constraints, **acknowledged** corrections — no failed code). Re-inject after a
@@ -348,7 +352,7 @@ context reset instead of replaying the transcript.
 | `--project <root>` | target project |
 | `--json` | machine-readable (default is markdown) |
 
-## conductor resume / conductor-resume
+## intent-guard resume / intent-guard-resume
 
 Emit the current Session Brief plus recent prior contracts. Use at the start of
 a resumed agent session after context compaction or a new day.
@@ -358,7 +362,7 @@ a resumed agent session after context compaction or a new day.
 | `--project <root>` | target project |
 | `--json` | machine-readable (`resume_markdown`) |
 
-## conductor index / conductor-index
+## intent-guard index / intent-guard-index
 
 Render or regenerate `.conductor/index.md` from real contract history, pivots,
 constraints, and acknowledged corrections.
@@ -369,7 +373,7 @@ constraints, and acknowledged corrections.
 | `--write` | write `.conductor/index.md`; default prints markdown |
 | `--json` | machine-readable output |
 
-## conductor init / conductor-init
+## intent-guard init / intent-guard-init
 
 Create the `.conductor/` skeleton (`config.yaml`, `index.md`, `contracts/`).
 
