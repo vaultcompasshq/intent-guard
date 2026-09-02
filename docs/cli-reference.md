@@ -23,11 +23,18 @@ The session lifecycle: **coach → extract/import-spec (draft) → freeze
 conductor --help
 conductor --version
 conductor <command> [flags]
+conductor <command> --help
 ```
 
 Commands: `init`, `coach`, `extract`, `import-spec`, `freeze`, `check`,
 `report`, `rules`, `drift`, `correct`, `brief`, `doctor`, `hook`, `resume`,
 `index`, `pivot`.
+
+Every command accepts `--help` (and `-h`). Help prints usage to stdout and
+exits `0` without doing any work: it never runs the gate, reads a contract, or
+writes a file. `--help` is read as a flag, not as a flag's value, so
+`conductor check --message --help` scores the literal message `--help` rather
+than printing usage.
 
 `conductor drift --ci` runs the lower-level drift scorer and exits `1` when the
 JSON result has `block: true`; otherwise it preserves the normal command output.

@@ -4,10 +4,22 @@ import {
   type DoctorFinding,
   type DoctorFindingStatus,
 } from "@vaultcompass/conductor-core";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: conductor doctor [flags]
+
+Diagnose the local Conductor setup: contract, config, archive, generated index,
+git hook, and the guard binaries this project references.
+
+Flags:
+  --project <root>   Project root (default: .)
+  --json             Machine-readable output
+  --help, -h         Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let json = false;
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -15,10 +27,12 @@ function parseArgs(argv: string[]) {
       projectRoot = argv[++i];
     } else if (arg === "--json") {
       json = true;
+    } else if (isHelpFlag(arg)) {
+      help = true;
     }
   }
 
-  return { projectRoot, json };
+  return { projectRoot, json, help };
 }
 
 function marker(status: DoctorFindingStatus): string {
@@ -35,6 +49,8 @@ function renderFinding(finding: DoctorFinding): string {
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 const result = runDoctor(args.projectRoot);
 
 if (args.json) {

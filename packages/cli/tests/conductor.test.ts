@@ -49,6 +49,18 @@ describe("conductor", () => {
     expect(res.stdout).toContain("conductor check --project . --staged");
   });
 
+  it("passes --help through to a subcommand instead of running it", () => {
+    // The 1.1.0 papercut: these two ran the gate against the current
+    // directory and exited with its result.
+    for (const command of ["check", "report"]) {
+      const dir = tmpProject();
+      const res = run([command, "--help"], dir);
+      expect(res.code).toBe(0);
+      expect(res.stdout).toContain(`Usage: conductor ${command}`);
+      expect(res.stdout).not.toContain("Conductor gate:");
+    }
+  });
+
   it("accepts a leading pnpm argument separator", () => {
     const res = run(["--", "--help"]);
     expect(res.code).toBe(0);

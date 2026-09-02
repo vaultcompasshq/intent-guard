@@ -3,15 +3,29 @@ import {
   auditRules,
   renderRulesAuditMarkdown,
 } from "@vaultcompass/conductor-core";
+import { isHelpFlag, printUsage } from "./usage.js";
 
-function usage(): never {
-  console.error("Usage: conductor-rules audit [--project <root>] [--json]");
+const USAGE = `Usage: conductor rules audit [flags]
+
+Inspect project rule files (AGENTS.md, CLAUDE.md, GEMINI.md, .cursor/rules,
+.continue/rules, .kiro/steering) and surface maintainability problems.
+
+Flags:
+  --project <root>   Project root (default: .)
+  --json             Machine-readable output
+  --help, -h         Show this help`;
+
+function badUsage(): never {
+  console.error(USAGE);
   process.exit(1);
 }
 
 function parseArgs(argv: string[]) {
   const [command, ...rest] = argv;
-  if (command !== "audit") usage();
+  // Help is checked before the subcommand, so `conductor rules --help` prints
+  // help rather than complaining that "audit" is missing.
+  if (argv.some(isHelpFlag)) printUsage(USAGE);
+  if (command !== "audit") badUsage();
 
   let projectRoot = ".";
   let json = false;

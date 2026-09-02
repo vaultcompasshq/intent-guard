@@ -5,6 +5,20 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/conductor-core";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: conductor correct --wrong <text> --right <text> --rule <text> [flags]
+
+Record a durable correction lesson on the active Intent Contract.
+
+Flags:
+  --wrong <text>     What the agent did that was wrong
+  --right <text>     What it should have done instead
+  --rule <text>      The durable rule to remember
+  --project <root>   Project root (default: .)
+  --acknowledge      Mark the correction acknowledged by the user
+  --promote          Promote the rule to a contract constraint
+  --help, -h         Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -13,6 +27,7 @@ function parseArgs(argv: string[]) {
   let rule = "";
   let acknowledge = false;
   let promote = false;
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -22,12 +37,15 @@ function parseArgs(argv: string[]) {
     else if (arg === "--rule" && argv[i + 1]) rule = argv[++i];
     else if (arg === "--acknowledge") acknowledge = true;
     else if (arg === "--promote") promote = true;
+    else if (isHelpFlag(arg)) help = true;
   }
 
-  return { projectRoot, wrong, right, rule, acknowledge, promote };
+  return { projectRoot, wrong, right, rule, acknowledge, promote, help };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 if (!args.wrong || !args.right || !args.rule) {
   console.error(
     "Usage: conductor-correct --wrong <text> --right <text> --rule <text> [--project <root>] [--acknowledge] [--promote]",

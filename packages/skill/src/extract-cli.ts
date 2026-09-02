@@ -10,11 +10,24 @@ import {
   writeContract,
 } from "@vaultcompass/conductor-core";
 import { validateIntentContract } from "@vaultcompass/conductor-schema";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: conductor extract --text <user ask> [flags]
+
+Draft an unfrozen Intent Contract from an ask. Approval is a separate step:
+review the draft, then run conductor freeze.
+
+Flags:
+  --text <user ask>   The ask to draft a contract from (required)
+  --project <root>    Project root (default: .)
+  --dry-run           Print the draft without writing it
+  --help, -h          Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let userText = "";
   let dryRun = false;
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -30,13 +43,17 @@ function parseArgs(argv: string[]) {
           "Review the draft, then approve with: conductor-freeze --project <root> [--approved-by <name>]",
       );
       process.exit(2);
+    } else if (isHelpFlag(arg)) {
+      help = true;
     }
   }
 
-  return { projectRoot, userText, dryRun };
+  return { projectRoot, userText, dryRun, help };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 if (!args.userText) {
   console.error(
     "Usage: conductor-extract --text <user ask> [--project <root>] [--dry-run]",

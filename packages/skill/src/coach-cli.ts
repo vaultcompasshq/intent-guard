@@ -3,10 +3,27 @@ import {
   coachMessage,
   scorePrompt,
 } from "@vaultcompass/conductor-core";
+import { isHelpFlag, printUsage } from "./usage.js";
 
-const text = process.argv.slice(2).join(" ").trim();
+const USAGE = `Usage: conductor coach <prompt text>
+
+Score a prompt for scope and clarity risks before it becomes an Intent
+Contract. Everything after the command is treated as the prompt text.
+
+Flags:
+  --help, -h   Show this help
+
+Example:
+  conductor coach "Add CSV export. No new API endpoints."`;
+
+const argv = process.argv.slice(2);
+// coach takes free text rather than flags, so a help flag only counts in the
+// leading position. Anywhere else it is part of the prompt being scored.
+if (argv.length > 0 && isHelpFlag(argv[0])) printUsage(USAGE);
+
+const text = argv.join(" ").trim();
 if (!text) {
-  console.error("Usage: conductor-coach <prompt text>");
+  console.error(USAGE);
   process.exit(1);
 }
 

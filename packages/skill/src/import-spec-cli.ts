@@ -5,15 +5,25 @@ import {
   loadAllConstraints,
   writeContract,
 } from "@vaultcompass/conductor-core";
+import { isHelpFlag, printUsage } from "./usage.js";
 
-function usage(): never {
-  console.error(
-    [
-      "Usage: conductor-import-spec [--project <root>] [--from auto|spec-kit|kiro]",
-      "       [--spec-dir <dir>] [--requirements <path>] [--design <path>]",
-      "       [--tasks <path>] [--dry-run]",
-    ].join(" "),
-  );
+const USAGE = `Usage: conductor import-spec [flags]
+
+Import Spec Kit or Kiro artifacts as an unfrozen Intent Contract draft.
+
+Flags:
+  --project <root>          Project root (default: .)
+  --from auto|spec-kit|kiro Source format (default: auto)
+  --spec-dir <dir>          Directory holding the spec artifacts
+  --requirements <path>     Explicit requirements file
+  --design <path>           Explicit design file
+  --tasks <path>            Explicit tasks file
+  --dry-run                 Print the draft without writing it
+  --help, -h                Show this help`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(): never {
+  console.error(USAGE);
   process.exit(1);
 }
 
@@ -25,6 +35,7 @@ function parseArgs(argv: string[]) {
   let designPath = "";
   let tasksPath = "";
   let dryRun = false;
+  let help = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -32,7 +43,7 @@ function parseArgs(argv: string[]) {
       projectRoot = argv[++i];
     } else if (arg === "--from" && argv[i + 1]) {
       const next = argv[++i];
-      if (next !== "auto" && next !== "spec-kit" && next !== "kiro") usage();
+      if (next !== "auto" && next !== "spec-kit" && next !== "kiro") badUsage();
       format = next;
     } else if (arg === "--spec-dir" && argv[i + 1]) {
       specDir = argv[++i];
@@ -44,10 +55,10 @@ function parseArgs(argv: string[]) {
       tasksPath = argv[++i];
     } else if (arg === "--dry-run") {
       dryRun = true;
-    } else if (arg === "--help" || arg === "-h") {
-      usage();
+    } else if (isHelpFlag(arg)) {
+      help = true;
     } else {
-      usage();
+      badUsage();
     }
   }
 
@@ -59,10 +70,12 @@ function parseArgs(argv: string[]) {
     designPath: designPath || undefined,
     tasksPath: tasksPath || undefined,
     dryRun,
+    help,
   };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
 
 try {
   const imported = importSpecContract(args.projectRoot, {

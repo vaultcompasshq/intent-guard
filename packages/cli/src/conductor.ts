@@ -49,6 +49,9 @@ Global flags:
   --help, -h       Show this help
   --version, -v    Print the CLI version
 
+Every command takes --help too, and printing help never runs the command:
+  conductor check --help
+
 Examples:
   conductor init --project .
   conductor extract --project . --text "Add CSV export. No new API endpoints."

@@ -5,12 +5,28 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/conductor-core";
+import { isHelpFlag, printUsage } from "./usage.js";
+
+const USAGE = `Usage: conductor pivot --change <text> [flags]
+
+Record an intentional scope change against the active Intent Contract.
+
+Flags:
+  --change <text>              What changed (required)
+  --reason <text>              Why it changed
+  --add-scope <text>           Add an in-scope item (repeatable)
+  --remove-scope <text>        Remove an in-scope item (repeatable)
+  --add-out-of-scope <text>    Add an out-of-scope item (repeatable)
+  --acknowledge                Mark the pivot acknowledged by the user
+  --project <root>             Project root (default: .)
+  --help, -h                   Show this help`;
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let change = "";
   let reason = "";
   let acknowledge = false;
+  let help = false;
   const addScope: string[] = [];
   const removeScope: string[] = [];
   const addOutOfScope: string[] = [];
@@ -24,6 +40,7 @@ function parseArgs(argv: string[]) {
     else if (arg === "--remove-scope" && argv[i + 1]) removeScope.push(argv[++i]);
     else if (arg === "--add-out-of-scope" && argv[i + 1]) addOutOfScope.push(argv[++i]);
     else if (arg === "--acknowledge") acknowledge = true;
+    else if (isHelpFlag(arg)) help = true;
   }
 
   return {
@@ -34,10 +51,13 @@ function parseArgs(argv: string[]) {
     addScope,
     removeScope,
     addOutOfScope,
+    help,
   };
 }
 
 const args = parseArgs(process.argv.slice(2));
+if (args.help) printUsage(USAGE);
+
 if (!args.change) {
   console.error(
     "Usage: conductor-pivot --change <text> [--reason <text>] [--add-scope <text>] [--remove-scope <text>] [--add-out-of-scope <text>] [--acknowledge] [--project <root>]",
