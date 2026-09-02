@@ -40,9 +40,31 @@ jobs:
       - name: Release smoke
         run: pnpm release:smoke
 
+      # Skips any package whose exact version is already on the registry, so a
+      # tag run stays green after a version was published by hand. That happens
+      # on a first publish of a new package name: npm only exposes the
+      # trusted-publisher setting on a package that already exists, so the very
+      # first publish of a name cannot go through OIDC.
+      #
+      # Without the check, the first republish returns E403 and, because a run
+      # block executes under bash -e, aborts the whole step. The job then fails
+      # and both the GitHub Release step and the smoke-published job are
+      # skipped, which is a misleading red for a release that is actually fine.
+      #
+      # The skip is per exact version, so it never hides a real publish failure
+      # of a version that is genuinely new.
       - name: Publish to npm
         run: |
+          set -euo pipefail
           for pkg in packages/schema packages/core packages/skill packages/cli; do
+            name="$(node -p "require('./$pkg/package.json').name")"
+            version="$(node -p "require('./$pkg/package.json').version")"
+            published="$(npm view "$name@$version" version 2>/dev/null || true)"
+            if [ "$published" = "$version" ]; then
+              echo "SKIP: $name@$version is already on the registry"
+              continue
+            fi
+            echo "PUBLISH: $name@$version"
             (cd "$pkg" && pnpm publish --access public --tag latest)
           done
 

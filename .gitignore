@@ -4,9 +4,10 @@ dist/
 .env
 .env.*
 .DS_Store
-# Local maintainer notes (public repo, never commit)
+# Local maintainer notes and scratch files (public repo, never commit).
+# *.local.* covers notes (.md) and throwaway scripts (.mjs, .sh) alike.
 .local/
-*.local.md
+*.local.*
 audit.md
 # Local Intent Guard state (contracts and runtime files belong in consuming app repos)
 .conductor/
