@@ -31,13 +31,16 @@ done
 
 cat <<'EOF'
 
-Next on npmjs.com (each package -> Settings -> Trusted Publisher):
+Next on npmjs.com (each package, then Settings, then Trusted Publisher):
   Publisher: GitHub Actions
   Organization or user: vaultcompasshq
   Repository: intent-guard
   Workflow filename: release.yml
+  Environment name: leave blank (release.yml declares no environment)
 
-Then re-run the Release workflow or push the tag again:
-  git tag -d v0.3.0-beta && git push origin :refs/tags/v0.3.0-beta
-  git tag v0.3.0-beta && git push origin v0.3.0-beta
+Then tag the release from main and push the tag. The release workflow
+skips any package whose exact version is already on the registry, so a
+tag matching the version just published goes green, creates the GitHub
+Release, and smoke-tests the published CLI without republishing:
+  git tag vX.Y.Z && git push origin vX.Y.Z
 EOF
