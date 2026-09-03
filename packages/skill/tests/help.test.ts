@@ -1,6 +1,14 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import { execFile } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -34,12 +42,18 @@ interface RunResult {
   stderr: string;
 }
 
-async function run(cli: string, args: string[], cwd: string): Promise<RunResult> {
+async function run(
+  cli: string,
+  args: string[],
+  cwd: string,
+  env?: NodeJS.ProcessEnv,
+): Promise<RunResult> {
   try {
     const { stdout, stderr } = await execFileAsync("node", [join(DIST, cli), ...args], {
       cwd,
       encoding: "utf8",
       timeout: 30000,
+      ...(env ? { env } : {}),
     });
     return { code: 0, stdout: String(stdout), stderr: String(stderr ?? "") };
   } catch (err) {
@@ -50,6 +64,25 @@ async function run(cli: string, args: string[], cwd: string): Promise<RunResult>
       stderr: e.stderr ?? "",
     };
   }
+}
+
+/**
+ * A PATH directory containing only a real node (symlinked, since the child
+ * process resolves "node" through the PATH we hand it, not ours) and a stub
+ * git that appends its argv to a log file instead of doing anything. A run
+ * that never shells out to git leaves that log file missing entirely; one
+ * that does leaves a line behind naming exactly what it called git with.
+ */
+function makeStubGitPath(): { binDir: string; gitLog: string } {
+  const binDir = mkdtempSync(join(tmpdir(), "conductor-help-bin-"));
+  const gitLog = join(mkdtempSync(join(tmpdir(), "conductor-help-gitlog-")), "git-calls.log");
+  symlinkSync(process.execPath, join(binDir, "node"));
+  writeFileSync(
+    join(binDir, "git"),
+    "#!/bin/sh\necho \"$@\" >> \"" + gitLog + "\"\nexit 0\n",
+  );
+  chmodSync(join(binDir, "git"), 0o755);
+  return { binDir, gitLog };
 }
 
 beforeAll(() => {
@@ -72,6 +105,20 @@ describe("subcommand help", () => {
       expect(readdirSync(dir)).toEqual([]);
     });
 
+    // The empty-temp-dir check above only catches a write into the project
+    // directory. It would not catch a shell-out to git (reading branch
+    // state, touching global config) that never writes a file there at all.
+    // PATH here resolves to only node and a stub git, so any git invocation
+    // leaves a line in gitLog; --help must leave that file missing.
+    it(`${cli} --help does not shell out to git`, async () => {
+      const dir = mkdtempSync(join(tmpdir(), "conductor-help-"));
+      const { binDir, gitLog } = makeStubGitPath();
+      const res = await run(cli, ["--help"], dir, { PATH: binDir });
+
+      expect(res.code).toBe(0);
+      expect(existsSync(gitLog)).toBe(false);
+    });
+
     it(`${cli} -h prints the same usage`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "conductor-help-"));
       const long = await run(cli, ["--help"], dir);
@@ -92,6 +139,21 @@ describe("subcommand help", () => {
     // The gate's own verdict lines, not the word "gate", which usage uses.
     expect(res.stdout).not.toMatch(/Intent Guard gate:/);
     expect(res.stderr).toBe("");
+  });
+
+  it("check --help does not read the contract", async () => {
+    // The contract file's usual place is a directory instead. Any code path
+    // that opens it as a file (readFileSync, or an fs.readFile that follows
+    // the same name) throws EISDIR immediately, so a quiet, exit-0 run here
+    // is only possible if --help genuinely never reads it.
+    const dir = mkdtempSync(join(tmpdir(), "conductor-help-check-contract-"));
+    mkdirSync(join(dir, ".conductor"), { recursive: true });
+    mkdirSync(join(dir, ".conductor", "intent-contract.yaml"));
+
+    const res = await run("check-cli.js", ["--help"], dir);
+
+    expect(res.code).toBe(0);
+    expect(res.stdout).toMatch(/^Usage: /m);
   });
 
   it("report --help does not build a report", async () => {
