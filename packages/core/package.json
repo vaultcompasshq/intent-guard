@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/intent-guard-core",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "Core prompt coaching, drift scoring, gate, correction, and memory-index utilities for Intent Guard",
   "license": "MIT",

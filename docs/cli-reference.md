@@ -64,25 +64,81 @@ JSON: `valid`, `written_path`, `frozen` (always false), `next_step`,
 
 ## intent-guard import-spec / intent-guard-import-spec
 
-Import Spec Kit or Kiro-style artifacts into an unfrozen Intent Contract draft.
-This is a bridge into Intent Guard's approval flow, not a second spec system:
-review the draft, edit if needed, then run `intent-guard freeze`.
+Import Spec Kit, Kiro, or superpowers-style artifacts into an unfrozen Intent
+Contract draft. This is a bridge into Intent Guard's approval flow, not a second
+spec system: review the draft, edit if needed, then run `intent-guard freeze`.
 
 | Flag | Meaning |
 |------|---------|
 | `--project <root>` | target project |
-| `--from auto|spec-kit|kiro` | source format; default `auto` |
-| `--spec-dir <dir>` | explicit spec directory |
+| `--from auto\|spec-kit\|kiro\|superpowers` | source format; default `auto` |
+| `--spec-dir <dir>` | explicit spec directory (spec-kit, kiro) |
 | `--requirements <path>` | explicit requirements/spec/bugfix file |
 | `--design <path>` | explicit design/plan file |
 | `--tasks <path>` | explicit tasks file |
+| `--spec <path>` | superpowers: the design spec markdown file |
+| `--plan <path>` | superpowers: the plan markdown file |
 | `--dry-run` | print the draft JSON, write nothing |
 
 Discovery checks Spec Kit-style `specs/<feature>/spec.md`, `plan.md`,
 `tasks.md` and `.specify/specs/<feature>/...`; Kiro-style
 `.kiro/specs/<feature>/requirements.md` or `bugfix.md`, `design.md`, and
-`tasks.md`. JSON includes `format`, `spec_dir`, `imported_files`,
-`written_path`, `frozen: false`, `next_step`, and `contract_yaml`.
+`tasks.md`; then superpowers-style `docs/superpowers/`. JSON includes `format`,
+`spec_dir`, `imported_files`, `written_path`, `frozen: false`, `next_step`, and
+`contract_yaml`.
+
+### superpowers artifacts
+
+A superpowers feature is two markdown files, not a directory of roles: a design
+spec at `docs/superpowers/specs/<date>-<slug>-design.md` and a plan at
+`docs/superpowers/plans/<date>-<slug>.md`. The spec is imported as
+`requirements` and the plan as `tasks`. The `design` role stays empty unless
+`--design` is passed, because the design reasoning already lives in the spec.
+
+With no `--spec`, discovery takes the newest markdown file (by mtime) directly
+under `docs/superpowers/specs`, then the plan in `docs/superpowers/plans` whose
+filename stem matches, with a trailing `-design` stripped. The `-design` suffix
+is optional; a repo that names both files identically pairs them too. A spec
+with no matching plan imports on its own. `--plan` without `--spec` is an error:
+a task list is not a contract.
+
+`--spec` and `--plan` belong to this format alone. Combining either with
+`--from spec-kit`, `--from kiro`, or `--spec-dir` is a usage error (exit 1)
+rather than a silently ignored flag, since the contract would otherwise be built
+from files the caller did not name.
+
+Under `--from auto`, superpowers is checked **after** spec-kit and kiro, so a
+repo with an existing layout resolves the way it always did.
+
+`spec_dir` for this format is the `docs/superpowers` directory.
+
+Two things to look for in the draft before freezing it. A plan's prose often
+carries machine-specific absolute paths (a `Run: pnpm --dir /Users/...` line, for
+example), and those land in the drafted contract verbatim, so scrub them during
+review: `.conductor/intent-contract.yaml` is a committed file. And an
+unterminated fence swallows the rest of the document, because the fence toggle
+never flips back, so a plan with an unclosed block contributes nothing after it.
+
+#### Budget block
+
+If the spec or the plan contains a fenced yaml block whose entire content is a
+single `budget` key, that value is validated against the contract schema and
+attached to the draft as its change budget:
+
+````markdown
+```yaml
+budget:
+  allowed_paths: ["packages/core/src/online/**"]
+  max_files: 12
+```
+````
+
+Either fence delimiter works: ```` ``` ```` and `~~~` are both read, and a fence
+is closed by its own delimiter. The spec is searched before the plan, and the
+first such block wins. Any other yaml fence is ignored, so a document can show a
+config or workflow sample without declaring a budget by accident. A `budget` block that does not validate
+is an error naming the file it came from, never a silent skip: a budget that
+quietly vanished would leave the gate open.
 
 ## intent-guard freeze / intent-guard-freeze
 
@@ -108,6 +164,7 @@ a blocking threshold. Used by the pre-commit hook / CI.
 |------|---------|
 | `--project <root>` | target project |
 | `--staged` | auto-collect staged paths via `git diff --cached --name-only` |
+| `--base <ref>` | auto-collect paths changed since the merge base with `<ref>`, via `git diff --name-only <ref>...HEAD` |
 | `--paths a,b` | explicit changed paths |
 | `--signals "x,y"` | free-text descriptions of what changed (open vocabulary) |
 | `--message "<text>"` | latest user message (pivot detection) |
@@ -115,7 +172,36 @@ a blocking threshold. Used by the pre-commit hook / CI.
 | `--no-require-frozen` | allow a missing contract (still scores drift) |
 | `--json` / `--log` | JSON output / append to `drift-log.jsonl` |
 
-Exit 0 = ok, 1 = blocked.
+Exit 0 = ok, 1 = blocked, 2 = `--base` could not be resolved.
+
+### Checking a pull request with `--base`
+
+`--staged` is the pre-commit view. `--base` is the pull-request view: the three
+dot form asks what the branch changed since it forked, so commits that landed on
+the base branch afterwards are not attributed to the branch.
+
+`--base` is additive with `--paths` and `--staged`. The combined list is
+de-duplicated and keeps first-seen order.
+
+Git lists paths relative to the **repository root**, not to `--project`. When
+`--project` points at a subdirectory of the repo, either run the gate from the
+repository root or write the budget globs repo-relative, or nothing will match.
+
+It fails closed. An unknown ref, a directory that is not a repository, a shallow
+clone with no merge base, or a git that will not run all print one line to
+stderr naming the ref and exit **2**. There is no silent fallback to an empty
+path set, because an empty set makes the gate pass.
+
+In GitHub Actions, `actions/checkout` fetches a single commit by default, so
+there is no merge base to diff against. Either check out with `fetch-depth: 0`,
+or fetch the base ref explicitly before running the gate:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- run: npx intent-guard check --project . --base origin/${{ github.base_ref }}
+```
 When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
 this does not change the gate exit code.
 
@@ -159,8 +245,10 @@ Notes:
 - Globs are case-sensitive, matching git's case-sensitive path tracking. On a
   case-insensitive filesystem a `Src` glob still will not match a staged
   `src/...` path.
-- Changed paths come from git, which lists deleted and renamed files, so a
-  deleted protected file still blocks.
+- Changed paths come from git with `--no-renames`, so a deletion lists the
+  deleted path and a rename lists **both** its old and its new path. Moving a
+  file out of a protected directory therefore still blocks. The cost is that a
+  rename counts as two paths against `max_files`.
 - The budget is evaluated against the current diff only. Cross-session
   comparison (`--previous-contract`) scores drift but does not re-check the
   budget.
@@ -225,6 +313,7 @@ It runs the same gate as `intent-guard check` and exits with the gate result.
 |------|---------|
 | `--project <root>` | target project |
 | `--staged` | auto-collect staged paths via `git diff --cached --name-only` |
+| `--base <ref>` | auto-collect paths changed since the merge base with `<ref>`, exactly as `check --base` does |
 | `--paths a,b` | explicit changed paths |
 | `--signals "x,y"` | free-text descriptions of what changed |
 | `--message "<text>"` | latest user message |
@@ -236,6 +325,11 @@ It runs the same gate as `intent-guard check` and exits with the gate result.
 Markdown includes the active contract, gate reasons, drift score, acceptance
 criteria coverage inferred from paths/signals, pivots, corrections, changed
 paths, signals, and a recommended next action.
+
+`--base` behaves exactly as it does for `check`, including the fail-closed exit
+2 and the GitHub Actions checkout note above: `check` and `report` share one
+path-collection module so the two commands cannot see different paths for the
+same flags.
 
 With `--with-secrets`, the `vault_guard` block reports `blockingMatches` and a
 `blocked` verdict taken from vault-guard's own `run.blocking_matches`, which

@@ -2,6 +2,12 @@
 
 **Approved Intent Contract + drift gate for AI-assisted development.**
 
+The package is **`@vaultcompass/intent-guard`**, and it installs as
+`npm install --save-dev @vaultcompass/intent-guard` (or
+`pnpm add -D @vaultcompass/intent-guard`). An unrelated package named
+`intentguard` also exists on npm; it is a different project and has nothing to
+do with this one, so install the scoped name.
+
 > **Renamed in 1.2.0.** This project shipped as **Conductor** through 1.1.0. The
 > npm packages are now `@vaultcompass/intent-guard`,
 > `@vaultcompass/intent-guard-core`, `@vaultcompass/intent-guard-schema`, and
@@ -15,8 +21,10 @@
 
 Intent Guard turns an unstructured request into a frozen **Intent Contract**, then
 blocks scope drift in pre-commit and CI before misaligned changes reach review.
-It complements Spec Kit, Kiro, Cursor, Claude Code, Codex, and CodeRabbit; it
-does not replace planning, coding agents, or PR review.
+It complements Spec Kit, Kiro, superpowers, Cursor, Claude Code, Codex, and
+CodeRabbit; it does not replace planning, coding agents, or PR review.
+`intent-guard import-spec` imports Spec Kit, Kiro, and superpowers artifacts as
+a draft contract.
 
 The contract is plain YAML any model can read. Pair with
 [vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) when you
@@ -34,7 +42,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.2.0` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.2.1` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli` (see [docs/NEXT.md](./docs/NEXT.md))
@@ -134,6 +142,7 @@ pnpm intent-guard --init --project .
 pnpm intent-guard --doctor --project .
 pnpm intent-guard --extract --project . --text "Add CSV export. Do not add new API endpoints. Verify the file downloads."
 pnpm intent-guard --import-spec --project . --from kiro --spec-dir .kiro/specs/export
+pnpm intent-guard --import-spec --project . --from superpowers   # docs/superpowers spec + plan
 pnpm intent-guard --freeze --project . --approved-by "<name>"
 pnpm intent-guard --check --project . --staged
 pnpm intent-guard --report --project . --staged
@@ -144,7 +153,7 @@ pnpm intent-guard --rules audit --project .
 
 ```bash
 pnpm install
-pnpm test      # 180 tests (builds first, then schema + core + skill + cli + examples/integrations)
+pnpm test      # 359 tests (builds first, then schema + core + skill + cli + examples/integrations)
 pnpm dogfood:cursor-hooks   # Cursor rule + hook install pass/fail fixture
 pnpm dogfood:claude-hooks   # Claude Code SessionStart/Stop lifecycle fixture
 pnpm build

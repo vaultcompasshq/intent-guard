@@ -31,7 +31,7 @@ Commands:
   init      Create a .conductor project skeleton
   coach     Score a prompt for scope and clarity risks
   extract   Draft an unfrozen Intent Contract from an ask
-  import-spec Import Spec Kit or Kiro artifacts as an unfrozen draft
+  import-spec Import Spec Kit, Kiro, or superpowers artifacts as a draft
   freeze    Approve and freeze the active draft contract
   check     Run the enforcement gate against changed paths
   drift     Score drift for a specific contract file
@@ -56,12 +56,14 @@ Examples:
   intent-guard init --project .
   intent-guard extract --project . --text "Add CSV export. No new API endpoints."
   intent-guard import-spec --project . --from kiro --spec-dir .kiro/specs/export
+  intent-guard import-spec --project . --from superpowers
   intent-guard freeze --project . --approved-by alice
   intent-guard doctor --project .
   intent-guard hook install --project . --with-vault-guard
   intent-guard report --project . --staged
   intent-guard rules audit --project .
   intent-guard check --project . --staged
+  intent-guard check --project . --base origin/main
   intent-guard drift --ci --contract .conductor/intent-contract.yaml --paths src/app/api/export/route.ts
 
 For command flags, see docs/cli-reference.md. Per-command bins such as

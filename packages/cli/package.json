@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/intent-guard",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "Unified Intent Guard CLI for intent contracts, drift checks, and session continuity",
   "license": "MIT",

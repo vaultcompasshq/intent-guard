@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
 import {
   appendDriftEvent,
   checkGate,
@@ -8,6 +7,7 @@ import {
   readArchivedContract,
   readContract,
 } from "@vaultcompass/intent-guard-core";
+import { collectChangedPaths } from "./changed-paths.js";
 import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard check [flags]
@@ -18,6 +18,7 @@ blocks the change.
 Flags:
   --project <root>            Project root (default: .)
   --staged                    Collect staged paths from git
+  --base <ref>                Collect paths changed since the merge base with <ref>
   --paths a,b                 Explicit changed paths
   --signals "x,y"             Free-text descriptions of what changed
   --message "<text>"          Latest user message
@@ -26,7 +27,16 @@ Flags:
   --log                       Append the result to the drift log
   --json                      Machine-readable output
   --help, -h                  Show this help
-  --version, -v               Print the version`;
+  --version, -v               Print the version
+
+--base is additive with --paths and --staged. It fails closed: an unknown ref
+or a missing merge base exits 2 rather than gating on an empty path set.`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(): never {
+  console.error(USAGE);
+  process.exit(1);
+}
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -34,6 +44,7 @@ function parseArgs(argv: string[]) {
   const signals: string[] = [];
   let userMessage = "";
   let staged = false;
+  let base = "";
   let requireFrozen = true;
   let json = false;
   let log = false;
@@ -53,6 +64,11 @@ function parseArgs(argv: string[]) {
       userMessage = argv[++i];
     } else if (arg === "--staged") {
       staged = true;
+    } else if (arg === "--base") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) badUsage();
+      base = next;
+      i++;
     } else if (arg === "--no-require-frozen") {
       requireFrozen = false;
     } else if (arg === "--json") {
@@ -74,6 +90,7 @@ function parseArgs(argv: string[]) {
     signals,
     userMessage,
     staged,
+    base,
     requireFrozen,
     json,
     log,
@@ -83,27 +100,16 @@ function parseArgs(argv: string[]) {
   };
 }
 
-function stagedPaths(projectRoot: string): string[] {
-  try {
-    // core.quotePath=false keeps unicode/space paths literal instead of
-    // octal-escaped and quoted, so budget globs match the real path.
-    const out = execFileSync(
-      "git",
-      ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-      { cwd: projectRoot, encoding: "utf8" },
-    );
-    return out.split("\n").map((l) => l.trim()).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
 const args = parseArgs(process.argv.slice(2));
 if (args.help) printUsage(USAGE);
 if (args.version) printVersion();
 
-const changedPaths = [...args.paths];
-if (args.staged) changedPaths.push(...stagedPaths(args.projectRoot));
+const changedPaths = collectChangedPaths({
+  projectRoot: args.projectRoot,
+  paths: args.paths,
+  staged: args.staged,
+  base: args.base,
+});
 
 const result = checkGate(args.projectRoot, {
   requireFrozen: args.requireFrozen,

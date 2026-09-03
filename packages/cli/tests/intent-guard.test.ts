@@ -71,7 +71,7 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["--version"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).toBe("1.2.0\n");
+    expect(res.stdout).toBe("1.2.1\n");
     expect(res.stderr).toBe("");
     expect(readdirSync(dir)).toEqual([]);
   });
@@ -80,7 +80,7 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["-v"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).toBe("1.2.0\n");
+    expect(res.stdout).toBe("1.2.1\n");
     expect(res.stderr).toBe("");
     expect(readdirSync(dir)).toEqual([]);
   });
