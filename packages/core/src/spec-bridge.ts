@@ -346,15 +346,24 @@ function extractBudget(files: SpecBridgeFile[]): {
   budget: ChangeBudget;
   path: string;
 } | null {
-  const fence = /```ya?ml[^\n]*\n([\s\S]*?)```/gi;
-  const looksLikeBudget = /^\s*budget\s*:/m;
+  // The backreference is the point: CommonMark allows either delimiter, and
+  // stripMarkdown already honours both, so reading only backticks left a tilde
+  // budget dropped from the prose and never extracted. \1 closes a fence with
+  // its own delimiter instead of letting one style close the other.
+  const fence = /(```|~~~)ya?ml[^\n]*\n([\s\S]*?)\1/gi;
+  // The key may be quoted. YAML gives `"budget":` the same plain key, so a
+  // quoted key that parsed was already honoured while a quoted key that failed
+  // to parse was skipped. That asymmetry is the bug: this sentinel is what
+  // decides whether a broken fence fails loudly or vanishes.
+  const looksLikeBudget = /^\s*["']?budget["']?\s*:/m;
   for (const file of files) {
     for (const match of file.content.matchAll(fence)) {
+      const body = match[2];
       let parsed: unknown;
       try {
-        parsed = parseYaml(match[1]);
+        parsed = parseYaml(body);
       } catch (error) {
-        if (!looksLikeBudget.test(match[1])) continue;
+        if (!looksLikeBudget.test(body)) continue;
         const detail = error instanceof Error ? error.message : String(error);
         throw new Error(`Invalid budget block in ${file.path}:\n${detail}`);
       }

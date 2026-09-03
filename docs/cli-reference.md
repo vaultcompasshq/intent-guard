@@ -112,6 +112,13 @@ repo with an existing layout resolves the way it always did.
 
 `spec_dir` for this format is the `docs/superpowers` directory.
 
+Two things to look for in the draft before freezing it. A plan's prose often
+carries machine-specific absolute paths (a `Run: pnpm --dir /Users/...` line, for
+example), and those land in the drafted contract verbatim, so scrub them during
+review: `.conductor/intent-contract.yaml` is a committed file. And an
+unterminated fence swallows the rest of the document, because the fence toggle
+never flips back, so a plan with an unclosed block contributes nothing after it.
+
 #### Budget block
 
 If the spec or the plan contains a fenced yaml block whose entire content is a
@@ -126,9 +133,10 @@ budget:
 ```
 ````
 
-The spec is searched before the plan, and the first such block wins. Any other
-yaml fence is ignored, so a document can show a config or workflow sample
-without declaring a budget by accident. A `budget` block that does not validate
+Either fence delimiter works: ```` ``` ```` and `~~~` are both read, and a fence
+is closed by its own delimiter. The spec is searched before the plan, and the
+first such block wins. Any other yaml fence is ignored, so a document can show a
+config or workflow sample without declaring a budget by accident. A `budget` block that does not validate
 is an error naming the file it came from, never a silent skip: a budget that
 quietly vanished would leave the gate open.
 

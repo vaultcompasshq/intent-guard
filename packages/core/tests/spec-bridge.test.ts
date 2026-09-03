@@ -427,6 +427,69 @@ describe("spec bridge: superpowers", () => {
     expect(imported.contract.budget).toBeUndefined();
   });
 
+  it("reads a budget fence written with tilde delimiters", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "~~~yaml",
+          "budget:",
+          "  max_files: 4",
+          "~~~",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.contract.budget).toEqual({ max_files: 4 });
+  });
+
+  it("rejects an unparseable budget fence whose key is quoted", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          '"budget":',
+          "\tmax_files: 3",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /Invalid budget block in .*online-checks\.md/,
+    );
+  });
+
+  it("reads a budget fence whose key is quoted", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          '"budget":',
+          "  max_files: 5",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.contract.budget).toEqual({ max_files: 5 });
+  });
+
   it("reads a budget fence that carries an info string", () => {
     const dir = superpowersProject(
       "2026-08-16-online-checks-design.md",

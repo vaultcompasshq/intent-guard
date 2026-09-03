@@ -153,7 +153,7 @@ pnpm intent-guard --rules audit --project .
 
 ```bash
 pnpm install
-pnpm test      # 356 tests (builds first, then schema + core + skill + cli + examples/integrations)
+pnpm test      # 359 tests (builds first, then schema + core + skill + cli + examples/integrations)
 pnpm dogfood:cursor-hooks   # Cursor rule + hook install pass/fail fixture
 pnpm dogfood:claude-hooks   # Claude Code SessionStart/Stop lifecycle fixture
 pnpm build

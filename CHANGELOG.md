@@ -9,8 +9,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [1.2.1] - 2026-09-03
 
-Patch bump on all four packages. Two additive features and a README note; no
-schema change, no removed flag, nothing to migrate.
+Patch bump on all four packages. Two additive features, a README note, and one
+change that is not additive: the rename fix under **Fixed** makes a rename count
+as two paths, so a tight `max_files` budget that passed on a rename under 1.2.0
+now blocks. Read that entry before upgrading a pre-commit hook. No schema
+change and no removed flag.
 
 ### Added
 
