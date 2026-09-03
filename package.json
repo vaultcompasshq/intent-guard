@@ -1,7 +1,7 @@
 {
   "name": "intent-guard",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Intent fidelity for AI-assisted development",
   "license": "MIT",
   "scripts": {

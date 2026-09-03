@@ -2,6 +2,12 @@
 
 **Approved Intent Contract + drift gate for AI-assisted development.**
 
+The package is **`@vaultcompass/intent-guard`**, and it installs as
+`npm install --save-dev @vaultcompass/intent-guard` (or
+`pnpm add -D @vaultcompass/intent-guard`). An unrelated package named
+`intentguard` also exists on npm; it is a different project and has nothing to
+do with this one, so install the scoped name.
+
 > **Renamed in 1.2.0.** This project shipped as **Conductor** through 1.1.0. The
 > npm packages are now `@vaultcompass/intent-guard`,
 > `@vaultcompass/intent-guard-core`, `@vaultcompass/intent-guard-schema`, and
@@ -36,7 +42,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.2.0` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.2.1` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli` (see [docs/NEXT.md](./docs/NEXT.md))
@@ -147,7 +153,7 @@ pnpm intent-guard --rules audit --project .
 
 ```bash
 pnpm install
-pnpm test      # 180 tests (builds first, then schema + core + skill + cli + examples/integrations)
+pnpm test      # 344 tests (builds first, then schema + core + skill + cli + examples/integrations)
 pnpm dogfood:cursor-hooks   # Cursor rule + hook install pass/fail fixture
 pnpm dogfood:claude-hooks   # Claude Code SessionStart/Stop lifecycle fixture
 pnpm build

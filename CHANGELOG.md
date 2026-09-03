@@ -7,6 +7,62 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-03
+
+Patch bump on all four packages. Two additive features and a README note; no
+schema change, no removed flag, nothing to migrate.
+
+### Added
+
+- **`check --base <ref>` and `report --base <ref>`.** The gate can now be run
+  against a base ref instead of the git index, which is what a pull request
+  actually is: paths come from `git diff --name-only <ref>...HEAD`, the three-dot
+  form, so commits that landed on the base branch after the fork are not
+  attributed to the branch. `--staged` is still the pre-commit view, and it sees
+  nothing in CI, where the index is empty.
+
+  `--base` is additive with `--paths` and `--staged`; the combined list is
+  de-duplicated and keeps first-seen order. It **fails closed**: an unknown ref,
+  a directory that is not a repository, a shallow clone with no merge base, or a
+  git that will not run each print one line to stderr naming the ref and exit
+  **2**. There is no silent fallback to an empty path set, because an empty set
+  makes the gate pass.
+
+  In GitHub Actions, `actions/checkout` fetches a single commit by default, so
+  check out with `fetch-depth: 0` or fetch the base ref explicitly; without a
+  merge base the gate exits 2 rather than passing. `check` and `report` now share
+  one path-collection module so they cannot see different paths for the same
+  flags.
+
+- **`import-spec --from superpowers`.** A fourth source format for the spec
+  bridge. A superpowers feature is two markdown files rather than a directory of
+  roles, so the design spec is imported as `requirements` and the plan as
+  `tasks`; the `design` role stays empty unless `--design` is passed, because the
+  design reasoning already lives in the spec.
+
+  `--spec <path>` and `--plan <path>` name the two files. With neither,
+  discovery takes the newest markdown file by mtime under
+  `docs/superpowers/specs` and pairs it with the plan in
+  `docs/superpowers/plans` whose filename stem matches after a trailing
+  `-design` is stripped; the suffix is optional. A spec with no matching plan
+  imports on its own, and `--plan` without `--spec` is an error, since a task
+  list is not a contract. Under `--from auto`, superpowers is checked **after**
+  spec-kit and kiro, so a repo with an existing layout resolves exactly as it did
+  before.
+
+  If the spec or the plan holds a fenced yaml block whose entire content is a
+  single `budget` key, that value is validated against the contract schema and
+  attached to the draft as its change budget. Any other yaml fence is ignored, so
+  a document can show a config sample without declaring a budget by accident, and
+  a `budget` block that does not validate is an error naming its file rather than
+  a silent skip.
+
+### Changed
+
+- The README now names the package at the top: this project is
+  `@vaultcompass/intent-guard`. An unrelated package called `intentguard` exists
+  on npm and is not this project.
+
 ## [1.2.0] - 2026-09-02
 
 Minor bump on all four packages. The rename is the headline, but it renames
