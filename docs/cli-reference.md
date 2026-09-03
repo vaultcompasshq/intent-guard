@@ -170,6 +170,10 @@ the base branch afterwards are not attributed to the branch.
 `--base` is additive with `--paths` and `--staged`. The combined list is
 de-duplicated and keeps first-seen order.
 
+Git lists paths relative to the **repository root**, not to `--project`. When
+`--project` points at a subdirectory of the repo, either run the gate from the
+repository root or write the budget globs repo-relative, or nothing will match.
+
 It fails closed. An unknown ref, a directory that is not a repository, a shallow
 clone with no merge base, or a git that will not run all print one line to
 stderr naming the ref and exit **2**. There is no silent fallback to an empty
@@ -228,8 +232,10 @@ Notes:
 - Globs are case-sensitive, matching git's case-sensitive path tracking. On a
   case-insensitive filesystem a `Src` glob still will not match a staged
   `src/...` path.
-- Changed paths come from git, which lists deleted and renamed files, so a
-  deleted protected file still blocks.
+- Changed paths come from git with `--no-renames`, so a deletion lists the
+  deleted path and a rename lists **both** its old and its new path. Moving a
+  file out of a protected directory therefore still blocks. The cost is that a
+  rename counts as two paths against `max_files`.
 - The budget is evaluated against the current diff only. Cross-session
   comparison (`--previous-contract`) scores drift but does not re-check the
   budget.

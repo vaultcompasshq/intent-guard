@@ -34,6 +34,10 @@ schema change, no removed flag, nothing to migrate.
   one path-collection module so they cannot see different paths for the same
   flags.
 
+  Git lists paths relative to the repository root, not to `--project`, so run
+  the gate from the repository root or write budget globs repo-relative when
+  `--project` points at a subdirectory.
+
 - **`import-spec --from superpowers`.** A fourth source format for the spec
   bridge. A superpowers feature is two markdown files rather than a directory of
   roles, so the design spec is imported as `requirements` and the plan as
@@ -56,6 +60,16 @@ schema change, no removed flag, nothing to migrate.
   a document can show a config sample without declaring a budget by accident, and
   a `budget` block that does not validate is an error naming its file rather than
   a silent skip.
+
+### Fixed
+
+- **A rename no longer walks a file out of a protected directory unnoticed.**
+  Both `--staged` and `--base` now pass `--no-renames` to git. Rename detection
+  reports only a rename's destination, so moving `src/legacy/keeper.ts` to
+  `src/new/keeper.ts` never named the protected path and a
+  `protected_paths: ["**/legacy/**"]` budget passed. Both sides of a rename are
+  now listed, so a deletion and a move both block. The cost, and it is
+  deliberate: **a rename counts as two paths against `max_files`**.
 
 ### Changed
 

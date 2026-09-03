@@ -73,6 +73,26 @@ function repoWithBranch(changed: string[]): string {
   return dir;
 }
 
+/**
+ * A repo whose feature branch renames one committed file. Git detects the
+ * rename and, left to itself, reports only the destination path.
+ */
+function repoWithRename(from: string, to: string, commitRename: boolean): string {
+  const dir = tmpDir();
+  git(dir, ["init", "-b", "main"]);
+  git(dir, ["config", "user.email", "tester@example.com"]);
+  git(dir, ["config", "user.name", "tester"]);
+  writeAt(dir, "README.md", "# Project\n");
+  writeAt(dir, from, "keep me exactly as I am\n");
+  git(dir, ["add", "--", "README.md", from]);
+  git(dir, ["commit", "-m", "initial"]);
+  git(dir, ["checkout", "-b", "feature"]);
+  mkdirSync(dirname(join(dir, to)), { recursive: true });
+  git(dir, ["mv", from, to]);
+  if (commitRename) git(dir, ["commit", "-m", "rename"]);
+  return dir;
+}
+
 /** Land a commit on main after the feature branch already forked from it. */
 function advanceMain(dir: string, relative: string): void {
   git(dir, ["checkout", "main"]);
@@ -152,6 +172,28 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
     expect(JSON.stringify(out.budget)).not.toContain("landed-on-main");
   });
 
+  it("lists both sides of a rename out of a protected directory", async () => {
+    const dir = repoWithRename("src/legacy/keeper.ts", "src/new/keeper.ts", true);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "**/legacy/**"\n');
+
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.budget.action).toBe("hard_block");
+    expect(JSON.stringify(out.budget.violations)).toContain("src/legacy/keeper.ts");
+  });
+
+  it("lists both sides of a staged rename out of a protected directory", async () => {
+    const dir = repoWithRename("src/legacy/keeper.ts", "src/new/keeper.ts", false);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "**/legacy/**"\n');
+
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.budget.action).toBe("hard_block");
+    expect(JSON.stringify(out.budget.violations)).toContain("src/legacy/keeper.ts");
+  });
+
   it("fails closed with exit 2 on an unknown base ref", async () => {
     const dir = repoWithBranch(["README.md"]);
     await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
@@ -160,6 +202,8 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
     expect(res.code).toBe(2);
     expect(res.stderr).toContain("no-such-ref");
     expect(res.stdout).not.toContain('"status":"ok"');
+    // One line, as documented: git's own multi-line stderr is not forwarded.
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
   });
 
   it("fails closed with exit 2 outside a git repository", async () => {
@@ -167,6 +211,8 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
     const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
     expect(res.code).toBe(2);
     expect(res.stderr).toContain("main");
+    // git prints its whole usage screen here; only its first line may survive.
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
   });
 
   it("treats --base with no ref value as a usage error", async () => {
