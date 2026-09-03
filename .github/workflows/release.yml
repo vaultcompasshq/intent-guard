@@ -96,18 +96,32 @@ jobs:
           VERSION="${TAG#v}"
           echo "Smoke testing @vaultcompass/intent-guard@${VERSION}"
 
+          # The CLI depends on the other three at an exact version, so the
+          # install below fails until every one of them is visible. Waiting on
+          # the CLI alone is what failed the v1.2.1 run: schema and skill were
+          # visible inside a minute, core took about six minutes, and npm hit
+          # ETARGET one second after the CLI appeared. Wait for all four, and
+          # leave the registry room to be slow.
+          PACKAGES="@vaultcompass/intent-guard-schema @vaultcompass/intent-guard-core @vaultcompass/intent-guard-skill @vaultcompass/intent-guard"
           FOUND=0
-          for i in $(seq 1 12); do
-            if [[ "$(npm view "@vaultcompass/intent-guard@${VERSION}" version 2>/dev/null)" == "${VERSION}" ]]; then
-              echo "Package visible on registry."
+          MISSING=""
+          for i in $(seq 1 60); do
+            MISSING=""
+            for pkg in ${PACKAGES}; do
+              if [[ "$(npm view "${pkg}@${VERSION}" version 2>/dev/null)" != "${VERSION}" ]]; then
+                MISSING="${MISSING} ${pkg}"
+              fi
+            done
+            if [[ -z "${MISSING}" ]]; then
+              echo "All four packages visible on registry."
               FOUND=1
               break
             fi
-            echo "Waiting for npm registry (attempt ${i}/12)…"
+            echo "Waiting for npm registry (attempt ${i}/60), still missing:${MISSING}"
             sleep 10
           done
           if [[ "${FOUND}" -ne 1 ]]; then
-            echo "::error::Timed out waiting for @vaultcompass/intent-guard@${VERSION} on the npm registry."
+            echo "::error::Timed out waiting at ${VERSION} for:${MISSING}"
             exit 1
           fi
 
