@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { evaluateBudget } from "../src/budget.js";
 import { scoreDrift } from "../src/drift.js";
+import { findingFingerprint } from "../src/fingerprint.js";
 
 const contract: IntentContract = {
   contract_id: "ic-20260902-aa11bb",
@@ -96,9 +97,39 @@ describe("drift finding fingerprints", () => {
       changedPaths: [...signals.changedPaths].reverse(),
     });
 
+    // Note: for this contract and these signals, scoreDrift's own matched
+    // arrays come out in the same order forward and reversed regardless of
+    // canonicalMatched's sort, because they are built by iterating token sets
+    // derived from the contract text, not from changedPaths order. That is
+    // what makes the case below load-bearing where this one is not.
     expect(new Set(reversed.finding_details.map((f) => f.fingerprint))).toEqual(
       new Set(forward.finding_details.map((f) => f.fingerprint)),
     );
+  });
+
+  it("is unchanged when a drift finding's matched token set is built in a different order", () => {
+    // scoreDrift's own matched arrays do not vary in order for a fixed
+    // contract and fixed signals (see the case above), so this drives
+    // findingFingerprint directly with the same contract id and the same
+    // rule id a real constraint_violation finding would use, and only the
+    // order of the matched tokens differs. This is what actually exercises
+    // canonicalMatched's sort for a drift-shaped finding: removing the sort
+    // makes forward and reversed hash differently.
+    const ruleId = "constraint_violation:No new API endpoints";
+    const matched = ["endpoint", "authentication", "session"];
+
+    const forward = findingFingerprint({
+      contractId: contract.contract_id,
+      ruleId,
+      matched,
+    });
+    const reversed = findingFingerprint({
+      contractId: contract.contract_id,
+      ruleId,
+      matched: [...matched].reverse(),
+    });
+
+    expect(reversed).toBe(forward);
   });
 
   it("differs for a different contract id", () => {
