@@ -96,13 +96,19 @@ function markdownFilesIn(dir: string): string[] {
     .filter((path) => statSync(path).isFile());
 }
 
-/** The most recently modified spec markdown file, by mtime, not by name. */
+/**
+ * The most recently modified spec markdown file, by mtime, with the filename
+ * as the tie-break. The tie-break is not cosmetic: a fresh CI checkout writes
+ * every file at once, so every spec carries the same mtime and the winner
+ * would otherwise be whatever readdir returned first. Names are dated, so
+ * descending filename order puts the newest spec first.
+ */
 function discoverSuperpowersSpec(projectRoot: string): string | undefined {
   const specs = markdownFilesIn(join(projectRoot, SUPERPOWERS_DIRS.specs));
   if (specs.length === 0) return undefined;
   return specs
     .map((path) => ({ path, mtime: statSync(path).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime)[0].path;
+    .sort((a, b) => b.mtime - a.mtime || b.path.localeCompare(a.path))[0].path;
 }
 
 /**
@@ -330,19 +336,27 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * a change budget for the imported draft. Anything else in a yaml fence (a
  * config sample, a workflow snippet) is left alone, so a spec can show yaml
  * without accidentally declaring a budget.
+ *
+ * A fence that does not parse is only ignorable when it was not trying to be a
+ * budget. One that opens with a `budget:` key and then fails to parse is an
+ * error naming the file: skipping it would drop the budget silently and leave
+ * the gate open, which is the exact outcome this feature exists to prevent.
  */
 function extractBudget(files: SpecBridgeFile[]): {
   budget: ChangeBudget;
   path: string;
 } | null {
-  const fence = /```ya?ml\s*\n([\s\S]*?)```/gi;
+  const fence = /```ya?ml[^\n]*\n([\s\S]*?)```/gi;
+  const looksLikeBudget = /^\s*budget\s*:/m;
   for (const file of files) {
     for (const match of file.content.matchAll(fence)) {
       let parsed: unknown;
       try {
         parsed = parseYaml(match[1]);
-      } catch {
-        continue;
+      } catch (error) {
+        if (!looksLikeBudget.test(match[1])) continue;
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`Invalid budget block in ${file.path}:\n${detail}`);
       }
       if (!isPlainObject(parsed)) continue;
       const keys = Object.keys(parsed);
@@ -368,19 +382,35 @@ function assertBudgetValid(contract: IntentContract, path: string): void {
   throw new Error(`Invalid budget block in ${path}:\n${budgetErrors.join("\n")}`);
 }
 
+/**
+ * Prose only. Fenced blocks are dropped rather than stripped, using the same
+ * fence toggle `extractConstraintsFromMarkdown` uses: a superpowers plan is
+ * mostly code by design, and feeding source lines into the extractor turned
+ * literal `test(...)` lines into acceptance criteria. `extractBudget` reads the
+ * raw file content, so dropping fences here does not hide a budget block.
+ */
 function stripMarkdown(content: string): string {
-  return content
-    .split("\n")
-    .map((line) =>
-      line
-        .replace(/^#{1,6}\s+/, "")
-        .replace(/^[-*]\s+\[[ xX]\]\s+/, "- ")
-        .replace(/^[-*]\s+/, "- ")
-        .replace(/`([^`]+)`/g, "$1")
-        .trim(),
-    )
-    .filter((line) => line.length > 0)
-    .join("\n");
+  const lines: string[] = [];
+  let inFence = false;
+
+  for (const raw of content.split("\n")) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
+    const line = trimmed
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/^[-*]\s+\[[ xX]\]\s+/, "- ")
+      .replace(/^[-*]\s+/, "- ")
+      .replace(/`([^`]+)`/g, "$1")
+      .trim();
+    if (line.length > 0) lines.push(line);
+  }
+
+  return lines.join("\n");
 }
 
 function buildImportText(

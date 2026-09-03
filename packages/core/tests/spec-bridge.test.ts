@@ -336,7 +336,168 @@ describe("spec bridge: superpowers", () => {
     );
 
     expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
-      /2026-08-16-online-checks\.md/,
+      /Invalid budget block in .*online-checks\.md/,
+    );
+  });
+
+  it("rejects a budget fence with duplicate top-level keys", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  max_files: 3",
+          "budget:",
+          "  max_files: 4",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /Invalid budget block in .*online-checks\.md/,
+    );
+  });
+
+  it("rejects a budget fence with a duplicate nested key", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  max_files: 3",
+          "  max_files: 4",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /Invalid budget block in .*online-checks\.md/,
+    );
+  });
+
+  it("rejects a budget fence indented with a tab", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "\tmax_files: 3",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /Invalid budget block in .*online-checks\.md/,
+    );
+  });
+
+  it("ignores an unparseable yaml fence that is not a budget", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "online: true",
+          "\tbad: indentation",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.contract.budget).toBeUndefined();
+  });
+
+  it("reads a budget fence that carries an info string", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml title=budget",
+          "budget:",
+          "  max_files: 7",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.contract.budget).toEqual({ max_files: 7 });
+  });
+
+  it("breaks an mtime tie on the filename, newest dated name first", () => {
+    const dir = superpowersProject("2026-08-01-first-design.md");
+    const specs = join(dir, "docs", "superpowers", "specs");
+    writeFileSync(join(specs, "2026-09-02-latest-design.md"), SPEC_BODY, "utf8");
+    writeFileSync(join(specs, "2026-08-20-middle-design.md"), SPEC_BODY, "utf8");
+    // A fresh CI checkout stamps every file with the same mtime.
+    setMtime(join(specs, "2026-08-01-first-design.md"), "2026-09-03T00:00:00Z");
+    setMtime(join(specs, "2026-08-20-middle-design.md"), "2026-09-03T00:00:00Z");
+    setMtime(join(specs, "2026-09-02-latest-design.md"), "2026-09-03T00:00:00Z");
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.files[0].path).toBe(join(specs, "2026-09-02-latest-design.md"));
+  });
+
+  it("keeps fenced code out of the drafted contract", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          "# Online checks implementation plan",
+          "",
+          "## Tasks",
+          "",
+          "- [ ] Port the registry client into core",
+          "",
+          "```ts",
+          "test('returns the parsed body on a 200', async () => {",
+          "  expect(await fetchJson(url)).toEqual({ ok: true });",
+          "});",
+          "```",
+          "",
+          "Verify the cache is reused within the window.",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(JSON.stringify(imported.contract)).not.toContain("returns the parsed body");
+    expect(JSON.stringify(imported.contract)).not.toContain("fetchJson");
+    // Prose on either side of the fence still lands.
+    expect(imported.contract.acceptance_criteria).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          description: expect.stringMatching(/cache is reused/i),
+        }),
+      ]),
     );
   });
 });
