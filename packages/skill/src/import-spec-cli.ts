@@ -9,18 +9,26 @@ import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js"
 
 const USAGE = `Usage: intent-guard import-spec [flags]
 
-Import Spec Kit or Kiro artifacts as an unfrozen Intent Contract draft.
+Import Spec Kit, Kiro, or superpowers artifacts as an unfrozen Intent Contract
+draft.
 
 Flags:
   --project <root>          Project root (default: .)
-  --from auto|spec-kit|kiro Source format (default: auto)
+  --from <format>           auto|spec-kit|kiro|superpowers (default: auto)
   --spec-dir <dir>          Directory holding the spec artifacts
   --requirements <path>     Explicit requirements file
   --design <path>           Explicit design file
   --tasks <path>            Explicit tasks file
+  --spec <path>             superpowers: the design spec markdown file
+  --plan <path>             superpowers: the plan markdown file
   --dry-run                 Print the draft without writing it
   --help, -h                Show this help
-  --version, -v             Print the version`;
+  --version, -v             Print the version
+
+superpowers imports the spec as requirements and the plan as tasks. With no
+--spec, it takes the newest markdown file in docs/superpowers/specs and the
+plan in docs/superpowers/plans whose stem matches, with a trailing -design
+stripped. --plan without --spec is an error.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 function badUsage(): never {
@@ -30,11 +38,13 @@ function badUsage(): never {
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
-  let format: "auto" | "spec-kit" | "kiro" = "auto";
+  let format: "auto" | "spec-kit" | "kiro" | "superpowers" = "auto";
   let specDir = "";
   let requirementsPath = "";
   let designPath = "";
   let tasksPath = "";
+  let specPath = "";
+  let planPath = "";
   let dryRun = false;
   let help = false;
   let version = false;
@@ -45,8 +55,19 @@ function parseArgs(argv: string[]) {
       projectRoot = argv[++i];
     } else if (arg === "--from" && argv[i + 1]) {
       const next = argv[++i];
-      if (next !== "auto" && next !== "spec-kit" && next !== "kiro") badUsage();
+      if (
+        next !== "auto" &&
+        next !== "spec-kit" &&
+        next !== "kiro" &&
+        next !== "superpowers"
+      ) {
+        badUsage();
+      }
       format = next;
+    } else if (arg === "--spec" && argv[i + 1]) {
+      specPath = argv[++i];
+    } else if (arg === "--plan" && argv[i + 1]) {
+      planPath = argv[++i];
     } else if (arg === "--spec-dir" && argv[i + 1]) {
       specDir = argv[++i];
     } else if (arg === "--requirements" && argv[i + 1]) {
@@ -73,6 +94,8 @@ function parseArgs(argv: string[]) {
     requirementsPath: requirementsPath || undefined,
     designPath: designPath || undefined,
     tasksPath: tasksPath || undefined,
+    specPath: specPath || undefined,
+    planPath: planPath || undefined,
     dryRun,
     help,
     version,
@@ -90,6 +113,8 @@ try {
     requirementsPath: args.requirementsPath,
     designPath: args.designPath,
     tasksPath: args.tasksPath,
+    specPath: args.specPath,
+    planPath: args.planPath,
   });
 
   const loaded = loadAllConstraints(args.projectRoot);

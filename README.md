@@ -15,8 +15,10 @@
 
 Intent Guard turns an unstructured request into a frozen **Intent Contract**, then
 blocks scope drift in pre-commit and CI before misaligned changes reach review.
-It complements Spec Kit, Kiro, Cursor, Claude Code, Codex, and CodeRabbit; it
-does not replace planning, coding agents, or PR review.
+It complements Spec Kit, Kiro, superpowers, Cursor, Claude Code, Codex, and
+CodeRabbit; it does not replace planning, coding agents, or PR review.
+`intent-guard import-spec` imports Spec Kit, Kiro, and superpowers artifacts as
+a draft contract.
 
 The contract is plain YAML any model can read. Pair with
 [vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) when you
@@ -134,6 +136,7 @@ pnpm intent-guard --init --project .
 pnpm intent-guard --doctor --project .
 pnpm intent-guard --extract --project . --text "Add CSV export. Do not add new API endpoints. Verify the file downloads."
 pnpm intent-guard --import-spec --project . --from kiro --spec-dir .kiro/specs/export
+pnpm intent-guard --import-spec --project . --from superpowers   # docs/superpowers spec + plan
 pnpm intent-guard --freeze --project . --approved-by "<name>"
 pnpm intent-guard --check --project . --staged
 pnpm intent-guard --report --project . --staged

@@ -1,11 +1,69 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { importSpecContract } from "../src/spec-bridge.js";
 
 function tmpProject(): string {
   return mkdtempSync(join(tmpdir(), "conductor-spec-bridge-"));
+}
+
+const SPEC_BODY = [
+  "# Online checks design",
+  "",
+  "## What this is",
+  "",
+  "Add an opt-in online registry check to the scanner.",
+  "Escalate a low-severity typosquat finding when downloads confirm the asymmetry.",
+  "Do not enable the online check by default.",
+  "",
+  "## Acceptance",
+  "",
+  "Verify a cached lookup is reused within the cache window.",
+  "",
+].join("\n");
+
+const PLAN_BODY = [
+  "# Online checks implementation plan",
+  "",
+  "## Goal",
+  "",
+  "Ship the registry client and wire it into the scan.",
+  "",
+  "## Tasks",
+  "",
+  "- [ ] Port the registry client into core",
+  "- [ ] Add the local cache",
+  "",
+].join("\n");
+
+/** Write a superpowers spec and optional plan, returning the project root. */
+function superpowersProject(
+  specName: string,
+  planName?: string,
+  bodies: { spec?: string; plan?: string } = {},
+): string {
+  const dir = tmpProject();
+  mkdirSync(join(dir, "docs", "superpowers", "specs"), { recursive: true });
+  mkdirSync(join(dir, "docs", "superpowers", "plans"), { recursive: true });
+  writeFileSync(
+    join(dir, "docs", "superpowers", "specs", specName),
+    bodies.spec ?? SPEC_BODY,
+    "utf8",
+  );
+  if (planName) {
+    writeFileSync(
+      join(dir, "docs", "superpowers", "plans", planName),
+      bodies.plan ?? PLAN_BODY,
+      "utf8",
+    );
+  }
+  return dir;
+}
+
+function setMtime(path: string, iso: string): void {
+  const when = new Date(iso);
+  utimesSync(path, when, when);
 }
 
 describe("spec bridge", () => {
@@ -97,6 +155,188 @@ describe("spec bridge", () => {
       expect.arrayContaining([
         expect.stringMatching(/not expose customer payment tokens/i),
       ]),
+    );
+  });
+});
+
+describe("spec bridge: superpowers", () => {
+  it("imports an explicit spec as requirements and plan as tasks", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+    );
+
+    const imported = importSpecContract(dir, {
+      format: "superpowers",
+      specPath: "docs/superpowers/specs/2026-08-16-online-checks-design.md",
+      planPath: "docs/superpowers/plans/2026-08-16-online-checks.md",
+    });
+
+    expect(imported.format).toBe("superpowers");
+    expect(imported.specDir).toBe(join(dir, "docs", "superpowers"));
+    expect(imported.files.map((file) => file.role)).toEqual(["requirements", "tasks"]);
+    expect(imported.contract.frozen_by).toBeUndefined();
+    expect(imported.contract.out_of_scope).toEqual(
+      expect.arrayContaining([expect.stringMatching(/not enable the online check/i)]),
+    );
+  });
+
+  it("imports the spec alone when no plan is given", () => {
+    const dir = superpowersProject("2026-08-16-online-checks-design.md");
+
+    const imported = importSpecContract(dir, {
+      format: "superpowers",
+      specPath: "docs/superpowers/specs/2026-08-16-online-checks-design.md",
+    });
+
+    expect(imported.files.map((file) => file.role)).toEqual(["requirements"]);
+  });
+
+  it("rejects a plan given without a spec", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+    );
+
+    expect(() =>
+      importSpecContract(dir, {
+        format: "superpowers",
+        planPath: "docs/superpowers/plans/2026-08-16-online-checks.md",
+      }),
+    ).toThrow(/plan/i);
+  });
+
+  it("auto-discovers the newest spec and its matching plan", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+    );
+    writeFileSync(
+      join(dir, "docs", "superpowers", "specs", "2026-09-01-newer-thing-design.md"),
+      SPEC_BODY.replace("Online checks design", "Newer thing design"),
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "docs", "superpowers", "plans", "2026-09-01-newer-thing.md"),
+      PLAN_BODY.replace("Online checks", "Newer thing"),
+      "utf8",
+    );
+    // Explicit mtimes: creation order must not be what decides this.
+    setMtime(
+      join(dir, "docs", "superpowers", "specs", "2026-09-01-newer-thing-design.md"),
+      "2026-09-01T00:00:00Z",
+    );
+    setMtime(
+      join(dir, "docs", "superpowers", "specs", "2026-08-16-online-checks-design.md"),
+      "2026-08-16T00:00:00Z",
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.files.map((file) => file.path)).toEqual([
+      join(dir, "docs", "superpowers", "specs", "2026-09-01-newer-thing-design.md"),
+      join(dir, "docs", "superpowers", "plans", "2026-09-01-newer-thing.md"),
+    ]);
+  });
+
+  it("matches a plan for a spec named without the -design suffix", () => {
+    const dir = superpowersProject("2026-09-02-export.md", "2026-09-02-export.md");
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.files.map((file) => file.role)).toEqual(["requirements", "tasks"]);
+    expect(imported.files[1].path).toBe(
+      join(dir, "docs", "superpowers", "plans", "2026-09-02-export.md"),
+    );
+  });
+
+  it("imports the spec alone when no plan matches its stem", () => {
+    const dir = superpowersProject("2026-09-02-export-design.md", "unrelated-plan.md");
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.files.map((file) => file.role)).toEqual(["requirements"]);
+  });
+
+  it("format auto still prefers spec-kit when both layouts exist", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+    );
+    const specKitDir = join(dir, "specs", "photo-albums");
+    mkdirSync(specKitDir, { recursive: true });
+    writeFileSync(join(specKitDir, "spec.md"), "- Build album grouping by date\n", "utf8");
+
+    expect(importSpecContract(dir, { format: "auto" }).format).toBe("spec-kit");
+  });
+
+  it("format auto picks superpowers when only that layout exists", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+    );
+
+    expect(importSpecContract(dir, { format: "auto" }).format).toBe("superpowers");
+  });
+
+  it("attaches a change budget from a fenced yaml block in the plan", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  allowed_paths:",
+          '    - "packages/core/src/online/**"',
+          "  max_files: 12",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.contract.budget).toEqual({
+      allowed_paths: ["packages/core/src/online/**"],
+      max_files: 12,
+    });
+  });
+
+  it("leaves the budget undefined when the plan has no budget block", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [PLAN_BODY, "```yaml", "online: true", "```", ""].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.contract.budget).toBeUndefined();
+  });
+
+  it("rejects an invalid budget block and names the file", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  max_files: nope",
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /2026-08-16-online-checks\.md/,
     );
   });
 });

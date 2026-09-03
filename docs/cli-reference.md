@@ -64,25 +64,68 @@ JSON: `valid`, `written_path`, `frozen` (always false), `next_step`,
 
 ## intent-guard import-spec / intent-guard-import-spec
 
-Import Spec Kit or Kiro-style artifacts into an unfrozen Intent Contract draft.
-This is a bridge into Intent Guard's approval flow, not a second spec system:
-review the draft, edit if needed, then run `intent-guard freeze`.
+Import Spec Kit, Kiro, or superpowers-style artifacts into an unfrozen Intent
+Contract draft. This is a bridge into Intent Guard's approval flow, not a second
+spec system: review the draft, edit if needed, then run `intent-guard freeze`.
 
 | Flag | Meaning |
 |------|---------|
 | `--project <root>` | target project |
-| `--from auto|spec-kit|kiro` | source format; default `auto` |
-| `--spec-dir <dir>` | explicit spec directory |
+| `--from auto\|spec-kit\|kiro\|superpowers` | source format; default `auto` |
+| `--spec-dir <dir>` | explicit spec directory (spec-kit, kiro) |
 | `--requirements <path>` | explicit requirements/spec/bugfix file |
 | `--design <path>` | explicit design/plan file |
 | `--tasks <path>` | explicit tasks file |
+| `--spec <path>` | superpowers: the design spec markdown file |
+| `--plan <path>` | superpowers: the plan markdown file |
 | `--dry-run` | print the draft JSON, write nothing |
 
 Discovery checks Spec Kit-style `specs/<feature>/spec.md`, `plan.md`,
 `tasks.md` and `.specify/specs/<feature>/...`; Kiro-style
 `.kiro/specs/<feature>/requirements.md` or `bugfix.md`, `design.md`, and
-`tasks.md`. JSON includes `format`, `spec_dir`, `imported_files`,
-`written_path`, `frozen: false`, `next_step`, and `contract_yaml`.
+`tasks.md`; then superpowers-style `docs/superpowers/`. JSON includes `format`,
+`spec_dir`, `imported_files`, `written_path`, `frozen: false`, `next_step`, and
+`contract_yaml`.
+
+### superpowers artifacts
+
+A superpowers feature is two markdown files, not a directory of roles: a design
+spec at `docs/superpowers/specs/<date>-<slug>-design.md` and a plan at
+`docs/superpowers/plans/<date>-<slug>.md`. The spec is imported as
+`requirements` and the plan as `tasks`. The `design` role stays empty unless
+`--design` is passed, because the design reasoning already lives in the spec.
+
+With no `--spec`, discovery takes the newest markdown file (by mtime) directly
+under `docs/superpowers/specs`, then the plan in `docs/superpowers/plans` whose
+filename stem matches, with a trailing `-design` stripped. The `-design` suffix
+is optional; a repo that names both files identically pairs them too. A spec
+with no matching plan imports on its own. `--plan` without `--spec` is an error:
+a task list is not a contract.
+
+Under `--from auto`, superpowers is checked **after** spec-kit and kiro, so a
+repo with an existing layout resolves the way it always did.
+
+`spec_dir` for this format is the `docs/superpowers` directory.
+
+#### Budget block
+
+If the spec or the plan contains a fenced yaml block whose entire content is a
+single `budget` key, that value is validated against the contract schema and
+attached to the draft as its change budget:
+
+````markdown
+```yaml
+budget:
+  allowed_paths: ["packages/core/src/online/**"]
+  max_files: 12
+```
+````
+
+The spec is searched before the plan, and the first such block wins. Any other
+yaml fence is ignored, so a document can show a config or workflow sample
+without declaring a budget by accident. A `budget` block that does not validate
+is an error naming the file it came from, never a silent skip: a budget that
+quietly vanished would leave the gate open.
 
 ## intent-guard freeze / intent-guard-freeze
 
