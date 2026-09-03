@@ -108,6 +108,7 @@ a blocking threshold. Used by the pre-commit hook / CI.
 |------|---------|
 | `--project <root>` | target project |
 | `--staged` | auto-collect staged paths via `git diff --cached --name-only` |
+| `--base <ref>` | auto-collect paths changed since the merge base with `<ref>`, via `git diff --name-only <ref>...HEAD` |
 | `--paths a,b` | explicit changed paths |
 | `--signals "x,y"` | free-text descriptions of what changed (open vocabulary) |
 | `--message "<text>"` | latest user message (pivot detection) |
@@ -115,7 +116,32 @@ a blocking threshold. Used by the pre-commit hook / CI.
 | `--no-require-frozen` | allow a missing contract (still scores drift) |
 | `--json` / `--log` | JSON output / append to `drift-log.jsonl` |
 
-Exit 0 = ok, 1 = blocked.
+Exit 0 = ok, 1 = blocked, 2 = `--base` could not be resolved.
+
+### Checking a pull request with `--base`
+
+`--staged` is the pre-commit view. `--base` is the pull-request view: the three
+dot form asks what the branch changed since it forked, so commits that landed on
+the base branch afterwards are not attributed to the branch.
+
+`--base` is additive with `--paths` and `--staged`. The combined list is
+de-duplicated and keeps first-seen order.
+
+It fails closed. An unknown ref, a directory that is not a repository, a shallow
+clone with no merge base, or a git that will not run all print one line to
+stderr naming the ref and exit **2**. There is no silent fallback to an empty
+path set, because an empty set makes the gate pass.
+
+In GitHub Actions, `actions/checkout` fetches a single commit by default, so
+there is no merge base to diff against. Either check out with `fetch-depth: 0`,
+or fetch the base ref explicitly before running the gate:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- run: npx intent-guard check --project . --base origin/${{ github.base_ref }}
+```
 When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
 this does not change the gate exit code.
 
@@ -225,6 +251,7 @@ It runs the same gate as `intent-guard check` and exits with the gate result.
 |------|---------|
 | `--project <root>` | target project |
 | `--staged` | auto-collect staged paths via `git diff --cached --name-only` |
+| `--base <ref>` | auto-collect paths changed since the merge base with `<ref>`, exactly as `check --base` does |
 | `--paths a,b` | explicit changed paths |
 | `--signals "x,y"` | free-text descriptions of what changed |
 | `--message "<text>"` | latest user message |
@@ -236,6 +263,11 @@ It runs the same gate as `intent-guard check` and exits with the gate result.
 Markdown includes the active contract, gate reasons, drift score, acceptance
 criteria coverage inferred from paths/signals, pivots, corrections, changed
 paths, signals, and a recommended next action.
+
+`--base` behaves exactly as it does for `check`, including the fail-closed exit
+2 and the GitHub Actions checkout note above: `check` and `report` share one
+path-collection module so the two commands cannot see different paths for the
+same flags.
 
 With `--with-secrets`, the `vault_guard` block reports `blockingMatches` and a
 `blocked` verdict taken from vault-guard's own `run.blocking_matches`, which

@@ -62,6 +62,7 @@ Examples:
   intent-guard report --project . --staged
   intent-guard rules audit --project .
   intent-guard check --project . --staged
+  intent-guard check --project . --base origin/main
   intent-guard drift --ci --contract .conductor/intent-contract.yaml --paths src/app/api/export/route.ts
 
 For command flags, see docs/cli-reference.md. Per-command bins such as
