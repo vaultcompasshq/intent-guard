@@ -221,6 +221,39 @@ describe("conductor-import-spec", () => {
     expect(out.contract_yaml).toContain("Do not add new API endpoints");
     expect(out.contract_yaml).toContain("Add the export button");
   });
+
+  it("rejects --spec with --from spec-kit instead of ignoring it", async () => {
+    const dir = tmpProject();
+    const res = await run("import-spec-cli.js", [
+      "--project", dir,
+      "--from", "spec-kit",
+      "--spec", "docs/superpowers/specs/anything-design.md",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("Usage: intent-guard import-spec");
+  });
+
+  it("rejects --plan with --from kiro instead of ignoring it", async () => {
+    const dir = tmpProject();
+    const res = await run("import-spec-cli.js", [
+      "--project", dir,
+      "--from", "kiro",
+      "--plan", "docs/superpowers/plans/anything.md",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("Usage: intent-guard import-spec");
+  });
+
+  it("rejects --spec-dir together with --spec", async () => {
+    const dir = tmpProject();
+    const res = await run("import-spec-cli.js", [
+      "--project", dir,
+      "--spec-dir", ".kiro/specs/export",
+      "--spec", "docs/superpowers/specs/anything-design.md",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("Usage: intent-guard import-spec");
+  });
 });
 
 describe("conductor-freeze (approval gate)", () => {

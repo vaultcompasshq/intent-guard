@@ -102,6 +102,11 @@ is optional; a repo that names both files identically pairs them too. A spec
 with no matching plan imports on its own. `--plan` without `--spec` is an error:
 a task list is not a contract.
 
+`--spec` and `--plan` belong to this format alone. Combining either with
+`--from spec-kit`, `--from kiro`, or `--spec-dir` is a usage error (exit 1)
+rather than a silently ignored flag, since the contract would otherwise be built
+from files the caller did not name.
+
 Under `--from auto`, superpowers is checked **after** spec-kit and kiro, so a
 repo with an existing layout resolves the way it always did.
 

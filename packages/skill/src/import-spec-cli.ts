@@ -28,7 +28,8 @@ Flags:
 superpowers imports the spec as requirements and the plan as tasks. With no
 --spec, it takes the newest markdown file in docs/superpowers/specs and the
 plan in docs/superpowers/plans whose stem matches, with a trailing -design
-stripped. --plan without --spec is an error.`;
+stripped. --plan without --spec is an error, and so is --spec or --plan
+combined with --from spec-kit, --from kiro, or --spec-dir.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 function badUsage(): never {
@@ -86,6 +87,16 @@ function parseArgs(argv: string[]) {
       badUsage();
     }
   }
+
+  // --spec and --plan only mean anything for superpowers. Combined with a
+  // spec-kit or kiro source they used to be dropped without a word, and the
+  // command then built a contract from entirely different files. A flag that
+  // is ignored silently is worse than one that is refused.
+  const namesSuperpowersFiles = specPath !== "" || planPath !== "";
+  if (namesSuperpowersFiles && (format === "spec-kit" || format === "kiro")) {
+    badUsage();
+  }
+  if (namesSuperpowersFiles && specDir !== "") badUsage();
 
   return {
     projectRoot,
