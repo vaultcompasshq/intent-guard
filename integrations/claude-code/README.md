@@ -27,10 +27,8 @@ pnpm dogfood:claude-hooks
 # or: node scripts/dogfood-claude-hooks.mjs   # after pnpm build
 ```
 
-Validation note:
-[claude-hook-dogfood-2026-07-21.md](../../docs/validation/claude-hook-dogfood-2026-07-21.md).
-Shared Git mechanical gate:
-[cursor-hook-dogfood-2026-07-21.md](../../docs/validation/cursor-hook-dogfood-2026-07-21.md).
+This path and the Cursor one were both exercised against real sessions before
+release; the hooks share the same mechanical gate.
 
 ## What It Does
 

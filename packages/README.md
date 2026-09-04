@@ -12,4 +12,4 @@ All four were published under `@vaultcompass/conductor-*` through 1.1.0 and
 renamed in 1.2.0. The directory names here are generic (`cli/`, `core/`) and did
 not change.
 
-See [implementation roadmap](../docs/phases/implementation-roadmap.md) for the full 14-week plan.
+See [docs/cli-reference.md](../docs/cli-reference.md) for what each binary does.

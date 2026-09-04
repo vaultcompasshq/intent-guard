@@ -47,7 +47,7 @@ echo "  3. Make a small aligned change, then: intent-guard check --project . --s
 echo "  4. Make an out-of-scope change, confirm check blocks or warns"
 echo "  5. Optional: intent-guard hook install --project . --with-vault-guard"
 echo ""
-echo "See docs/release/v1-launch-checklist.md — mark dogfood items when done."
+echo "Record what this run found in your own maintainer notes."
 
 if [[ -n "$VG_BIN" && -x "$VG_BIN" ]]; then
   echo ""

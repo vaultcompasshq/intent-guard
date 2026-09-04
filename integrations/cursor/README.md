@@ -1,7 +1,7 @@
 # Cursor Integration
 
-**Status:** Project rule (advisory) + Git pre-commit enforcement  
-**Validated:** [cursor-hook-dogfood-2026-07-21.md](../../docs/validation/cursor-hook-dogfood-2026-07-21.md)
+**Status:** Project rule (advisory) plus Git pre-commit enforcement, both
+exercised against real sessions before release.
 
 ---
 

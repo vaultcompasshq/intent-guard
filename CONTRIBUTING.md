@@ -4,15 +4,16 @@
 
 ---
 
-## Current phase
+## Before you start
 
-We are in **brainstorming / design review**. Please read:
+Intent Guard is published and in use, so changes land against a working tool
+rather than a design under review. Read [docs/cli-reference.md](./docs/cli-reference.md)
+for the surface you are changing and [docs/release/stability-policy.md](./docs/release/stability-policy.md)
+for what a version number promises, since some of that surface is a contract
+and cannot change without a major release.
 
-1. [BRAINSTORMING.md](./BRAINSTORMING.md)
-2. [Design spec](./docs/superpowers/specs/2026-06-17-conductor-design.md)
-3. [Open questions](./docs/brainstorming/04-open-questions.md)
-
-Do not open PRs for implementation until the design spec is approved.
+Open an issue before a large change. A small fix can go straight to a pull
+request.
 
 ---
 
