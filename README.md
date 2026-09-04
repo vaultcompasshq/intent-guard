@@ -72,7 +72,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.2.1` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.2.1`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -239,4 +239,4 @@ Intent Guard grew out of repeated intent-drift failures in AI-assisted developme
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT, see [LICENSE](./LICENSE)
