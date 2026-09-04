@@ -1,6 +1,26 @@
 # Intent Guard
 
-**Approved Intent Contract + drift gate for AI-assisted development.**
+Intent Guard freezes an approved request as a contract, then checks later
+changes against it. What it reads is the set of paths a change touched: the
+staged paths before a commit, or the paths a branch has changed since it
+forked, together with any free-text signals and the latest user message the
+caller chooses to pass in.
+
+<!-- guardrails-family: shared block, keep it identical in dep-guard, vault-guard, intent-guard and conductor -->
+The Vault & Compass guardrails are three gates over an AI-assisted coding
+session: [dep-guard](https://www.npmjs.com/package/@vaultcompass/dep-guard)
+checks what comes in (hallucinated package names, typosquats, tampered
+lockfile entries),
+[vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) checks
+what goes out (credentials about to be committed), and
+[intent-guard](https://www.npmjs.com/package/@vaultcompass/intent-guard)
+checks the change against what was approved (drift from a frozen intent
+contract, and change budgets). Each one installs, configures and runs on its
+own;
+[conductor](https://www.npmjs.com/package/@vaultcompass/conductor) is the
+optional umbrella that runs them from one policy file, one hook and one
+report.
+<!-- /guardrails-family -->
 
 The package is **`@vaultcompass/intent-guard`**, and it installs as
 `npm install --save-dev @vaultcompass/intent-guard` (or
@@ -19,16 +39,26 @@ do with this one, so install the scoped name.
 > everything in it keeps working as-is. See [the upgrade
 > notes](#upgrading-from-conductor-110).
 
-Intent Guard turns an unstructured request into a frozen **Intent Contract**, then
-blocks scope drift in pre-commit and CI before misaligned changes reach review.
-It complements Spec Kit, Kiro, superpowers, Cursor, Claude Code, Codex, and
-CodeRabbit; it does not replace planning, coding agents, or PR review.
-`intent-guard import-spec` imports Spec Kit, Kiro, and superpowers artifacts as
-a draft contract.
+Two kinds of finding come out of the gate. The first is drift: the change has
+moved outside what the contract put in scope, into something it put out of
+scope, or across a constraint the contract recorded. The second is the change
+budget, an optional block on the contract that is evaluated from paths alone,
+offline and without a model: a path matching `protected_paths` is a hard
+block, and a path outside `allowed_paths`, a changed-file count over
+`max_files`, or an edit to a manifest or lockfile when
+`allow_new_dependencies` is false are soft blocks. A missing or unapproved
+contract fails too, because a gate with nothing to check against is not a
+gate that passed.
 
-The contract is plain YAML any model can read. Pair with
-[vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) when you
-also want secret scanning as a separate gate. See [integrations/](./integrations).
+What it does not do is read the diff. It sees which files a change touched,
+never what changed inside them, so work that stays within the approved paths
+and does something the contract never sanctioned reads as clean. That is the
+real gap in this design. The `--signals` and `--message` flags soften it
+rather than close it: they are free text supplied by whatever is calling the
+gate, so they are only as honest as the caller. Intent Guard does not plan,
+write code, or review it either. `intent-guard import-spec` imports Spec Kit,
+Kiro, and superpowers artifacts as a draft contract, and the contract itself
+is plain YAML any model can read. See [integrations/](./integrations).
 
 ```
 User conversation
@@ -42,7 +72,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.2.1` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.2.1`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -209,4 +239,4 @@ Intent Guard grew out of repeated intent-drift failures in AI-assisted developme
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT, see [LICENSE](./LICENSE)
