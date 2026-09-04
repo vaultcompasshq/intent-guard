@@ -45,23 +45,18 @@ User conversation
 **Version:** `1.2.1` — stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
-**Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli` (see [docs/NEXT.md](./docs/NEXT.md))
-
-**Maintainers:** [docs/NEXT.md](./docs/NEXT.md) · [docs/TODO.md](./docs/TODO.md) · [docs/cli-reference.md](./docs/cli-reference.md)
+**Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
 
 ## Start here
 
 | Doc | Purpose |
 |-----|---------|
-| [AGENTS.md](./AGENTS.md) | Agent rules, phase status, verification |
-| [docs/NEXT.md](./docs/NEXT.md) | Maintainer status and next work |
-| [docs/product-positioning.md](./docs/product-positioning.md) | Competitive positioning and next product bets |
-| [BRAINSTORMING.md](./BRAINSTORMING.md) | Design-session index |
-| [docs/repo-strategy.md](./docs/repo-strategy.md) | Public scope, licensing, org placement |
-| [docs/superpowers/specs/2026-06-17-conductor-design.md](./docs/superpowers/specs/2026-06-17-conductor-design.md) | Approved design spec (review gate) |
-| [docs/release/v1-launch-checklist.md](./docs/release/v1-launch-checklist.md) | Beta → v1.0.0 launch gate |
-| [docs/release/stability-policy.md](./docs/release/stability-policy.md) | Schema and package semver policy |
-| [docs/superpowers/plans/2026-06-17-conductor-phase1.md](./docs/superpowers/plans/2026-06-17-conductor-phase1.md) | Phase 1 plan (complete) |
+| [docs/cli-reference.md](./docs/cli-reference.md) | Every command and flag |
+| [docs/schemas/intent-contract.example.md](./docs/schemas/intent-contract.example.md) | What a contract looks like |
+| [docs/schemas/directory-layout.md](./docs/schemas/directory-layout.md) | What the tool writes, and where |
+| [integrations/](./integrations) | Hooks for Claude Code, Cursor, Codex, and CI |
+| [docs/release/stability-policy.md](./docs/release/stability-policy.md) | What a version number promises |
+| [AGENTS.md](./AGENTS.md) | Rules for agents working in this repository |
 
 ## What Intent Guard is / isn't
 
@@ -178,8 +173,7 @@ pnpm intent-guard --brief   --project .                     # clean re-injectabl
 pnpm intent-guard --resume  --project .                     # brief + recent history
 ```
 
-Full flags: [docs/cli-reference.md](./docs/cli-reference.md). Release steps:
-[docs/release/beta-release-checklist.md](./docs/release/beta-release-checklist.md).
+Full flags: [docs/cli-reference.md](./docs/cli-reference.md).
 The gate
 (`intent-guard check`, or `intent-guard-check`) is the one place Intent Guard
 *enforces* rather than *suggests*:

@@ -12,3 +12,25 @@ audit.md
 # Local Intent Guard state (contracts and runtime files belong in consuming app repos)
 .conductor/
 .cursor/
+# Umbrella policy and hook manifest, written locally while that tool is
+# unpublished. Committing them would point a reader at something they cannot
+# install.
+.guardrails.yaml
+.guardrails/
+# Maintainer records. The public content policy already says these must not be
+# committed: maintainer status, week-ahead plans, and dogfood validation notes.
+# They were tracked anyway until 2026-09-04, so this is the rule catching up
+# with the repository. They stay on disk; they just stop being published.
+BRAINSTORMING.md
+docs/NEXT.md
+docs/TODO.md
+docs/repo-strategy.md
+docs/product-positioning.md
+docs/brainstorming/
+docs/phases/
+docs/plans/
+docs/retrospectives/
+docs/validation/
+docs/superpowers/
+docs/release/beta-release-checklist.md
+docs/release/v1-launch-checklist.md

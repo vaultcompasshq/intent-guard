@@ -10,14 +10,16 @@ Conductor is the intent-fidelity layer for AI-assisted development: Intent Contr
 
 | # | File | Purpose |
 |---|------|---------|
-| 1 | [docs/NEXT.md](./docs/NEXT.md) | Maintainer status and next work |
-| 2 | [docs/TODO.md](./docs/TODO.md) | File-level task backlog |
-| 3 | [docs/cli-reference.md](./docs/cli-reference.md) | Every CLI command and flag |
-| 4 | [README.md](./README.md) | Product overview, package layout, dev commands |
-| 5 | [docs/superpowers/specs/2026-06-17-conductor-design.md](./docs/superpowers/specs/2026-06-17-conductor-design.md) | Approved product spec |
-| 6 | [docs/phases/implementation-roadmap.md](./docs/phases/implementation-roadmap.md) | 14-week implementation plan |
+| 1 | [docs/cli-reference.md](./docs/cli-reference.md) | Every CLI command and flag |
+| 2 | [README.md](./README.md) | Product overview, package layout, dev commands |
+| 3 | [docs/schemas/directory-layout.md](./docs/schemas/directory-layout.md) | What the tool writes, and where |
+| 4 | [docs/release/stability-policy.md](./docs/release/stability-policy.md) | What a version number promises |
 
-Phase 1 reference: [docs/superpowers/plans/2026-06-17-conductor-phase1.md](./docs/superpowers/plans/2026-06-17-conductor-phase1.md)
+Maintainer records (status, backlog, roadmap, design specs, validation runs)
+are deliberately not in this repository. The public content policy has always
+said they must not be committed, and they now live where it says they should:
+outside the public tree. If you are working here and need them, ask for the
+maintainer notes rather than reconstructing them from git history.
 
 ---
 
@@ -54,14 +56,12 @@ Lifecycle: coach -> extract (draft) -> freeze (approve) -> check (gate) -> pivot
 
 ## Current Work
 
-1.1.0 is out — Change Budget is on npm. Next is 1.2.0: a small `conductor budget`
-CLI (`show` / `set` / `clear`) so people aren't hand-editing YAML. See
-[docs/NEXT.md](./docs/NEXT.md).
+1.2.1 is on npm. It added `check --base <ref>`, so a pull request can be gated
+against its merge base rather than the index, and an importer for the spec and
+plan markdown this organisation writes.
 
 Skills in the tree: `intent-contract`, `prompt-coach`, `drift-guard`,
-`capture-correction`. Hook dogfood notes:
-[cursor](./docs/validation/cursor-hook-dogfood-2026-07-21.md),
-[claude](./docs/validation/claude-hook-dogfood-2026-07-21.md).
+`capture-correction`.
 
 PRs only onto `main`. CI green before merge. Write a plan before multi-step work.
 

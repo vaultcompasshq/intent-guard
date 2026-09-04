@@ -325,8 +325,9 @@ function renderReport({ revision, results }) {
     "## Notes",
     "",
     "- This harness is intentionally manual by default because it clones public repositories.",
-    "- Use `--report docs/validation/public-repos/YYYY-MM-DD.md` when the run should be committed.",
-    "- Expand the repo list further before v1 if specific downstream host layouts need coverage.",
+    "- Use `--report <path>` to keep a run. Reports name real repositories and",
+    "  their contents, so write them outside this public tree.",
+    "- Expand the repo list if specific downstream host layouts need coverage.",
   );
 
   const failures = results.filter((result) => result.errors.length > 0);

@@ -37,7 +37,7 @@ Pair with [@vaultcompass/vault-guard](https://www.npmjs.com/package/@vaultcompas
 
 - [CLI reference](https://github.com/vaultcompasshq/intent-guard/blob/main/docs/cli-reference.md)
 - [Integrations](https://github.com/vaultcompasshq/intent-guard/tree/main/integrations)
-- [v1 launch checklist](https://github.com/vaultcompasshq/intent-guard/blob/main/docs/release/v1-launch-checklist.md)
+- [Stability policy](https://github.com/vaultcompasshq/intent-guard/blob/main/docs/release/stability-policy.md)
 
 ## License
 
