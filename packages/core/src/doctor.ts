@@ -647,9 +647,9 @@ export function runDoctor(projectRoot: string): DoctorResult {
       finding(
         "error",
         "state_dir_conflict",
-        `Both ${STATE_DIR}/ and ${LEGACY_STATE_DIR}/ exist. Intent Guard reads ` +
-          `one and never merges two. Move what you need into ${STATE_DIR}/ and ` +
-          `delete ${LEGACY_STATE_DIR}/.`,
+        `Both ${STATE_DIR} and ${LEGACY_STATE_DIR} exist. Intent Guard reads ` +
+          `one state directory and never merges two. Move what you need into ` +
+          `${STATE_DIR}, move ${LEGACY_STATE_DIR} aside, and run doctor again.`,
         `${STATE_DIR}/`,
         `${LEGACY_STATE_DIR}/ is the pre-1.3.0 name for the same directory.`,
       ),
