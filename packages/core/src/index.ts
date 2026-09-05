@@ -35,6 +35,7 @@ export {
 export {
   LEGACY_STATE_DIR,
   STATE_DIR,
+  StateDirError,
   ensureStateDir,
   inspectStateDir,
   resetStateDirNotices,

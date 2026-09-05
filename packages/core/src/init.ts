@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { defaultConfigYaml, CONFIG_FILE } from "./config.js";
 import { renderIndex } from "./memory-index.js";
-import { STATE_DIR, ensureStateDir } from "./state-dir.js";
+import { LEGACY_STATE_DIR, STATE_DIR, ensureStateDir } from "./state-dir.js";
 
 export const INIT_NEXT_STEPS = [
   "intent-guard extract --project . --text \"<your ask>\"",
@@ -20,11 +20,17 @@ export const INIT_NEXT_STEPS = [
 export const INIT_GITIGNORE_HINT =
   `Commit ${STATE_DIR}/ so contracts are reviewable, and add ` +
   `${STATE_DIR}/drift-log.jsonl to .gitignore. Before 1.3.0 this directory was ` +
-  `named .conductor/; if your .gitignore still names it, update the entry.`;
+  `named ${LEGACY_STATE_DIR}/; if your .gitignore still names it, update the ` +
+  `entry, and if this run migrated an existing directory, stage the rename ` +
+  `with: git add -A ${STATE_DIR} ${LEGACY_STATE_DIR}`;
 
 export interface InitResult {
   state_dir: string;
-  /** @deprecated since 1.3.0. Use `state_dir`. */
+  /**
+   * @deprecated since 1.3.0. Use `state_dir`. Frozen at its 1.2 meaning, the
+   * `<projectRoot>/.conductor` path, so a consumer reading this field keeps
+   * getting what it got before. Removed in 2.0.
+   */
   conductor_dir: string;
   created: string[];
   skipped: string[];
@@ -63,7 +69,7 @@ export function initConductor(projectRoot: string): InitResult {
 
   return {
     state_dir: dir,
-    conductor_dir: dir,
+    conductor_dir: join(projectRoot, LEGACY_STATE_DIR),
     created,
     skipped,
     next_steps: [...INIT_NEXT_STEPS],

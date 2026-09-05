@@ -18,6 +18,26 @@
  */
 
 import { readFileSync } from "node:fs";
+import { StateDirError } from "@vaultcompass/intent-guard-core";
+
+/**
+ * A refused state directory is a designed outcome with a message written for a
+ * user: both directories present, or a file or symlink where one belongs.
+ * Without this every command except doctor answered it with a raw Node stack
+ * trace, which reads as a crash in the tool rather than a state the user has
+ * to fix. Installed on import because every one of the sixteen bins imports
+ * this module, so there is no entry point left to forget it.
+ *
+ * Anything else keeps Node's own behaviour: the stack, then exit 1.
+ */
+process.on("uncaughtException", (error) => {
+  if (error instanceof StateDirError) {
+    console.error(error.message);
+  } else {
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+  }
+  process.exit(1);
+});
 
 /** True when this token, in flag position, is a help request. */
 export function isHelpFlag(arg: string): boolean {

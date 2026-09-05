@@ -5,6 +5,7 @@ import { parse } from "yaml";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { configPath, loadConfig } from "./config.js";
 import {
+  conductorDir,
   contractPath,
   isContractFrozen,
   readContract,
@@ -40,7 +41,11 @@ export interface DoctorResult {
   projectRoot: string;
   /** The state directory actually in use: canonical, or legacy if only it exists. */
   stateDir: string;
-  /** @deprecated since 1.3.0. Use `stateDir`. */
+  /**
+   * @deprecated since 1.3.0. Use `stateDir`. Frozen at its 1.2 meaning, the
+   * `<projectRoot>/.conductor` path, so a consumer reading this field keeps
+   * getting what it got before. Removed in 2.0.
+   */
   conductorDir: string;
   packageVersion: string;
   status: DoctorStatus;
@@ -86,11 +91,10 @@ function finalize(
   const summary = summarize(findings);
   const status: DoctorStatus =
     summary.error > 0 ? "error" : summary.warn > 0 ? "warn" : "ok";
-  const dir = inspectStateDir(projectRoot).dir;
   return {
     projectRoot,
-    stateDir: dir,
-    conductorDir: dir,
+    stateDir: inspectStateDir(projectRoot).dir,
+    conductorDir: conductorDir(projectRoot),
     packageVersion: packageVersion(),
     status,
     exitCode: summary.error > 0 ? 1 : 0,

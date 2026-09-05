@@ -56,14 +56,19 @@ Lifecycle: coach -> extract (draft) -> freeze (approve) -> check (gate) -> pivot
 
 ## Current Work
 
-1.2.1 is on npm. It added `check --base <ref>`, so a pull request can be gated
+1.3.0 is the current release. It renames the per-project state directory from
+`.conductor/` to `.intent-guard/`, because the umbrella product over the three
+gates now owns the name `conductor`. A legacy directory is read as-is with a
+notice and renamed on the first write; both present is a hard error. Upgrading
+without also upgrading `@vaultcompass/conductor` to 0.2.3 silently quiets that
+umbrella's intent gate, because 0.2.2 reads the old path.
+
+As at every release cut here, the version lands in the tree first and npm
+follows on the tag, so `1.3.0` in the README Status line is the version this
+tree is, not proof it is on the registry yet. 1.2.1 is the last version
+published: it added `check --base <ref>`, so a pull request can be gated
 against its merge base rather than the index, and an importer for the spec and
 plan markdown this organisation writes.
-
-1.3.0 is prepared but not published. It renames the per-project state directory
-from `.conductor/` to `.intent-guard/`, because the umbrella product over the
-three gates now owns the name `conductor`. A legacy directory is read as-is
-with a notice and renamed on the first write; both present is a hard error.
 
 Skills in the tree: `intent-contract`, `prompt-coach`, `drift-guard`,
 `capture-correction`.

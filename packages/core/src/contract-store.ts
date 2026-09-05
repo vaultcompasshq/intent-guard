@@ -6,18 +6,29 @@ import {
   type IntentContract,
 } from "@vaultcompass/intent-guard-schema";
 import { archiveContract } from "./history.js";
-import { STATE_DIR, ensureStateDir, stateDir } from "./state-dir.js";
+import { LEGACY_STATE_DIR, ensureStateDir, stateDir } from "./state-dir.js";
 
 /**
- * @deprecated since 1.3.0. Use `STATE_DIR`. Kept as an alias for one minor
- * release; note the value is now `.intent-guard`, not `.conductor`.
+ * The pre-1.3.0 state directory name, `.conductor`.
+ *
+ * @deprecated since 1.3.0. Use `STATE_DIR` for the directory this tool now
+ * writes, or `LEGACY_STATE_DIR`, which this aliases, for the old name. Its
+ * value is frozen at what it meant in 1.2 so that code compiled against it
+ * keeps behaving the same for one minor release. Removed in 2.0.
  */
-export const CONDUCTOR_DIR = STATE_DIR;
+export const CONDUCTOR_DIR = LEGACY_STATE_DIR;
 export const DEFAULT_CONTRACT_FILE = "intent-contract.yaml";
 
-/** @deprecated since 1.3.0. Use `stateDir`. */
+/**
+ * The pre-1.3.0 state directory path, `<projectRoot>/.conductor`.
+ *
+ * @deprecated since 1.3.0. Use `stateDir()` to resolve the directory to read
+ * from, or `ensureStateDir()` for the directory to write to. This is a plain
+ * join, frozen at its 1.2 behaviour: it does not resolve between the two
+ * directory names, never writes to stderr, and never throws. Removed in 2.0.
+ */
 export function conductorDir(projectRoot: string): string {
-  return stateDir(projectRoot);
+  return join(projectRoot, LEGACY_STATE_DIR);
 }
 
 export function contractPath(

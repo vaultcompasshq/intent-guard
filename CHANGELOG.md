@@ -39,23 +39,55 @@ contract schema, the gate, or any flag changes.
     left alone: it is neither read nor renamed.
 
   `doctor` reports which directory is in use, warns while a legacy directory is
-  still the live one, and errors when both exist.
+  still the live one, and errors when both exist. Its finding ids are a
+  machine-readable contract, so `conductor_not_initialized` and
+  `conductor_dir_found` keep their names despite naming the old product; the
+  ids added here are `state_dir_legacy` and `state_dir_conflict`.
 
   Anything that reads the frozen contract by path should now read
   `.intent-guard/intent-contract.yaml`. The pre-1.3.0 path was
   `.conductor/intent-contract.yaml`.
 
-- **`.gitignore` guidance.** `init --human` now prints what to commit and what
-  to ignore, and the README says the same: commit `.intent-guard/` so contracts
-  are reviewable, ignore `.intent-guard/drift-log.jsonl`, and update a
-  `.gitignore` entry that still names `.conductor/`.
+  **Upgrade `@vaultcompass/conductor` alongside this.** The published umbrella
+  `@vaultcompass/conductor` 0.2.2 reads the frozen contract from
+  `.conductor/intent-contract.yaml`, so after migration it finds none, falls
+  back to spec discovery, and then to a no-contract advisory that passes: the
+  intent gate goes quiet rather than failing, so upgrading here silently
+  downgrades it there with nothing in either tool's output saying so.
+  `@vaultcompass/conductor` 0.2.3 reads `.intent-guard/intent-contract.yaml`
+  first and `.conductor/intent-contract.yaml` second, so it spans the
+  migration; upgrade it in the same change.
+
+- **`.gitignore` and staging guidance.** `init --human` now prints what to
+  commit and what to ignore, and the README says the same: commit
+  `.intent-guard/` so contracts are reviewable, ignore
+  `.intent-guard/drift-log.jsonl`, and update a `.gitignore` entry that still
+  names `.conductor/`. Because git does not see a rename this tool performed,
+  the rename notice and the README both say to stage it with
+  `git add -A .intent-guard .conductor`; without that, `git status` shows the
+  contract deleted plus an untracked directory, and a `git commit -a` commits
+  the deletion on its own.
+
+- **A refused state directory prints one line, not a stack trace.** Both
+  directories present, or a file or symlink where a directory belongs, are
+  designed outcomes. They now raise `StateDirError`, which every CLI turns into
+  a single message and exit 1.
+
+- **A `.conductor` symlink is ignored rather than treated as a second
+  directory.** `ln -s .intent-guard .conductor` is the obvious workaround for a
+  script that still names the old path. The legacy path is now tested with
+  `lstat`, so a symlink is not a legacy state directory and does not trip the
+  both-directories error. The error text also says to move `.conductor` aside
+  rather than to delete `.conductor/`, because a trailing slash through a
+  symlink makes BSD `rm -rf` delete the target's contents.
 
 ### Added
 
-- `STATE_DIR`, `LEGACY_STATE_DIR`, `stateDir()`, `ensureStateDir()`,
-  `inspectStateDir()`, and `resetStateDirNotices()` exported from
-  `@vaultcompass/intent-guard-core`. `stateDir()` resolves the directory to read
-  from; `ensureStateDir()` resolves the directory to write to, migrating first.
+- `STATE_DIR`, `LEGACY_STATE_DIR`, `StateDirError`, `stateDir()`,
+  `ensureStateDir()`, `inspectStateDir()`, and `resetStateDirNotices()` exported
+  from `@vaultcompass/intent-guard-core`. `stateDir()` resolves the directory to
+  read from; `ensureStateDir()` resolves the directory to write to, migrating
+  first.
 - `DoctorResult.stateDir` and `InitResult.state_dir`, plus
   `InitResult.gitignore_hint`.
 - `DRIFT_LOG_FILE` and `INIT_GITIGNORE_HINT` exports.
@@ -63,10 +95,15 @@ contract schema, the gate, or any flag changes.
 ### Deprecated
 
 - `CONDUCTOR_DIR` and `conductorDir()` in `@vaultcompass/intent-guard-core`, and
-  `DoctorResult.conductorDir` and `InitResult.conductor_dir`. They stay for one
-  minor release and are removed in the next major, per the deprecation policy.
-  Note that `CONDUCTOR_DIR` now holds `.intent-guard`: it is an alias for
-  `STATE_DIR`, not a record of the old name. Use `LEGACY_STATE_DIR` for that.
+  `DoctorResult.conductorDir` and `InitResult.conductor_dir`. All four are
+  **frozen at their 1.2 meaning** and removed in 2.0. `CONDUCTOR_DIR` still
+  holds `.conductor` (it now aliases `LEGACY_STATE_DIR`), `conductorDir()` is
+  still the plain join `<projectRoot>/.conductor`, and the two result fields
+  still report that path. None of them resolves between the two directory
+  names, writes to stderr, or throws. A deprecated symbol gets one minor
+  release still behaving as it did, so use `STATE_DIR`, `stateDir()`,
+  `DoctorResult.stateDir`, and `InitResult.state_dir` for the directory the
+  tool actually uses.
 
 ### Fixed
 

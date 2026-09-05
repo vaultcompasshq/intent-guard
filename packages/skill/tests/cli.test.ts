@@ -60,6 +60,23 @@ describe("conductor-init", () => {
     expect(out.next_steps?.length).toBeGreaterThan(0);
     expect(existsSync(join(dir, ".intent-guard", "config.yaml"))).toBe(true);
   });
+
+  it("answers a both-directories conflict with one line, not a stack trace", async () => {
+    const dir = tmpProject();
+    mkdirSync(join(dir, ".intent-guard"), { recursive: true });
+    mkdirSync(join(dir, ".conductor"), { recursive: true });
+    writeFileSync(join(dir, ".conductor", "config.yaml"), "drift:\n", "utf8");
+
+    const res = await run("init-cli.js", ["--project", dir]);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain(".intent-guard");
+    expect(res.stderr).toContain(".conductor");
+    // A designed refusal, not a crash: no stack frames, and one line.
+    expect(res.stderr).not.toContain("    at ");
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
+    expect(res.stdout).toBe("");
+  });
 });
 
 describe("conductor-coach", () => {

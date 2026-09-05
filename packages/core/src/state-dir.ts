@@ -1,5 +1,18 @@
-import { existsSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { join } from "node:path";
+
+/**
+ * A state directory this tool refuses to act on, described for a user rather
+ * than as a stack trace: both directories present, or a symlink or plain file
+ * where a directory belongs. Every one of these is a designed outcome and not
+ * a crash, so the CLI entry points catch this class and print one line.
+ */
+export class StateDirError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StateDirError";
+  }
+}
 
 /**
  * Canonical directory for per-project Intent Guard state, as of 1.3.0.
@@ -48,8 +61,24 @@ function isDirectory(path: string): boolean {
   }
 }
 
+/**
+ * A real directory, not a symlink to one. `ln -s .intent-guard .conductor` is
+ * the obvious workaround for a script that still names the old path, and
+ * following it would make one directory look like two: the legacy path would
+ * hold state, the canonical path would exist, and every command would fail
+ * closed on a conflict that is not one. lstat does not follow the link, so a
+ * symlink is simply not a legacy state directory.
+ */
+function isRealDirectory(path: string): boolean {
+  try {
+    return existsSync(path) && lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function holdsIntentGuardState(dir: string): boolean {
-  if (!isDirectory(dir)) return false;
+  if (!isRealDirectory(dir)) return false;
   return STATE_MARKERS.some((marker) => existsSync(join(dir, marker)));
 }
 
@@ -71,13 +100,31 @@ export function inspectStateDir(projectRoot: string): StateDirStatus {
   };
 }
 
-function conflictError(status: StateDirStatus): Error {
-  return new Error(
+function conflictError(status: StateDirStatus): StateDirError {
+  // No trailing slash on the path to move, and no rm: a trailing slash through
+  // a symlink makes BSD rm -rf delete the target's contents, which here would
+  // be the state this message exists to protect.
+  return new StateDirError(
     `Both ${status.canonicalPath} and ${status.legacyPath} exist. Intent Guard ` +
-      `reads one state directory and never merges two. ${LEGACY_STATE_DIR}/ is ` +
-      `the pre-1.3.0 name for ${STATE_DIR}/: move anything you still need out ` +
-      `of ${LEGACY_STATE_DIR}/ into ${STATE_DIR}/, delete ${LEGACY_STATE_DIR}/, ` +
-      `and run the command again.`,
+      `reads one state directory and never merges two. ${LEGACY_STATE_DIR} is ` +
+      `the pre-1.3.0 name for ${STATE_DIR}: move anything you still need out ` +
+      `of ${LEGACY_STATE_DIR} into ${STATE_DIR}, move ${LEGACY_STATE_DIR} ` +
+      `aside, and run the command again.`,
+  );
+}
+
+function describeNonDirectory(path: string): string {
+  try {
+    return lstatSync(path).isSymbolicLink() ? "a symlink" : "a file";
+  } catch {
+    return "not a directory";
+  }
+}
+
+function notADirectoryError(path: string, kind: string): StateDirError {
+  return new StateDirError(
+    `Intent Guard needs ${path} to be a directory, but it is ${kind}. Move it ` +
+      `aside and run the command again.`,
   );
 }
 
@@ -120,15 +167,26 @@ export function ensureStateDir(projectRoot: string): string {
   const status = inspectStateDir(projectRoot);
   if (status.conflict) throw conflictError(status);
 
+  // Something that is not a directory sitting on the canonical path would come
+  // out of mkdir or rename as a raw EEXIST or ENOTDIR with a stack.
+  if (existsSync(status.canonicalPath) && !isDirectory(status.canonicalPath)) {
+    throw notADirectoryError(status.canonicalPath, describeNonDirectory(status.canonicalPath));
+  }
+
   if (status.usingLegacy) {
     // Re-check immediately before the rename: a concurrent process may have
     // created the canonical directory since inspectStateDir looked.
     if (existsSync(status.canonicalPath)) throw conflictError(inspectStateDir(projectRoot));
     renameSync(status.legacyPath, status.canonicalPath);
+    // Git sees a rename it was not told about as a delete plus an untracked
+    // directory. This tool tells people to commit the state directory, so
+    // without the staging line the next `git commit -a` commits the deletion
+    // of the frozen contract and nothing in its place.
     process.stderr.write(
       `Intent Guard: renamed ${LEGACY_STATE_DIR}/ to ${STATE_DIR}/ in ` +
-        `${projectRoot}. Update .gitignore and any script that names the old ` +
-        `path.\n`,
+        `${projectRoot}. Stage the rename so git records it as one: ` +
+        `git add -A ${STATE_DIR} ${LEGACY_STATE_DIR}. Update .gitignore and ` +
+        `any script that names the old path.\n`,
     );
   }
 

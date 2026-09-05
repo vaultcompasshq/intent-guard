@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import { tmpdir } from "node:os";
 import {
   LEGACY_STATE_DIR,
   STATE_DIR,
+  StateDirError,
   ensureStateDir,
   inspectStateDir,
   resetStateDirNotices,
@@ -18,6 +20,7 @@ import {
 } from "../src/state-dir.js";
 import { initConductor } from "../src/init.js";
 import { configPath, loadConfig } from "../src/config.js";
+import { CONDUCTOR_DIR, conductorDir } from "../src/contract-store.js";
 import { runDoctor } from "../src/doctor.js";
 
 function scratchRepo(): string {
@@ -88,6 +91,19 @@ describe("state directory resolution", () => {
     expect(stderrText()).toContain(`renamed ${LEGACY_STATE_DIR}/ to ${STATE_DIR}/`);
   });
 
+  it("tells the user to stage the rename, because git sees a delete plus untracked", () => {
+    // The directory this tool tells people to commit is the one it renames out
+    // from under git. Without staging guidance the next `git commit -a` commits
+    // the deletion of the frozen contract and nothing in its place.
+    const root = scratchRepo();
+    seedLegacy(root);
+
+    ensureStateDir(root);
+
+    const notice = stderrText();
+    expect(notice).toContain(`git add -A ${STATE_DIR} ${LEGACY_STATE_DIR}`);
+  });
+
   it("fails closed when both directories exist, naming both", () => {
     const root = scratchRepo();
     seedLegacy(root);
@@ -139,5 +155,66 @@ describe("state directory resolution", () => {
     expect(staleFinding?.status).toBe("warn");
     expect(staleFinding?.message).toContain(STATE_DIR);
     expect(staleFinding?.path).toBe(`${LEGACY_STATE_DIR}/`);
+  });
+
+  it("reports a both-directories conflict in doctor instead of throwing", () => {
+    const root = scratchRepo();
+    seedLegacy(root);
+    mkdirSync(join(root, STATE_DIR), { recursive: true });
+
+    const result = runDoctor(root);
+
+    expect(result.status).toBe("error");
+    expect(result.exitCode).toBe(1);
+    const conflict = result.findings.find((f) => f.id === "state_dir_conflict");
+    expect(conflict?.status).toBe("error");
+    expect(conflict?.message).toContain(STATE_DIR);
+    expect(conflict?.message).toContain(LEGACY_STATE_DIR);
+    // Doctor is the one command that must survive the conflict to report it,
+    // so it never reaches the checks that resolve a single directory.
+    expect(result.findings.some((f) => f.id === "config_missing")).toBe(false);
+  });
+
+  it("ignores a legacy path that is a symlink rather than a real directory", () => {
+    // `ln -s .intent-guard .conductor` is the obvious workaround for a script
+    // that still names the old path. Following it would make one directory
+    // look like two and brick every command.
+    const root = scratchRepo();
+    mkdirSync(join(root, STATE_DIR), { recursive: true });
+    writeFileSync(join(root, STATE_DIR, "config.yaml"), "drift:\n", "utf8");
+    symlinkSync(join(root, STATE_DIR), join(root, LEGACY_STATE_DIR));
+
+    const status = inspectStateDir(root);
+    expect(status.legacyExists).toBe(false);
+    expect(status.conflict).toBe(false);
+    expect(stateDir(root)).toBe(join(root, STATE_DIR));
+    expect(ensureStateDir(root)).toBe(join(root, STATE_DIR));
+    expect(stderrText()).toBe("");
+  });
+
+  it("names the path when the canonical directory is a plain file", () => {
+    const root = scratchRepo();
+    writeFileSync(join(root, STATE_DIR), "not a directory\n", "utf8");
+
+    expect(() => ensureStateDir(root)).toThrow(StateDirError);
+    // One readable line naming the path, not a raw EEXIST from mkdir.
+    expect(() => ensureStateDir(root)).toThrow(join(root, STATE_DIR));
+    expect(() => ensureStateDir(root)).not.toThrow(/EEXIST/);
+  });
+
+  it("keeps the deprecated conductor aliases frozen at their 1.2 meaning", () => {
+    // A deprecated symbol gets one minor release still behaving as it did.
+    // These name the legacy directory and must not start resolving, warning,
+    // or throwing the way stateDir() does.
+    const root = scratchRepo();
+    initConductor(root);
+
+    expect(CONDUCTOR_DIR).toBe(".conductor");
+    expect(conductorDir(root)).toBe(join(root, ".conductor"));
+    expect(stderrText()).toBe("");
+
+    // Still inert in the state that makes stateDir() throw.
+    seedLegacy(root);
+    expect(conductorDir(root)).toBe(join(root, ".conductor"));
   });
 });

@@ -242,10 +242,14 @@ when you want a separate secret-scanning gate beside Intent Guard.
    you do this. Add `--force` if the hook was hand-edited.
 4. Update any CI step, agent hook, or script that calls `conductor` or a
    `conductor-*` binary.
-5. On 1.3.0, move project state from `.conductor/` to `.intent-guard/`. The
-   tool does it for you on the first write, or you can run
-   `git mv .conductor .intent-guard` yourself. Update the `.gitignore` entry
-   and any script or CI step that names the old directory.
+5. On 1.3.0, move project state from `.conductor/` to `.intent-guard/`. Run
+   `git mv .conductor .intent-guard` yourself, or let the tool rename it on its
+   next write. **If the tool renamed it, stage the rename before committing:**
+   `git add -A .intent-guard .conductor`. Git did not see the rename happen, so
+   until it is staged `git status` shows the contract deleted and a new
+   untracked directory, and a `git commit -a` commits the deletion on its own.
+   Then update the `.gitignore` entry and any script or CI step that names the
+   old directory.
 
 The name `conductor` is now used by a different product in this family, so pin
 `@vaultcompass/intent-guard` rather than assuming the old name still points at
@@ -267,11 +271,24 @@ governed:
 Commit the directory so contracts are reviewable in pull requests, and ignore
 `.intent-guard/drift-log.jsonl`, which is local noise. Before 1.3.0 the
 directory was named `.conductor/`; if a `.gitignore` still names it, update the
-entry.
+entry. If the tool did the rename for you, stage it with
+`git add -A .intent-guard .conductor` so git records one rename rather than a
+delete plus an untracked directory.
 
-Anything reading the frozen contract by path (the umbrella gate runner, a CI
-step, another tool) should read `.intent-guard/intent-contract.yaml`. The
-pre-1.3.0 path was `.conductor/intent-contract.yaml`.
+Anything reading the frozen contract by path (a CI step, another tool) should
+read `.intent-guard/intent-contract.yaml`. The pre-1.3.0 path was
+`.conductor/intent-contract.yaml`.
+
+> **Upgrade `@vaultcompass/conductor` alongside this.** The published umbrella
+> `@vaultcompass/conductor` 0.2.2 reads the frozen contract from
+> `.conductor/intent-contract.yaml`, so after migration it stops finding one,
+> falls back to spec discovery, and then to a no-contract advisory that passes.
+> The intent gate goes quiet instead of failing, which means an upgrade here
+> silently downgrades it there and nothing in either tool's output says so.
+> `@vaultcompass/conductor` 0.2.3 reads `.intent-guard/intent-contract.yaml`
+> first and `.conductor/intent-contract.yaml` second, so it works either side
+> of the migration. Upgrade it in the same change, or check that the umbrella
+> still reports the intent gate as running.
 
 ## Origin
 
