@@ -86,6 +86,12 @@ pnpm validate:portfolio-names
 pnpm validate:public-repos   # manual; clones public GitHub repos
 ```
 
+`validate:public-repos` measures layout compatibility, not drift-detection
+accuracy. A pass means the CLI produced the expected verdicts on three
+synthetic probes that are decidable from the file path alone, across eight real
+repository layouts. Do not quote its pass count as an accuracy number, and do
+not read identical rows as independent confirmations.
+
 `pnpm test` builds first because the skill CLI tests spawn compiled `dist/` files.
 
 Paste actual test output before claiming tests pass.

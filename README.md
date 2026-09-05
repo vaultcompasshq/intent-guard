@@ -194,6 +194,15 @@ pnpm validate:public-repos
 pnpm intent-guard:install-skills   # copy skills to ~/.cursor/skills
 ```
 
+`validate:public-repos` clones eight public repositories and runs the full
+lifecycle against each. It measures layout compatibility, not drift-detection
+accuracy: a pass means the CLI produced the expected verdicts on three
+synthetic probes whose answers follow from the file path alone. It does not
+measure whether drift detection is right on a real change, and identical rows
+across the eight repositories are the expected shape of a good result rather
+than eight independent confirmations. The generated report opens with the same
+warning.
+
 ### Session lifecycle (CLIs)
 
 ```bash
