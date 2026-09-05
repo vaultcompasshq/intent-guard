@@ -7,6 +7,73 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-05
+
+Minor bump on all four packages. One user-visible change: the per-project state
+directory is renamed from `.conductor/` to `.intent-guard/`. Nothing about the
+contract schema, the gate, or any flag changes.
+
+### Changed
+
+- **State directory renamed to `.intent-guard/`.** Through 1.2.1 this tool wrote
+  its per-project state to `.conductor/`. The umbrella product that runs the
+  three gates is now itself called conductor, and it writes `.guardrails.yaml`
+  and `.guardrails/` into the same repositories. A repository that adopted both
+  would show `.conductor/` and `.guardrails/` side by side with nothing to say
+  which tool owns which, and the first guess most people make is the wrong one.
+
+  The migration rule, in full:
+
+  - If `.intent-guard/` exists, it is used, and `.conductor/` is not read.
+  - Otherwise, if `.conductor/` exists and holds Intent Guard state
+    (`config.yaml`, `intent-contract.yaml`, `index.md`, `drift-log.jsonl`, or
+    `contracts/`), it is read from, and one line goes to stderr per invocation
+    saying the directory was renamed and how to migrate.
+  - The first write migrates it: the directory is renamed with a single
+    `rename`, which is atomic on one filesystem and carries across files this
+    tool does not know about, and a line goes to stderr saying what happened.
+    The rename only ever runs when `.intent-guard/` does not exist.
+  - If both directories exist, every command fails closed with an error naming
+    both, rather than picking one and silently orphaning the other.
+  - A `.conductor/` holding none of those files belongs to something else and is
+    left alone: it is neither read nor renamed.
+
+  `doctor` reports which directory is in use, warns while a legacy directory is
+  still the live one, and errors when both exist.
+
+  Anything that reads the frozen contract by path should now read
+  `.intent-guard/intent-contract.yaml`. The pre-1.3.0 path was
+  `.conductor/intent-contract.yaml`.
+
+- **`.gitignore` guidance.** `init --human` now prints what to commit and what
+  to ignore, and the README says the same: commit `.intent-guard/` so contracts
+  are reviewable, ignore `.intent-guard/drift-log.jsonl`, and update a
+  `.gitignore` entry that still names `.conductor/`.
+
+### Added
+
+- `STATE_DIR`, `LEGACY_STATE_DIR`, `stateDir()`, `ensureStateDir()`,
+  `inspectStateDir()`, and `resetStateDirNotices()` exported from
+  `@vaultcompass/intent-guard-core`. `stateDir()` resolves the directory to read
+  from; `ensureStateDir()` resolves the directory to write to, migrating first.
+- `DoctorResult.stateDir` and `InitResult.state_dir`, plus
+  `InitResult.gitignore_hint`.
+- `DRIFT_LOG_FILE` and `INIT_GITIGNORE_HINT` exports.
+
+### Deprecated
+
+- `CONDUCTOR_DIR` and `conductorDir()` in `@vaultcompass/intent-guard-core`, and
+  `DoctorResult.conductorDir` and `InitResult.conductor_dir`. They stay for one
+  minor release and are removed in the next major, per the deprecation policy.
+  Note that `CONDUCTOR_DIR` now holds `.intent-guard`: it is an alias for
+  `STATE_DIR`, not a record of the old name. Use `LEGACY_STATE_DIR` for that.
+
+### Fixed
+
+- The `archived_path` on an archived contract summary is now derived from the
+  project root instead of a hard-coded directory name, so it names whichever
+  state directory is actually in use.
+
 ## [1.2.1] - 2026-09-03
 
 Patch bump on all four packages. Two additive features, a README note, and one

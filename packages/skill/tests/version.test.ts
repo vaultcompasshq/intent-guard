@@ -99,7 +99,7 @@ beforeAll(() => {
 
 describe("subcommand version", () => {
   for (const cli of CLIS) {
-    // An empty directory with no .conductor: a command that actually ran
+    // An empty directory with no .intent-guard: a command that actually ran
     // here would either fail the gate, write a skeleton, or both. --version
     // must do neither — same property help already has to satisfy.
     it(`${cli} --version prints exactly the package version, exits 0, and touches nothing`, async () => {

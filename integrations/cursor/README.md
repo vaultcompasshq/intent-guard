@@ -68,8 +68,11 @@ path is not in the published packages. Use `intent-guard hook install`.
 ### 4. Optional gitignore
 
 ```
-.conductor/drift-log.jsonl
+.intent-guard/drift-log.jsonl
 ```
+
+Before 1.3.0 this directory was named `.conductor/`. If a `.gitignore` still
+names the old path, update the entry.
 
 Commit `intent-contract.yaml` on feature branches when the team should see the
 approved ask. The Intent Guard OSS repo itself does not keep a frozen root contract

@@ -3,7 +3,7 @@ name: intent-contract
 description: >-
   Draft and freeze an Intent Contract before brainstorming or implementation.
   Use when the user describes a feature, fix, or task and no frozen contract
-  exists in .conductor/intent-contract.yaml. Hard gate — do not run
+  exists in .intent-guard/intent-contract.yaml. Hard gate — do not run
   test-driven-development or implementation skills until frozen_by user.
 ---
 
@@ -21,14 +21,16 @@ Skill order: user instructions (AGENTS.md) → **Intent Guard skills** → Super
 
 Do **not** invoke implementation skills until:
 
-1. `.conductor/intent-contract.yaml` exists in the **target project root**
+1. `.intent-guard/intent-contract.yaml` exists in the **target project root**
 2. `frozen_by: user` is set (explicit user approval)
 
 ## Workflow
 
 ### 1. Check for existing contract
 
-Read `.conductor/intent-contract.yaml` in the project being worked on.
+Read `.intent-guard/intent-contract.yaml` in the project being worked on. On a
+project last used before 1.3.0 this may still be `.conductor/intent-contract.yaml`;
+the CLI reads either and migrates on the first write.
 
 - If present and `frozen_by: user` → proceed to brainstorming/plans
 - If present but not frozen → present draft, ask one clarifying question at a time, then freeze
@@ -93,7 +95,7 @@ pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-freeze \
 
 The approver and timestamp are recorded in the contract's `approval` block;
 the gate (`intent-guard-check`) only treats the contract as frozen once that
-record exists. Confirm `written_path` is `.conductor/intent-contract.yaml`.
+record exists. Confirm `written_path` is `.intent-guard/intent-contract.yaml`.
 
 Set `metadata.superpowers_spec_path` when a design spec will follow (e.g. `docs/superpowers/specs/YYYY-MM-DD-topic-design.md`).
 

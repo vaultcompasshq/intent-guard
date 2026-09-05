@@ -60,6 +60,11 @@ Lifecycle: coach -> extract (draft) -> freeze (approve) -> check (gate) -> pivot
 against its merge base rather than the index, and an importer for the spec and
 plan markdown this organisation writes.
 
+1.3.0 is prepared but not published. It renames the per-project state directory
+from `.conductor/` to `.intent-guard/`, because the umbrella product over the
+three gates now owns the name `conductor`. A legacy directory is read as-is
+with a notice and renamed on the first write; both present is a hard error.
+
 Skills in the tree: `intent-contract`, `prompt-coach`, `drift-guard`,
 `capture-correction`.
 
@@ -90,7 +95,7 @@ Paste actual test output before claiming tests pass.
 ## Boundaries
 
 - Keep this repo focused on Conductor packages, docs, examples, and integration samples.
-- Do not commit local per-project `.conductor/intent-contract.yaml` files here; consuming application repos own their active contracts.
+- Do not commit local per-project `.intent-guard/intent-contract.yaml` files here; consuming application repos own their active contracts.
 - Keep examples synthetic. Do not commit customer data, private project specs, API keys, or internal portfolio data.
 - **Never name portfolio products or link to private V&C app repos** in tracked files. Use generic "private downstream app repo" / "downstream integration" wording. Enforce with `pnpm validate:portfolio-names`; policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md). Maintainer notes belong in gitignored `.local/` or `TODO.local.md` only.
 - Runtime wiring for downstream products belongs in those downstream repos. This repo should expose packages and documented integration surfaces.

@@ -5,10 +5,14 @@ Unified CLI for [Intent Guard](https://github.com/vaultcompasshq/intent-guard) â
 > Renamed in 1.2.0. This package was published as `@vaultcompass/conductor-cli`
 > through 1.1.0, and the binary was `conductor`. The binary is now
 > `intent-guard`, and the per-command binaries are `intent-guard-check`,
-> `intent-guard-report`, and so on. Project state still lives in `.conductor/`,
-> so an existing project keeps working after the upgrade; re-run
-> `intent-guard hook install` to refresh a pre-commit hook that still calls the
-> old binary name.
+> `intent-guard-report`, and so on. Re-run `intent-guard hook install` to
+> refresh a pre-commit hook that still calls the old binary name.
+
+> Renamed again in 1.3.0: per-project state lives in `.intent-guard/`, not
+> `.conductor/`, which is now the name of a different product in this family.
+> An existing `.conductor/` is read as-is with a notice and renamed on the
+> first write. If both directories exist, commands fail closed rather than
+> guessing.
 
 ## Install
 

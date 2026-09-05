@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import {
@@ -6,19 +6,25 @@ import {
   type IntentContract,
 } from "@vaultcompass/intent-guard-schema";
 import { archiveContract } from "./history.js";
+import { STATE_DIR, ensureStateDir, stateDir } from "./state-dir.js";
 
-export const CONDUCTOR_DIR = ".conductor";
+/**
+ * @deprecated since 1.3.0. Use `STATE_DIR`. Kept as an alias for one minor
+ * release; note the value is now `.intent-guard`, not `.conductor`.
+ */
+export const CONDUCTOR_DIR = STATE_DIR;
 export const DEFAULT_CONTRACT_FILE = "intent-contract.yaml";
 
+/** @deprecated since 1.3.0. Use `stateDir`. */
 export function conductorDir(projectRoot: string): string {
-  return join(projectRoot, CONDUCTOR_DIR);
+  return stateDir(projectRoot);
 }
 
 export function contractPath(
   projectRoot: string,
   filename = DEFAULT_CONTRACT_FILE,
 ): string {
-  return join(conductorDir(projectRoot), filename);
+  return join(stateDir(projectRoot), filename);
 }
 
 export function readContract(
@@ -37,8 +43,7 @@ export function writeContract(
   filename = DEFAULT_CONTRACT_FILE,
 ): string {
   assertValidIntentContract(contract);
-  const dir = conductorDir(projectRoot);
-  mkdirSync(dir, { recursive: true });
+  const dir = ensureStateDir(projectRoot);
   const path = join(dir, filename);
   writeFileSync(path, stringify(contract), "utf8");
   if (

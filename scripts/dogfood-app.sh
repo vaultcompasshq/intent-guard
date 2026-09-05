@@ -32,7 +32,7 @@ echo ""
 
 echo "--- init ---"
 "$INTENT_GUARD" init --project "$TARGET" --human
-test -f "$TARGET/.conductor/config.yaml"
+test -f "$TARGET/.intent-guard/config.yaml"
 
 echo ""
 echo "--- extract (dry run) ---"

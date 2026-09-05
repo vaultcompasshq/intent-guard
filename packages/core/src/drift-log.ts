@@ -1,7 +1,7 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DriftAction } from "./rubric.js";
-import { conductorDir } from "./contract-store.js";
+import { ensureStateDir, stateDir } from "./state-dir.js";
 
 export interface DriftLogEvent {
   timestamp: string;
@@ -13,19 +13,20 @@ export interface DriftLogEvent {
   user_message?: string;
 }
 
+export const DRIFT_LOG_FILE = "drift-log.jsonl";
+
 export function driftLogPath(projectRoot: string): string {
-  return join(conductorDir(projectRoot), "drift-log.jsonl");
+  return join(stateDir(projectRoot), DRIFT_LOG_FILE);
 }
 
 export function appendDriftEvent(
   projectRoot: string,
   event: Omit<DriftLogEvent, "timestamp">,
 ): void {
-  const dir = conductorDir(projectRoot);
-  mkdirSync(dir, { recursive: true });
+  const dir = ensureStateDir(projectRoot);
   const line = JSON.stringify({
     ...event,
     timestamp: new Date().toISOString(),
   });
-  appendFileSync(driftLogPath(projectRoot), `${line}\n`, "utf8");
+  appendFileSync(join(dir, DRIFT_LOG_FILE), `${line}\n`, "utf8");
 }

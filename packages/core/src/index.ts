@@ -33,6 +33,15 @@ export {
   type DriftThresholds,
 } from "./config-types.js";
 export {
+  LEGACY_STATE_DIR,
+  STATE_DIR,
+  ensureStateDir,
+  inspectStateDir,
+  resetStateDirNotices,
+  stateDir,
+  type StateDirStatus,
+} from "./state-dir.js";
+export {
   CONDUCTOR_DIR,
   DEFAULT_CONTRACT_FILE,
   contractPath,
@@ -51,10 +60,20 @@ export {
   type BudgetRule,
   type BudgetSeverity,
 } from "./budget.js";
-export { appendDriftEvent, driftLogPath, type DriftLogEvent } from "./drift-log.js";
+export {
+  DRIFT_LOG_FILE,
+  appendDriftEvent,
+  driftLogPath,
+  type DriftLogEvent,
+} from "./drift-log.js";
 export { draftContract, generateContractId, type DraftContractInput } from "./extract.js";
 export { formatDriftMessage } from "./format-drift.js";
-export { initConductor, INIT_NEXT_STEPS, type InitResult } from "./init.js";
+export {
+  initConductor,
+  INIT_GITIGNORE_HINT,
+  INIT_NEXT_STEPS,
+  type InitResult,
+} from "./init.js";
 export {
   CONDUCTOR_HOOK_MARKER,
   installPreCommitHook,

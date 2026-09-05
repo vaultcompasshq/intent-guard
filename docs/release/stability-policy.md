@@ -13,8 +13,9 @@ The YAML field `version` on an Intent Contract is **`1.0.0`**.
 | Rename or remove required fields | Major npm release; migration notes in CHANGELOG |
 | Validation rule tightening | Minor if existing valid contracts stay valid; else major |
 
-Frozen contracts in `.conductor/contracts/` are archives; the active contract at
-`.conductor/intent-contract.yaml` is the source of truth per project.
+Frozen contracts in `.intent-guard/contracts/` are archives; the active contract
+at `.intent-guard/intent-contract.yaml` is the source of truth per project. That
+directory was named `.conductor/` before 1.3.0.
 
 ## npm package semver
 

@@ -35,9 +35,16 @@ do with this one, so install the scoped name.
 > per-command binaries are `intent-guard-check`, `intent-guard-report`, and so
 > on. The old binary names are gone in this release, so a pre-commit hook or
 > agent hook that still calls `conductor-check` needs updating: re-run
-> `intent-guard hook install`. Project state is untouched, so `.conductor/` and
-> everything in it keeps working as-is. See [the upgrade
+> `intent-guard hook install`. See [the upgrade
 > notes](#upgrading-from-conductor-110).
+
+> **State directory renamed in 1.3.0.** Per-project state now lives in
+> `.intent-guard/`, not `.conductor/`. The old name belongs to a different
+> product in this family, which writes `.guardrails.yaml` and `.guardrails/`
+> into the same repositories, and two similarly named directories from two
+> tools is a trap. An existing `.conductor/` is read as-is with a notice, and
+> renamed to `.intent-guard/` on the first write. If both directories exist,
+> every command fails closed rather than guessing which one is current.
 
 Two kinds of finding come out of the gate. The first is drift: the change has
 moved outside what the contract put in scope, into something it put out of
@@ -72,7 +79,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.2.1`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.3.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -226,12 +233,36 @@ when you want a separate secret-scanning gate beside Intent Guard.
    you do this. Add `--force` if the hook was hand-edited.
 4. Update any CI step, agent hook, or script that calls `conductor` or a
    `conductor-*` binary.
-5. Nothing under `.conductor/` changes. Contracts, config, history, and the
-   drift log are all read from the same paths as before.
+5. On 1.3.0, move project state from `.conductor/` to `.intent-guard/`. The
+   tool does it for you on the first write, or you can run
+   `git mv .conductor .intent-guard` yourself. Update the `.gitignore` entry
+   and any script or CI step that names the old directory.
 
-The name `conductor` may later be reused for a different package in this
-family, so pin `@vaultcompass/intent-guard` rather than assuming the old name
-still points at this tool.
+The name `conductor` is now used by a different product in this family, so pin
+`@vaultcompass/intent-guard` rather than assuming the old name still points at
+this tool.
+
+## Project state directory
+
+Per-project state lives in `.intent-guard/` at the root of the repository being
+governed:
+
+| Path | What it is |
+|------|------------|
+| `.intent-guard/intent-contract.yaml` | the active contract, and the frozen contract other tools read |
+| `.intent-guard/contracts/` | archived frozen contracts, one file per contract id |
+| `.intent-guard/config.yaml` | drift thresholds and coach settings |
+| `.intent-guard/index.md` | the generated memory index |
+| `.intent-guard/drift-log.jsonl` | append-only drift events |
+
+Commit the directory so contracts are reviewable in pull requests, and ignore
+`.intent-guard/drift-log.jsonl`, which is local noise. Before 1.3.0 the
+directory was named `.conductor/`; if a `.gitignore` still names it, update the
+entry.
+
+Anything reading the frozen contract by path (the umbrella gate runner, a CI
+step, another tool) should read `.intent-guard/intent-contract.yaml`. The
+pre-1.3.0 path was `.conductor/intent-contract.yaml`.
 
 ## Origin
 

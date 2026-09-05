@@ -6,10 +6,14 @@ import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { configPath, loadConfig } from "./config.js";
 import {
   contractPath,
-  conductorDir,
   isContractFrozen,
   readContract,
 } from "./contract-store.js";
+import {
+  LEGACY_STATE_DIR,
+  STATE_DIR,
+  inspectStateDir,
+} from "./state-dir.js";
 import { archivedContractPath, contractsDir, listContracts } from "./history.js";
 import { INDEX_FILE, renderIndex } from "./memory-index.js";
 import { resolveGitHooksDir } from "./hook.js";
@@ -34,6 +38,9 @@ export interface DoctorSummary {
 
 export interface DoctorResult {
   projectRoot: string;
+  /** The state directory actually in use: canonical, or legacy if only it exists. */
+  stateDir: string;
+  /** @deprecated since 1.3.0. Use `stateDir`. */
   conductorDir: string;
   packageVersion: string;
   status: DoctorStatus;
@@ -79,9 +86,11 @@ function finalize(
   const summary = summarize(findings);
   const status: DoctorStatus =
     summary.error > 0 ? "error" : summary.warn > 0 ? "warn" : "ok";
+  const dir = inspectStateDir(projectRoot).dir;
   return {
     projectRoot,
-    conductorDir: conductorDir(projectRoot),
+    stateDir: dir,
+    conductorDir: dir,
     packageVersion: packageVersion(),
     status,
     exitCode: summary.error > 0 ? 1 : 0,
@@ -141,10 +150,19 @@ function filesInDir(path: string, extensions: string[]): string[] {
   }
 }
 
+/**
+ * Finding paths name the state directory actually in use, so a project still
+ * on the legacy name is not told to look somewhere that does not exist.
+ */
+function stateLabel(projectRoot: string): string {
+  return inspectStateDir(projectRoot).usingLegacy ? LEGACY_STATE_DIR : STATE_DIR;
+}
+
 function activeContractStatus(
   projectRoot: string,
   findings: DoctorFinding[],
 ): IntentContract | null {
+  const label = stateLabel(projectRoot);
   const activePath = contractPath(projectRoot);
   if (!existsSync(activePath)) {
     findings.push(
@@ -152,7 +170,7 @@ function activeContractStatus(
         "error",
         "active_contract_missing",
         "No active Intent Contract found. Run intent-guard extract, review it, then intent-guard freeze.",
-        ".conductor/intent-contract.yaml",
+        `${label}/intent-contract.yaml`,
       ),
     );
     return null;
@@ -166,7 +184,7 @@ function activeContractStatus(
         "ok",
         "active_contract_valid",
         `Active contract ${contract.contract_id} is schema-valid.`,
-        ".conductor/intent-contract.yaml",
+        `${label}/intent-contract.yaml`,
       ),
     );
 
@@ -176,7 +194,7 @@ function activeContractStatus(
           "ok",
           "active_contract_frozen",
           `Active contract is frozen and approved by ${contract.approval?.approved_by}.`,
-          ".conductor/intent-contract.yaml",
+          `${label}/intent-contract.yaml`,
         ),
       );
     } else {
@@ -185,7 +203,7 @@ function activeContractStatus(
           "error",
           "active_contract_unfrozen",
           "Active contract exists but is not approved/frozen. Run intent-guard freeze --approved-by <name>.",
-          ".conductor/intent-contract.yaml",
+          `${label}/intent-contract.yaml`,
         ),
       );
     }
@@ -196,7 +214,7 @@ function activeContractStatus(
         "error",
         "active_contract_invalid",
         "Active Intent Contract is not valid.",
-        ".conductor/intent-contract.yaml",
+        `${label}/intent-contract.yaml`,
         error instanceof Error ? error.message : String(error),
       ),
     );
@@ -205,14 +223,15 @@ function activeContractStatus(
 }
 
 function configStatus(projectRoot: string, findings: DoctorFinding[]): void {
+  const label = stateLabel(projectRoot);
   const path = configPath(projectRoot);
   if (!existsSync(path)) {
     findings.push(
       finding(
         "error",
         "config_missing",
-        "Missing .conductor/config.yaml. Run intent-guard init.",
-        ".conductor/config.yaml",
+        `Missing ${label}/config.yaml. Run intent-guard init.`,
+        `${label}/config.yaml`,
       ),
     );
     return;
@@ -222,7 +241,7 @@ function configStatus(projectRoot: string, findings: DoctorFinding[]): void {
     parse(readFileSync(path, "utf8"));
     loadConfig(projectRoot);
     findings.push(
-      finding("ok", "config_valid", "Config file is readable.", ".conductor/config.yaml"),
+      finding("ok", "config_valid", "Config file is readable.", `${label}/config.yaml`),
     );
   } catch (error) {
     findings.push(
@@ -230,7 +249,7 @@ function configStatus(projectRoot: string, findings: DoctorFinding[]): void {
         "error",
         "config_invalid",
         "Config file cannot be parsed or merged.",
-        ".conductor/config.yaml",
+        `${label}/config.yaml`,
         error instanceof Error ? error.message : String(error),
       ),
     );
@@ -242,6 +261,7 @@ function archiveStatus(
   contract: IntentContract | null,
   findings: DoctorFinding[],
 ): void {
+  const label = stateLabel(projectRoot);
   const dir = contractsDir(projectRoot);
   if (!existsSync(dir)) {
     findings.push(
@@ -249,7 +269,7 @@ function archiveStatus(
         "warn",
         "contracts_dir_missing",
         "Archived contracts directory is missing. Run intent-guard init or freeze the active contract again.",
-        ".conductor/contracts/",
+        `${label}/contracts/`,
       ),
     );
     return;
@@ -264,7 +284,7 @@ function archiveStatus(
         archived.length > 0
           ? `${archived.length} archived contract(s) found.`
           : "No archived contracts yet.",
-        ".conductor/contracts/",
+        `${label}/contracts/`,
       ),
     );
 
@@ -277,8 +297,8 @@ function archiveStatus(
         finding(
           "warn",
           "active_contract_not_archived",
-          "Frozen active contract is not archived under .conductor/contracts/.",
-          `.conductor/contracts/${contract.contract_id}.yaml`,
+          `Frozen active contract is not archived under ${label}/contracts/.`,
+          `${label}/contracts/${contract.contract_id}.yaml`,
         ),
       );
     }
@@ -288,7 +308,7 @@ function archiveStatus(
         "warn",
         "contracts_archive_invalid",
         "One or more archived contracts could not be read.",
-        ".conductor/contracts/",
+        `${label}/contracts/`,
         error instanceof Error ? error.message : String(error),
       ),
     );
@@ -296,14 +316,15 @@ function archiveStatus(
 }
 
 function indexStatus(projectRoot: string, findings: DoctorFinding[]): void {
-  const path = join(conductorDir(projectRoot), INDEX_FILE);
+  const label = stateLabel(projectRoot);
+  const path = join(inspectStateDir(projectRoot).dir, INDEX_FILE);
   if (!existsSync(path)) {
     findings.push(
       finding(
         "warn",
         "index_missing",
-        "Missing .conductor/index.md. Run intent-guard index.",
-        ".conductor/index.md",
+        `Missing ${label}/index.md. Run intent-guard index.`,
+        `${label}/index.md`,
       ),
     );
     return;
@@ -319,7 +340,7 @@ function indexStatus(projectRoot: string, findings: DoctorFinding[]): void {
         actual === expected
           ? "Generated index is current."
           : "Generated index is stale. Run intent-guard index.",
-        ".conductor/index.md",
+        `${label}/index.md`,
       ),
     );
   } catch (error) {
@@ -328,7 +349,7 @@ function indexStatus(projectRoot: string, findings: DoctorFinding[]): void {
         "warn",
         "index_unreadable",
         "Generated index could not be checked.",
-        ".conductor/index.md",
+        `${label}/index.md`,
         error instanceof Error ? error.message : String(error),
       ),
     );
@@ -615,22 +636,58 @@ export function runDoctor(projectRoot: string): DoctorResult {
     ),
   ];
 
-  if (!existsSync(conductorDir(projectRoot))) {
+  const state = inspectStateDir(projectRoot);
+
+  if (state.conflict) {
     findings.push(
       finding(
         "error",
-        "conductor_not_initialized",
-        "No .conductor directory found. Run intent-guard init.",
-        ".conductor/",
+        "state_dir_conflict",
+        `Both ${STATE_DIR}/ and ${LEGACY_STATE_DIR}/ exist. Intent Guard reads ` +
+          `one and never merges two. Move what you need into ${STATE_DIR}/ and ` +
+          `delete ${LEGACY_STATE_DIR}/.`,
+        `${STATE_DIR}/`,
+        `${LEGACY_STATE_DIR}/ is the pre-1.3.0 name for the same directory.`,
       ),
     );
     integrationStatus(projectRoot, findings);
     return finalize(projectRoot, findings);
   }
 
-  findings.push(
-    finding("ok", "conductor_dir_found", ".conductor directory exists.", ".conductor/"),
-  );
+  if (!state.canonicalExists && !state.usingLegacy) {
+    findings.push(
+      finding(
+        "error",
+        "conductor_not_initialized",
+        `No ${STATE_DIR} directory found. Run intent-guard init.`,
+        `${STATE_DIR}/`,
+      ),
+    );
+    integrationStatus(projectRoot, findings);
+    return finalize(projectRoot, findings);
+  }
+
+  if (state.usingLegacy) {
+    findings.push(
+      finding(
+        "warn",
+        "state_dir_legacy",
+        `Project state is still in ${LEGACY_STATE_DIR}/, renamed to ${STATE_DIR}/ ` +
+          `in 1.3.0. The next write migrates it, or run: git mv ` +
+          `${LEGACY_STATE_DIR} ${STATE_DIR}`,
+        `${LEGACY_STATE_DIR}/`,
+      ),
+    );
+  } else {
+    findings.push(
+      finding(
+        "ok",
+        "conductor_dir_found",
+        `${STATE_DIR} directory exists.`,
+        `${STATE_DIR}/`,
+      ),
+    );
+  }
 
   configStatus(projectRoot, findings);
   const contract = activeContractStatus(projectRoot, findings);
