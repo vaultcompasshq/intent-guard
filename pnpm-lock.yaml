@@ -13,9 +13,21 @@ importers:
 
   .:
     devDependencies:
+      '@vaultcompass/conductor':
+        specifier: 0.2.0
+        version: 0.2.0
+      '@vaultcompass/dep-guard':
+        specifier: 0.2.1
+        version: 0.2.1
+      '@vaultcompass/intent-guard':
+        specifier: 1.2.1
+        version: 1.2.1
       '@vaultcompass/intent-guard-schema':
         specifier: workspace:*
         version: link:packages/schema
+      '@vaultcompass/vault-guard':
+        specifier: 1.4.6
+        version: 1.4.6
       vitest:
         specifier: ^3.0.5
         version: 3.2.6(@types/node@22.19.21)(yaml@2.9.0)
@@ -394,6 +406,47 @@ packages:
   '@types/node@22.19.21':
     resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
 
+  '@vaultcompass/conductor@0.2.0':
+    resolution: {integrity: sha512-E9VZ755Cbeg6/OP1SMclBWM9WE4loq6rgJWJE4k/Jd7tXf8xNsjjqslAorBSnvX5XWgcirWt8npUCLslgoJfzQ==}
+    engines: {node: '>=22'}
+    hasBin: true
+
+  '@vaultcompass/dep-guard-core@0.2.1':
+    resolution: {integrity: sha512-XiRv63SlFuxV5lDi+rAf+kn9B6bLxgjpgUgjBJmWryGGJiutb01BvtXKVd9XwBgSrJRPZY+b3IRijnDX3KVe6w==}
+    engines: {node: '>=22'}
+
+  '@vaultcompass/dep-guard@0.2.1':
+    resolution: {integrity: sha512-xMUH2swMMIut627yda8nV8hOyR299gR7Grv96dJ1C+HDErNDAa547Ad6yufyBMjoed5lBuT9zfNYQKtywk456g==}
+    engines: {node: '>=22'}
+    hasBin: true
+
+  '@vaultcompass/intent-guard-core@1.2.1':
+    resolution: {integrity: sha512-liQ8wlmG+mtwYzmA4wqfiuBXSWj9P1Ar2QzZVdg3zzOkyBJmJefeFpicMdslkzj3Ah0PiFKV9XigW+Ci5+Cbug==}
+
+  '@vaultcompass/intent-guard-schema@1.2.1':
+    resolution: {integrity: sha512-jyA4NxMEVYHiDYbm6qN93uhsZDMBm2HeXhw6lk74O5kG66uWxTgVwjJLNmk+13j7RvVzn9wRdV3Tu1pt58NPUg==}
+
+  '@vaultcompass/intent-guard-skill@1.2.1':
+    resolution: {integrity: sha512-TqIMBymuzV7QZpaoDpVB/EzZYUz8TVIWTKL3sgzQyTSDCr+jip9PYQu1yjDdxox9i/ynNPpF8P9Hil7BkLoteA==}
+    hasBin: true
+
+  '@vaultcompass/intent-guard@1.2.1':
+    resolution: {integrity: sha512-QhXpMKPimRRNM+MiFx3SLyBk5M0wpVJFuJnPMD7M5yadWW/KmhODpoIcfSb1iUswdc6NNtf+VnIGKNZH9tBysQ==}
+    hasBin: true
+
+  '@vaultcompass/vault-guard-core@1.4.6':
+    resolution: {integrity: sha512-yrfp6rfhm5ntllvGYg3EUb6Ytsbl0uyC2CitzT0A3WGp0bPtiOyWB1yBHVN0zpuI+5COsAMD3zvLkwTUr2XBhQ==}
+    engines: {node: '>=22.0.0', npm: '>=9.0.0', pnpm: '>=9.0.0'}
+
+  '@vaultcompass/vault-guard-telemetry@1.4.6':
+    resolution: {integrity: sha512-6FWjt1W1iK36dB9hbk1zncawNHS0vbtjcox+ly6ezvy7/AC2IxmmpeIl9A8Q18R02V4WZ7uNHZ7WVvmkWCMz3g==}
+    engines: {node: '>=22.0.0', npm: '>=9.0.0', pnpm: '>=9.0.0'}
+
+  '@vaultcompass/vault-guard@1.4.6':
+    resolution: {integrity: sha512-pg9MJ6yA4BR4NqFKw+X5b39dWziNfpUVvySwCcib1CZiITzAM/U3+f0A/7Wf8hJTELu/s5qrZGtHKb3h7+dDsw==}
+    engines: {node: '>=22.0.0', npm: '>=9.0.0', pnpm: '>=9.0.0'}
+    hasBin: true
+
   '@vitest/expect@3.2.6':
     resolution: {integrity: sha512-1+7q9BtaKzEmO+fmNT3kYvoNn5Y71XWAx2Q5HRim4tTVRQVRv4uJFAQ5FbK0OPUeNP/WmVCpxYxoJdvuHVjzBQ==}
 
@@ -434,9 +487,17 @@ packages:
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
 
+  ansi-styles@4.3.0:
+    resolution: {integrity: sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg==}
+    engines: {node: '>=8'}
+
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
+
+  better-sqlite3@13.0.3:
+    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
+    engines: {node: '>=22'}
 
   cac@6.7.14:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
@@ -446,9 +507,24 @@ packages:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
     engines: {node: '>=18'}
 
+  chalk@4.1.2:
+    resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
+    engines: {node: '>=10'}
+
   check-error@2.1.3:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
     engines: {node: '>= 16'}
+
+  color-convert@2.0.1:
+    resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
+    engines: {node: '>=7.0.0'}
+
+  color-name@1.1.4:
+    resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
+
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -498,6 +574,14 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  has-flag@4.0.0:
+    resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
+    engines: {node: '>=8'}
+
+  ignore@5.3.2:
+    resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
+    engines: {node: '>= 4'}
+
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
 
@@ -517,6 +601,10 @@ packages:
     resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
+
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -560,6 +648,10 @@ packages:
 
   strip-literal@3.1.0:
     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
+
+  supports-color@7.2.0:
+    resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
+    engines: {node: '>=8'}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -844,6 +936,58 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@vaultcompass/conductor@0.2.0':
+    dependencies:
+      ajv: 8.20.0
+      commander: 12.1.0
+      yaml: 2.9.0
+
+  '@vaultcompass/dep-guard-core@0.2.1':
+    dependencies:
+      yaml: 2.9.0
+
+  '@vaultcompass/dep-guard@0.2.1':
+    dependencies:
+      '@vaultcompass/dep-guard-core': 0.2.1
+      commander: 12.1.0
+
+  '@vaultcompass/intent-guard-core@1.2.1':
+    dependencies:
+      '@vaultcompass/intent-guard-schema': 1.2.1
+      yaml: 2.9.0
+
+  '@vaultcompass/intent-guard-schema@1.2.1':
+    dependencies:
+      ajv: 8.20.0
+      ajv-formats: 3.0.1(ajv@8.20.0)
+
+  '@vaultcompass/intent-guard-skill@1.2.1':
+    dependencies:
+      '@vaultcompass/intent-guard-core': 1.2.1
+      '@vaultcompass/intent-guard-schema': 1.2.1
+      yaml: 2.9.0
+
+  '@vaultcompass/intent-guard@1.2.1':
+    dependencies:
+      '@vaultcompass/intent-guard-skill': 1.2.1
+
+  '@vaultcompass/vault-guard-core@1.4.6':
+    dependencies:
+      ignore: 5.3.2
+
+  '@vaultcompass/vault-guard-telemetry@1.4.6':
+    dependencies:
+      '@vaultcompass/vault-guard-core': 1.4.6
+    optionalDependencies:
+      better-sqlite3: 13.0.3
+
+  '@vaultcompass/vault-guard@1.4.6':
+    dependencies:
+      '@vaultcompass/vault-guard-core': 1.4.6
+      '@vaultcompass/vault-guard-telemetry': 1.4.6
+      chalk: 4.1.2
+      commander: 12.1.0
+
   '@vitest/expect@3.2.6':
     dependencies:
       '@types/chai': 5.2.3
@@ -897,7 +1041,16 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
+  ansi-styles@4.3.0:
+    dependencies:
+      color-convert: 2.0.1
+
   assertion-error@2.0.1: {}
+
+  better-sqlite3@13.0.3:
+    dependencies:
+      node-addon-api: 8.9.2
+    optional: true
 
   cac@6.7.14: {}
 
@@ -909,7 +1062,20 @@ snapshots:
       loupe: 3.2.1
       pathval: 2.0.1
 
+  chalk@4.1.2:
+    dependencies:
+      ansi-styles: 4.3.0
+      supports-color: 7.2.0
+
   check-error@2.1.3: {}
+
+  color-convert@2.0.1:
+    dependencies:
+      color-name: 1.1.4
+
+  color-name@1.1.4: {}
+
+  commander@12.1.0: {}
 
   debug@4.4.3:
     dependencies:
@@ -965,6 +1131,10 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
+  has-flag@4.0.0: {}
+
+  ignore@5.3.2: {}
+
   js-tokens@9.0.1: {}
 
   json-schema-traverse@1.0.0: {}
@@ -978,6 +1148,9 @@ snapshots:
   ms@2.1.3: {}
 
   nanoid@3.3.16: {}
+
+  node-addon-api@8.9.2:
+    optional: true
 
   pathe@2.0.3: {}
 
@@ -1037,6 +1210,10 @@ snapshots:
   strip-literal@3.1.0:
     dependencies:
       js-tokens: 9.0.1
+
+  supports-color@7.2.0:
+    dependencies:
+      has-flag: 4.0.0
 
   tinybench@2.9.0: {}
 
