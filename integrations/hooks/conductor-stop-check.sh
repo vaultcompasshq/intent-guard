@@ -9,10 +9,14 @@ source "$SCRIPT_DIR/conductor-lib.sh"
 ROOT="$(intent_guard_git_root)"
 CHECK_CMD="$(intent_guard_bin "$ROOT" intent-guard-check || true)"
 
-# Claude Code only hard-blocks Stop hooks on exit code 2. Exit 1 is treated as
-# a non-blocking error (turn still ends). Map blocked / missing-check failures
-# to 2 for lifecycle hosts. Git pre-commit uses intent-guard-check directly
-# (exit 1).
+# Both lifecycle hosts map a gate failure to exit 2, and both read the reason
+# from stderr:
+# - Claude Code: only exit 2 prevents the stop. Exit 1 is non-blocking (the
+#   turn still ends), and stdout on exit 0 goes to the debug log only.
+# - Codex: exit 2 continues the agent with the stderr reason. Plain text on
+#   stdout at exit 0 is invalid for this event, so stdout stays empty on every
+#   path and the check's own output goes to stderr.
+# Git pre-commit uses intent-guard-check directly (exit 1).
 lifecycle_block() {
   exit 2
 }
@@ -26,12 +30,16 @@ PATHS="$(intent_guard_changed_paths_csv "$ROOT")"
 
 set +e
 if [[ -n "$PATHS" ]]; then
-  eval "$CHECK_CMD --project \"\$ROOT\" --paths \"\$PATHS\""
+  output="$(eval "$CHECK_CMD --project \"\$ROOT\" --paths \"\$PATHS\"" 2>&1)"
 else
-  eval "$CHECK_CMD --project \"\$ROOT\""
+  output="$(eval "$CHECK_CMD --project \"\$ROOT\"" 2>&1)"
 fi
 status=$?
 set -e
+
+if [[ -n "$output" ]]; then
+  printf '%s\n' "$output" >&2
+fi
 
 if [[ "$status" -ne 0 ]]; then
   lifecycle_block
