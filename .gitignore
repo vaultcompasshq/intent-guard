@@ -12,10 +12,9 @@ audit.md
 # Local Intent Guard state (contracts and runtime files belong in consuming app repos)
 .conductor/
 .cursor/
-# Umbrella policy and hook manifest, written locally while that tool is
-# unpublished. Committing them would point a reader at something they cannot
-# install.
-.guardrails.yaml
+# The umbrella's hook manifest, under .guardrails, records absolute paths on
+# whichever machine installed the hook, so it stays local. The policy file
+# beside it, .guardrails.yaml, is tracked: CI reads it.
 .guardrails/
 # Maintainer records. The public content policy already says these must not be
 # committed: maintainer status, week-ahead plans, and dogfood validation notes.
