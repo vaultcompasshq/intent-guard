@@ -131,5 +131,5 @@ jobs:
           npm install "@vaultcompass/intent-guard@${VERSION}"
           ./node_modules/.bin/intent-guard --version
           ./node_modules/.bin/intent-guard init --project .
-          test -f .conductor/config.yaml
+          test -f .intent-guard/config.yaml
           echo "Release smoke passed."

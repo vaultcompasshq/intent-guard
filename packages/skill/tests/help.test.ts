@@ -93,7 +93,7 @@ beforeAll(() => {
 
 describe("subcommand help", () => {
   for (const cli of CLIS) {
-    // An empty directory with no .conductor: a command that actually ran here
+    // An empty directory with no .intent-guard: a command that actually ran here
     // would either fail the gate, write a skeleton, or both. Help must do
     // neither.
     it(`${cli} --help prints usage, exits 0, and touches nothing`, async () => {
@@ -147,8 +147,8 @@ describe("subcommand help", () => {
     // the same name) throws EISDIR immediately, so a quiet, exit-0 run here
     // is only possible if --help genuinely never reads it.
     const dir = mkdtempSync(join(tmpdir(), "conductor-help-check-contract-"));
-    mkdirSync(join(dir, ".conductor"), { recursive: true });
-    mkdirSync(join(dir, ".conductor", "intent-contract.yaml"));
+    mkdirSync(join(dir, ".intent-guard"), { recursive: true });
+    mkdirSync(join(dir, ".intent-guard", "intent-contract.yaml"));
 
     const res = await run("check-cli.js", ["--help"], dir);
 

@@ -24,13 +24,13 @@ describe("gate guidance never names a removed binary", () => {
 
     const message = result.reasons.join("\n");
     // The substring, not a whole word: conductor-extract, conductor-freeze and
-    // every other removed bin start with it. The .conductor directory path is
-    // deliberately unchanged and does not contain this substring.
+    // every other removed bin start with it.
     expect(message).not.toContain("conductor-");
     expect(message).toContain("intent-guard-extract");
     expect(message).toContain("intent-guard-freeze");
-    // The project directory did not move, and the message still points at it.
-    expect(message).toContain(".conductor/intent-contract.yaml");
+    // The state directory moved in 1.3.0, and the message points at the new one.
+    expect(message).toContain(".intent-guard/intent-contract.yaml");
+    expect(message).not.toContain(".conductor/");
   });
 
   it("keeps every gate reason free of removed binary names", () => {

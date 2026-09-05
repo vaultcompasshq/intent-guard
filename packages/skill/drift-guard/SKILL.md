@@ -18,11 +18,11 @@ description: >-
 | After `brainstorming` → before `writing-plans` | Compare spec scope to contract |
 | After `writing-plans` → before `test-driven-development` | Compare plan to contract |
 | Before `verification-before-completion` | Compare work to acceptance criteria |
-| On file save | Opt-in via `.conductor/config.yaml` (future) |
+| On file save | Opt-in via `.intent-guard/config.yaml` (future) |
 
 ## Prerequisites
 
-- Frozen `.conductor/intent-contract.yaml` in the target project
+- Frozen `.intent-guard/intent-contract.yaml` in the target project
 - List of changed file paths since last check (from git diff or session context)
 - Optional: user message if scope may have pivoted
 
@@ -30,7 +30,7 @@ description: >-
 
 ```bash
 pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-drift \
-  --contract /path/to/project/.conductor/intent-contract.yaml \
+  --contract /path/to/project/.intent-guard/intent-contract.yaml \
   --project /path/to/project \
   --paths "src/api/new-route.ts,src/hooks/useWebSocket.ts" \
   --signals "new_api_route" \
@@ -46,7 +46,7 @@ JSON output:
 - `message` — formatted message for the user
 - `block` — true when agent should pause for confirmation
 
-`--log` appends to `.conductor/drift-log.jsonl`.
+`--log` appends to `.intent-guard/drift-log.jsonl`.
 
 ### Signals are open-vocabulary
 
@@ -67,7 +67,7 @@ the change in plain words. The scorer subtracts tokens that also appear in
 | 71–85 | Soft block: confirm to continue |
 | 86–100 | Hard block on critical constraints |
 
-Configurable via `.conductor/config.yaml`; see `examples/intent-guard.config.example.yaml`.
+Configurable via `.intent-guard/config.yaml`; see `examples/intent-guard.config.example.yaml`.
 
 ## When blocked
 

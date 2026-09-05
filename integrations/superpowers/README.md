@@ -58,13 +58,13 @@ CI step so the gate runs outside the agent's control.
 2. Extract `original_ask`, `in_scope`, `out_of_scope`, `constraints`, `acceptance_criteria`
 3. Run `prompt-coach` if quality score < 60
 4. Present draft to user — one question at a time if gaps
-5. Write `.conductor/intent-contract.yaml`
+5. Write `.intent-guard/intent-contract.yaml`
 6. Wait for explicit user approval → set `frozen_by: user`
 
 ### Output
 
 ```yaml
-# .conductor/intent-contract.yaml
+# .intent-guard/intent-contract.yaml
 metadata:
   superpowers_spec_path: docs/superpowers/specs/YYYY-MM-DD-topic-design.md
 ```

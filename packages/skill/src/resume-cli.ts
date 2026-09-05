@@ -36,7 +36,7 @@ if (args.version) printVersion();
 const resumeMarkdown = renderResume(args.projectRoot);
 
 if (!resumeMarkdown) {
-  console.error("No .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
+  console.error("No .intent-guard/intent-contract.yaml found. Run intent-guard-extract first.");
   process.exit(1);
 }
 

@@ -1,8 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { briefAcknowledgedCorrections } from "./correction.js";
-import { conductorDir, readContract } from "./contract-store.js";
+import { readContract } from "./contract-store.js";
+import { ensureStateDir } from "./state-dir.js";
 import { listContracts } from "./history.js";
 import { renderBriefMarkdown } from "./brief.js";
 
@@ -91,8 +92,7 @@ export function renderIndex(projectRoot: string): string {
 }
 
 export function writeIndex(projectRoot: string): string {
-  const dir = conductorDir(projectRoot);
-  mkdirSync(dir, { recursive: true });
+  const dir = ensureStateDir(projectRoot);
   const path = join(dir, INDEX_FILE);
   writeFileSync(path, renderIndex(projectRoot), "utf8");
   return path;

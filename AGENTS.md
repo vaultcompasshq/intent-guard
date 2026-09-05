@@ -56,7 +56,17 @@ Lifecycle: coach -> extract (draft) -> freeze (approve) -> check (gate) -> pivot
 
 ## Current Work
 
-1.2.1 is on npm. It added `check --base <ref>`, so a pull request can be gated
+1.3.0 is the current release. It renames the per-project state directory from
+`.conductor/` to `.intent-guard/`, because the umbrella product over the three
+gates now owns the name `conductor`. A legacy directory is read as-is with a
+notice and renamed on the first write; both present is a hard error. Upgrading
+without also upgrading `@vaultcompass/conductor` to 0.2.3 silently quiets that
+umbrella's intent gate, because 0.2.2 reads the old path.
+
+As at every release cut here, the version lands in the tree first and npm
+follows on the tag, so `1.3.0` in the README Status line is the version this
+tree is, not proof it is on the registry yet. 1.2.1 is the last version
+published: it added `check --base <ref>`, so a pull request can be gated
 against its merge base rather than the index, and an importer for the spec and
 plan markdown this organisation writes.
 
@@ -81,6 +91,12 @@ pnpm validate:portfolio-names
 pnpm validate:public-repos   # manual; clones public GitHub repos
 ```
 
+`validate:public-repos` measures layout compatibility, not drift-detection
+accuracy. A pass means the CLI produced the expected verdicts on three
+synthetic probes that are decidable from the file path alone, across eight real
+repository layouts. Do not quote its pass count as an accuracy number, and do
+not read identical rows as independent confirmations.
+
 `pnpm test` builds first because the skill CLI tests spawn compiled `dist/` files.
 
 Paste actual test output before claiming tests pass.
@@ -90,7 +106,7 @@ Paste actual test output before claiming tests pass.
 ## Boundaries
 
 - Keep this repo focused on Conductor packages, docs, examples, and integration samples.
-- Do not commit local per-project `.conductor/intent-contract.yaml` files here; consuming application repos own their active contracts.
+- Do not commit local per-project `.intent-guard/intent-contract.yaml` files here; consuming application repos own their active contracts.
 - Keep examples synthetic. Do not commit customer data, private project specs, API keys, or internal portfolio data.
 - **Never name portfolio products or link to private V&C app repos** in tracked files. Use generic "private downstream app repo" / "downstream integration" wording. Enforce with `pnpm validate:portfolio-names`; policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md). Maintainer notes belong in gitignored `.local/` or `TODO.local.md` only.
 - Runtime wiring for downstream products belongs in those downstream repos. This repo should expose packages and documented integration surfaces.

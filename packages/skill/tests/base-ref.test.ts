@@ -108,7 +108,7 @@ const DOCS_ASK =
 async function freezeWithBudget(dir: string, budgetYaml: string): Promise<void> {
   await run("extract-cli.js", ["--project", dir, "--text", DOCS_ASK]);
   await run("freeze-cli.js", ["--project", dir, "--approved-by", "tester"]);
-  const contractFile = join(dir, ".conductor", "intent-contract.yaml");
+  const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
   writeFileSync(contractFile, readFileSync(contractFile, "utf8") + budgetYaml, "utf8");
 }
 

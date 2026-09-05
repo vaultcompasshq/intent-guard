@@ -39,7 +39,7 @@ function check(name, cond, detail = "") {
 }
 
 function contractPath(repoPath) {
-  return join(repoPath, ".conductor/intent-contract.yaml");
+  return join(repoPath, ".intent-guard/intent-contract.yaml");
 }
 
 // Set a budget on the frozen contract by rewriting a marked YAML block.

@@ -6,12 +6,12 @@ import {
   mergeConductorConfig,
   type ConductorConfig,
 } from "./config-types.js";
-import { conductorDir } from "./contract-store.js";
+import { stateDir } from "./state-dir.js";
 
 export const CONFIG_FILE = "config.yaml";
 
 export function configPath(projectRoot: string): string {
-  return join(conductorDir(projectRoot), CONFIG_FILE);
+  return join(stateDir(projectRoot), CONFIG_FILE);
 }
 
 export function loadConfig(projectRoot: string): ConductorConfig {

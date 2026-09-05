@@ -70,7 +70,7 @@ async function main() {
 
   const contract = readContract(args.projectRoot);
   if (!contract) {
-    console.error("No draft .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
+    console.error("No draft .intent-guard/intent-contract.yaml found. Run intent-guard-extract first.");
     process.exit(1);
   }
   if (isContractFrozen(contract)) {

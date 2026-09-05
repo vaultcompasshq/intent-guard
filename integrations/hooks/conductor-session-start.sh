@@ -14,7 +14,10 @@ if [[ -z "$RESUME_CMD" ]]; then
   exit 0
 fi
 
-if [[ ! -f "$ROOT/.conductor/intent-contract.yaml" ]]; then
+# The state directory was renamed from .conductor to .intent-guard in 1.3.0.
+# Accept either, so this hook keeps working on a project that has not been
+# migrated yet.
+if [[ ! -f "$ROOT/.intent-guard/intent-contract.yaml" && ! -f "$ROOT/.conductor/intent-contract.yaml" ]]; then
   echo "Intent Guard: no active intent contract found."
   exit 0
 fi

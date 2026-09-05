@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { parse } from "yaml";
 import { loadConfig, configPath } from "../src/config.js";
 import { initConductor } from "../src/init.js";
-import { conductorDir } from "../src/contract-store.js";
+import { stateDir } from "../src/state-dir.js";
 import { loadCursorRules } from "../src/constraints.js";
 import { scoreDrift } from "../src/drift.js";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
@@ -32,13 +32,13 @@ describe("loadConfig", () => {
 });
 
 describe("initConductor", () => {
-  it("creates .conductor skeleton", () => {
-    const dir = mkdtempSync(join(tmpdir(), "conductor-"));
+  it("creates .intent-guard skeleton", () => {
+    const dir = mkdtempSync(join(tmpdir(), "intent-guard-"));
     const result = initConductor(dir);
-    expect(result.created).toContain(".conductor/config.yaml");
-    expect(result.created).toContain(".conductor/index.md");
-    expect(result.created).toContain(".conductor/contracts/");
-    expect(readFileSync(join(conductorDir(dir), "index.md"), "utf8")).toContain(
+    expect(result.created).toContain(".intent-guard/config.yaml");
+    expect(result.created).toContain(".intent-guard/index.md");
+    expect(result.created).toContain(".intent-guard/contracts/");
+    expect(readFileSync(join(stateDir(dir), "index.md"), "utf8")).toContain(
       "Intent Guard Index",
     );
   });
