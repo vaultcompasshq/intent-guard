@@ -24,11 +24,17 @@ export {
   configPath,
   defaultConfigYaml,
   loadConfig,
+  parseConfigText,
 } from "./config.js";
+export {
+  ConfigError,
+  MAX_DRIFT_SCORE,
+  mergeConductorConfig,
+  validateConductorConfig,
+} from "./config-schema.js";
 export {
   DEFAULT_CONDUCTOR_CONFIG,
   driftActionForScore,
-  mergeConductorConfig,
   type ConductorConfig,
   type DriftThresholds,
 } from "./config-types.js";
@@ -49,6 +55,7 @@ export {
   conductorDir,
   freezeContract,
   isContractFrozen,
+  notAFileMessage,
   readContract,
   writeContract,
   type FreezeApproval,
@@ -111,7 +118,27 @@ export {
   type GateResult,
   type GateStatus,
   type CheckGateOptions,
+  type TrustBaseSummary,
 } from "./gate.js";
+export {
+  CONFIG_PROPOSAL_LINE,
+  CONTRACT_PROPOSAL_LINE,
+  CONTROL_INPUT_REASON_PREFIX,
+  SELF_APPROVAL_REASON_PREFIX,
+  TrustBaseError,
+  assertTrustBaseResolvable,
+  controlShapeReason,
+  isRegularFileMode,
+  loadTrustedControls,
+  readArchivedContractAtRef,
+  readControlFileAtHead,
+  readControlFileAtRef,
+  readFileAtRef,
+  selfApprovalReason,
+  type ControlFile,
+  type ControlShapeChange,
+  type TrustedControls,
+} from "./trust-base.js";
 export {
   runDoctor,
   type DoctorFinding,

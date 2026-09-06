@@ -15,6 +15,8 @@ Flags:
   --project <root>            Project root (default: .)
   --staged                    Collect staged paths from git
   --base <ref>                Collect paths changed since the merge base with <ref>
+  --trust-base <ref>          Pull-request mode: read every control input
+                              (contract, config, contracts archive) from <ref>
   --paths a,b                 Explicit changed paths
   --signals "x,y"             Free-text descriptions of what changed
   --message "<text>"          Latest user message
@@ -26,7 +28,12 @@ Flags:
   --version, -v               Print the version
 
 --base is additive with --paths and --staged. It fails closed: an unknown ref
-or a missing merge base exits 2 rather than reporting on an empty path set.`;
+or a missing merge base exits 2 rather than reporting on an empty path set.
+
+--trust-base behaves exactly as it does for check, and the report gains a
+Pull-request mode section naming the ref and every control input the head
+proposes to change. The contract summarised is the base ref's, because that
+is the one the gate judged against.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 function badUsage(): never {
@@ -41,6 +48,7 @@ function parseArgs(argv: string[]) {
   let userMessage = "";
   let staged = false;
   let base = "";
+  let trustBase = "";
   let requireFrozen = true;
   let json = false;
   let previousContract = "";
@@ -65,6 +73,13 @@ function parseArgs(argv: string[]) {
       if (!next || next.startsWith("--")) badUsage();
       base = next;
       i++;
+    } else if (arg === "--trust-base") {
+      // Same shape as --base: a missing value must not quietly mean "not in
+      // pull-request mode", which is the permissive reading of a typo.
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) badUsage();
+      trustBase = next;
+      i++;
     } else if (arg === "--no-require-frozen") {
       requireFrozen = false;
     } else if (arg === "--json") {
@@ -87,6 +102,7 @@ function parseArgs(argv: string[]) {
     userMessage,
     staged,
     base,
+    trustBase,
     requireFrozen,
     json,
     previousContract,
@@ -111,6 +127,7 @@ const report = buildConductorReport(args.projectRoot, {
   requireFrozen: args.requireFrozen,
   previousContract: args.previousContract || undefined,
   withSecrets: args.withSecrets,
+  ...(args.trustBase ? { trustBase: args.trustBase } : {}),
   signals: {
     changedPaths,
     signals: args.signals,

@@ -170,6 +170,7 @@ a blocking threshold. Used by the pre-commit hook / CI.
 | `--project <root>` | target project |
 | `--staged` | auto-collect staged paths via `git diff --cached --name-only` |
 | `--base <ref>` | auto-collect paths changed since the merge base with `<ref>`, via `git diff --name-only <ref>...HEAD` |
+| `--trust-base <ref>` | pull-request mode: read every control input from `<ref>` |
 | `--paths a,b` | explicit changed paths |
 | `--signals "x,y"` | free-text descriptions of what changed (open vocabulary) |
 | `--message "<text>"` | latest user message (pivot detection) |
@@ -177,7 +178,8 @@ a blocking threshold. Used by the pre-commit hook / CI.
 | `--no-require-frozen` | allow a missing contract (still scores drift) |
 | `--json` / `--log` | JSON output / append to `drift-log.jsonl` |
 
-Exit 0 = ok, 1 = blocked, 2 = `--base` could not be resolved.
+Exit 0 = ok, 1 = blocked, 2 = could not run: `--base` or `--trust-base` would
+not resolve, or `config.yaml` was refused by the schema.
 
 ### Checking a pull request with `--base`
 
@@ -207,8 +209,171 @@ or fetch the base ref explicitly before running the gate:
     fetch-depth: 0
 - run: npx intent-guard check --project . --base origin/${{ github.base_ref }}
 ```
+
 When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
 this does not change the gate exit code.
+
+### Pull-request mode with `--trust-base`
+
+`--base` decides **which paths are judged**. `--trust-base` decides **where the
+rules come from**. They are independent, and a pull-request run passes both:
+
+```yaml
+- run: |
+    npx intent-guard check --project . \
+      --base origin/${{ github.base_ref }} \
+      --trust-base origin/${{ github.base_ref }}
+```
+
+Without it, the gate reads its contract and its config out of the branch it is
+judging, so a pull request can widen `in_scope`, delete `protected_paths`,
+write its own `frozen_by: user` and `approval`, and make the change all of
+that forbade, in one commit. The gate agrees with the rewritten contract and
+passes.
+
+With it, every control input comes from `<ref>` via `git show`, and the head
+tree is the thing judged:
+
+| Control input | Read from |
+|---------------|-----------|
+| `.intent-guard/intent-contract.yaml` | `<ref>` |
+| `.intent-guard/config.yaml` | `<ref>` |
+| `.intent-guard/contracts/<id>.yaml` (with `--previous-contract`) | `<ref>` |
+
+Reads only. No checkout switch, no worktree, and nothing written into the
+repository. `.conductor/` is tried after `.intent-guard/` at the base ref, so a
+ref predating the 1.3.0 rename still resolves.
+
+A control input the head changed **never takes effect** and is reported:
+
+```
+✓ Intent Guard gate: ok
+  control inputs from: origin/main
+  proposed: contract changed in this pull request
+```
+
+The `--json` output carries the same facts under `trustBase`:
+
+```json
+{"trustBase":{"ref":"origin/main","proposals":["contract changed in this pull request"],
+  "contractChanged":true,"configChanged":false,"baseContractFound":true,"selfApproval":false}}
+```
+
+**The refusals.** Both fire only while the gate is enforcing a frozen contract,
+so `--no-require-frozen` reports them and blocks on neither.
+
+`Self-approval refused:` when the pull request both changes the contract and
+gives it an approval that is not the base ref's. That is the attack: an
+approval a pull request granted itself. A widening that leaves the approval
+block alone is not refused; it is reported as a proposal and judged against the
+base contract's scope and budgets.
+
+`Control input refused:` when the pull request changed what the contract path
+**is** rather than what the contract says: a symlink, a directory, a deletion,
+or a change to the file's mode bits. A content comparison is blind to all of
+these. Turning the contract into a link whose target holds the approved bytes
+changes nothing any text comparison can see, and is the first half of a
+two-step whose second half edits only the link target, in a pull request where
+the contract path never appears in the diff at all.
+
+Independently of this flag and of pull-request mode, the gate refuses to follow
+a link at any of the three control paths: the contract file, the
+`.intent-guard` directory itself, and `config.yaml`. That is what stops the
+second half from landing on the trusted path, where pull-request mode is not in
+play. A link at the directory level is the same trick one level up, and the
+refusal has to cover it or the rule has a hole in it.
+
+**A genuine re-freeze on a branch trips the self-approval refusal, by design.**
+`intent-guard freeze` writes a new `approved_at`, so re-approving a widened
+contract on the pull-request branch is indistinguishable, from the base ref, from
+forging one. Two ways through, and there is no third:
+
+1. Land the contract change on the base branch first, in its own pull request,
+   then rebase the work onto it. The contract change gets reviewed as the change
+   to the gate that it is.
+2. Configure the human-approval add-on below, which lets a reviewer's approval
+   stand in for the base ref's.
+
+Until then the pull request shows drift against the old contract. That is the
+intended surface: the work really is outside the scope anybody has approved yet.
+
+**A `--trust-base` that resolves to the head commit is refused**, exit 2, even
+though it names a real commit. Control inputs would come from the tree under
+judgment, so the boundary would be off while the report said it was on. The
+comparison is on resolved commits, not spellings, so a branch, a tag or a raw
+SHA pointing at the head commit are all refused alike. The realistic way in is
+`--trust-base ${{ github.sha }}`: on a `pull_request` event with the default
+`actions/checkout`, that SHA is the merge commit, which is HEAD. Pass
+`origin/${{ github.base_ref }}` instead. A branch with no commits ahead of its
+base is refused by the same rule, which is not a case this can tell apart.
+
+**A `--trust-base` whose TREE equals the head's is refused too**, exit 2, even
+when it is a different commit. Two commits can carry one identical tree, and
+then every control input still comes from the tree under judgment while a
+commit comparison waves it through. This is the ordinary shape of a pull
+request's merge ref: what GitHub publishes as `refs/pull/N/merge` is a merge
+commit whose tree, when the base has not moved since the fork, *is* the head
+branch's tree, and `actions/checkout` leaves that commit checked out. A
+workflow passing `--trust-base ${{ github.event.pull_request.head.sha }}` then
+names a different commit holding the same tree. Merging the base into the
+branch changes the head's tree, so a pull request that does that is judged
+normally rather than swallowed by this rule.
+
+**No contract on the base ref** is first adoption, not an attack. The gate
+reports no-contract exactly as it does outside pull-request mode, and names the
+head's contract as a proposal.
+
+It fails closed like `--base`: a ref that will not resolve, and a base
+`config.yaml` the schema refuses, each print one line and exit **2**. A missing
+base is never a reason to fall back to trusting the head.
+
+Outside pull-request mode, behaviour is unchanged except for the link refusal
+above. A pre-commit hook and a direct CLI run on a checkout you control are
+already inside the trust boundary, and their output is byte for byte what it
+was before this flag existed, for every control input that is a regular file at
+the path it is named at.
+
+#### Requiring a human approval as well (optional, workflow-level)
+
+This is not a feature of this tool and there is no flag for it. It describes a
+way of configuring your own repository with GitHub's own controls, written down
+here because it composes with `--trust-base` and because the refusal above sends
+readers looking for it.
+
+Base-ref judgment is the floor and is not configurable. A team that has
+reviewers can additionally require that a contract change carry a **human
+approval** before it takes effect on merge: a required pull-request review, or a
+CODEOWNERS entry for `.intent-guard/**` together with branch protection that
+requires code-owner review. Those controls live in the repository's settings or
+in a workflow on the protected base side, and none of them is ever read from a
+file in the repository.
+
+**Arrange for the workflow itself to be on the protected side.** For a
+same-repo `pull_request` event GitHub runs the workflow file **from the pull
+request head**, so a workflow that merely sits in `.github/workflows` is as
+editable as any other file in the branch: a pull request can drop the
+`--trust-base` argument, or the whole job, in the same commit that carries what
+the gate would have caught. Nothing in this tool can see that, because the tool
+is what was not run. Two ways to close it, and a repository needs one of them:
+
+- Require the check by name in branch protection, so a pull request that
+  removes the job cannot merge on a missing status; or
+- Put the gate in a reusable workflow (or a composite action) held in a
+  protected repository or on a protected ref, and call it with `uses:` so the
+  steps that matter are not in the pull request's copy.
+
+This is a repository-configuration step, not something a flag can do. Say it
+out loud in your own setup docs, because "the workflow is on the protected
+side" is an assumption every claim above rests on.
+
+The reason is the whole point of this flag. A switch that selects between a
+stricter and a weaker mode, stored in a file the pull request can edit, is not
+a setting: the pull request picks the weaker mode, and the switch is the
+vulnerability wearing a settings label. A control that can only tighten is safe
+to offer from the protected side; one that can loosen is not safe anywhere the
+pull request can reach. Teams with reviewers get better ergonomics from it too,
+since an approved contract change can be allowed to settle the drift for that
+pull request rather than waiting for the merge.
 
 ### Change budget
 
@@ -319,6 +484,7 @@ It runs the same gate as `intent-guard check` and exits with the gate result.
 | `--project <root>` | target project |
 | `--staged` | auto-collect staged paths via `git diff --cached --name-only` |
 | `--base <ref>` | auto-collect paths changed since the merge base with `<ref>`, exactly as `check --base` does |
+| `--trust-base <ref>` | pull-request mode, exactly as `check --trust-base` does |
 | `--paths a,b` | explicit changed paths |
 | `--signals "x,y"` | free-text descriptions of what changed |
 | `--message "<text>"` | latest user message |
@@ -335,6 +501,12 @@ paths, signals, and a recommended next action.
 2 and the GitHub Actions checkout note above: `check` and `report` share one
 path-collection module so the two commands cannot see different paths for the
 same flags.
+
+`--trust-base` also behaves exactly as it does for `check`, and adds a
+**Pull-request mode** section at the top of the markdown naming the ref and
+every control input the head proposes to change. The contract summarised is
+the base ref's, because that is the one the gate judged against; summarising
+the head's would print an approver's name the run deliberately ignored.
 
 With `--with-secrets`, the `vault_guard` block reports `blockingMatches` and a
 `blocked` verdict taken from vault-guard's own `run.blocking_matches`, which
@@ -407,9 +579,42 @@ on contract presence).
 |------|---------|
 | `--contract <path>` | contract YAML (required) |
 | `--project <root>` · `--paths` · `--signals` · `--message` · `--log` | as above |
+| `--trust-base <ref>` | take the drift thresholds from `<ref>` |
 | `--ci` | unified CLI only; exit 1 when `block: true` |
 
 JSON: `overall`, `action`, `categories`, `findings`, `message`, `block`.
+
+`--trust-base` belongs here because `--ci` turns this score into an exit code,
+and the thresholds that decide it live in `config.yaml`, which a pull request
+can edit. Only the thresholds move to the base ref: the contract was named by
+the caller with `--contract`, so it is already the caller's own choice on
+either side. A changed config is noted on **stderr** so stdout stays parseable
+JSON. A ref that will not resolve exits 2.
+
+## Project config: `.intent-guard/config.yaml`
+
+Validated on every load, not only by a validate subcommand. A file the schema
+refuses prints one line naming the file and the key, and exits **2**, because
+nothing was judged.
+
+| Rule | Why |
+|------|-----|
+| drift thresholds are numbers from 0 to 100 | the drift score is capped at 100 and every band is tested with `>=`, so a band above 100 can never be entered and setting one is indistinguishable from turning the gate off |
+| `hard_block_on_critical_constraints` is a boolean | a string `"false"` is truthy, so it used to mean the opposite of what it reads as |
+| `drift.mode` is one of `handoff`, `file_write`, `every_turn` | anything else silently did nothing |
+| unknown keys are refused, named by full path | a dropped key is a setting the user believes is in force and is not |
+
+These are bounds on what a value may be, not on what a project may decide. A
+team that only wants to block on maximum drift can still set every band to
+100, and a team that trusts its own critical constraints can still turn
+`hard_block_on_critical_constraints` off.
+
+The path must also be a regular file: a symlinked `config.yaml`, like a
+symlinked contract or a symlinked `.intent-guard` directory, is refused rather
+than followed. The schema floors already bound what a linked config could do,
+so this is the smaller of the two link risks, but one rule that holds for every
+control input is easier to rely on than a rule with an exception nobody can
+remember the shape of.
 
 ## intent-guard correct / intent-guard-correct
 

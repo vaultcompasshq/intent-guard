@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, writeFileSync, existsSync, lstatSync } from "node:fs";
+import { join, relative } from "node:path";
 import { parse, stringify } from "yaml";
 import {
   assertValidIntentContract,
@@ -38,12 +38,60 @@ export function contractPath(
   return join(stateDir(projectRoot), filename);
 }
 
+/**
+ * Why a contract path that is not a regular file is refused, said once.
+ *
+ * Lives here, on the side that both readers already depend on, so the sentence
+ * a user gets does not depend on whether the trusted read or the base-versus-
+ * head comparison noticed first. `isSymlink` rather than a git mode, because
+ * one caller has an lstat and the other has a tree entry, and neither should
+ * have to speak the other's vocabulary to ask for this string.
+ */
+export function notAFileMessage(path: string, isSymlink: boolean): string {
+  return (
+    `the contract path ${path} is ${isSymlink ? "a symlink" : "not a regular file"}. ` +
+    "Intent Guard will not follow a link to a contract: the file it points at is " +
+    "not the file anyone approved, and a later edit to the link target would " +
+    "change the contract without the contract path ever appearing in the diff. " +
+    "Replace it with a regular file."
+  );
+}
+
+/**
+ * The active contract, or null when the project has none.
+ *
+ * The contract path must be a REGULAR FILE, and lstat is what says so.
+ * Following a link here is the second half of a two-step: one change turns
+ * the contract into a symlink whose target holds the approved bytes, which no
+ * content comparison can see, and a later change edits only the link target,
+ * where the contract path itself never appears in the diff. Pull-request mode
+ * refuses the first half; this refuses the second, on the trusted path where
+ * pull-request mode is not in play at all.
+ *
+ * The refusal is an ordinary throw, so it reaches a user through the gate's
+ * existing contract-invalid reason rather than as a new outcome to handle.
+ * Without it the failure was the schema's "/ must be object" against a link
+ * target string, which says nothing about the link.
+ */
 export function readContract(
   projectRoot: string,
   filename = DEFAULT_CONTRACT_FILE,
 ): IntentContract | null {
   const path = contractPath(projectRoot, filename);
-  if (!existsSync(path)) return null;
+  // lstat rather than existsSync, which follows links: a dangling symlink
+  // reads as absent to existsSync, and "there is no contract" is the wrong
+  // answer to "the contract is a broken link".
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch {
+    return null;
+  }
+  if (!stat.isFile()) {
+    throw new Error(
+      notAFileMessage(relative(projectRoot, path) || path, stat.isSymbolicLink()),
+    );
+  }
   const raw = parse(readFileSync(path, "utf8"));
   return assertValidIntentContract(raw);
 }

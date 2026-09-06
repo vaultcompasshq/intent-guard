@@ -84,59 +84,10 @@ export function driftActionForScore(
   return "proceed";
 }
 
-function mergeThresholds(raw: Partial<DriftThresholds>): DriftThresholds {
-  return {
-    info: raw.info ?? DRIFT_THRESHOLDS.info,
-    warn: raw.warn ?? DRIFT_THRESHOLDS.warn,
-    soft_block: raw.soft_block ?? DRIFT_THRESHOLDS.soft_block,
-    hard_block: raw.hard_block ?? DRIFT_THRESHOLDS.hard_block,
-  };
-}
-
-export function mergeConductorConfig(raw: Partial<ConductorConfig>): ConductorConfig {
-  return {
-    version: raw.version ?? DEFAULT_CONDUCTOR_CONFIG.version,
-    drift: {
-      mode: raw.drift?.mode ?? DEFAULT_CONDUCTOR_CONFIG.drift.mode,
-      thresholds: mergeThresholds(raw.drift?.thresholds ?? {}),
-      hard_block_on_critical_constraints:
-        raw.drift?.hard_block_on_critical_constraints ??
-        DEFAULT_CONDUCTOR_CONFIG.drift.hard_block_on_critical_constraints,
-    },
-    coach: {
-      show_when_score_below:
-        raw.coach?.show_when_score_below ??
-        DEFAULT_CONDUCTOR_CONFIG.coach.show_when_score_below,
-      patterns_enabled:
-        raw.coach?.patterns_enabled ??
-        DEFAULT_CONDUCTOR_CONFIG.coach.patterns_enabled,
-    },
-    constraints: {
-      priority_order:
-        raw.constraints?.priority_order ??
-        DEFAULT_CONDUCTOR_CONFIG.constraints.priority_order,
-    },
-    files: {
-      active_contract:
-        raw.files?.active_contract ?? DEFAULT_CONDUCTOR_CONFIG.files.active_contract,
-      contracts_dir:
-        raw.files?.contracts_dir ?? DEFAULT_CONDUCTOR_CONFIG.files.contracts_dir,
-      drift_log: raw.files?.drift_log ?? DEFAULT_CONDUCTOR_CONFIG.files.drift_log,
-    },
-    integrations: {
-      superpowers: {
-        require_contract_before:
-          raw.integrations?.superpowers?.require_contract_before ??
-          DEFAULT_CONDUCTOR_CONFIG.integrations.superpowers.require_contract_before,
-      },
-      downstream_pipeline: {
-        enabled:
-          raw.integrations?.downstream_pipeline?.enabled ??
-          DEFAULT_CONDUCTOR_CONFIG.integrations.downstream_pipeline.enabled,
-        issue_tracker_team_id:
-          raw.integrations?.downstream_pipeline?.issue_tracker_team_id ??
-          DEFAULT_CONDUCTOR_CONFIG.integrations.downstream_pipeline.issue_tracker_team_id,
-      },
-    },
-  };
-}
+/*
+ * mergeConductorConfig used to live here as a field-by-field merge that
+ * accepted anything and dropped anything it did not recognise. It moved to
+ * config-schema.ts in 1.4.0 and validates now. Keeping an unvalidated merge
+ * exported beside the validating one would leave the second door into the
+ * config open, which is the whole thing the schema closes.
+ */

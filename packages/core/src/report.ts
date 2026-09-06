@@ -15,6 +15,7 @@ import {
 } from "./drift.js";
 import { checkGate, type GateResult } from "./gate.js";
 import { readArchivedContract } from "./history.js";
+import { loadTrustedControls, readArchivedContractAtRef } from "./trust-base.js";
 import {
   intersectingTokens,
   tokenize,
@@ -75,6 +76,14 @@ export interface BuildReportOptions {
   signals?: DriftSignals;
   previousContract?: string;
   withSecrets?: boolean;
+  /**
+   * Pull-request mode, passed straight through to the gate. The report then
+   * summarises the contract the gate actually judged against, which is the
+   * base ref's. Summarising the head's would print an approver's name this
+   * run deliberately ignored, and a reviewer reading "approved by" would be
+   * reading the pull request's own claim about itself.
+   */
+  trustBase?: string;
 }
 
 function evidenceTokens(signals: DriftSignals): Set<string> {
@@ -157,11 +166,20 @@ export function buildConductorReport(
   const gate = checkGate(projectRoot, {
     requireFrozen: options.requireFrozen,
     signals,
+    ...(options.trustBase === undefined ? {} : { trustBase: options.trustBase }),
   });
+
+  const trustBase = options.trustBase;
 
   let contract: IntentContract | null = null;
   try {
-    contract = readContract(projectRoot);
+    // The same contract the gate judged against, from the same side. Reading
+    // the head here while the gate read the base would put an "approved by"
+    // line in the report for an approval the run never honoured.
+    contract =
+      trustBase === undefined || trustBase === ""
+        ? readContract(projectRoot)
+        : loadTrustedControls(projectRoot, trustBase).contract;
   } catch {
     contract = null;
   }
@@ -169,7 +187,14 @@ export function buildConductorReport(
   const crossSession =
     options.previousContract && contract
       ? (() => {
-          const previous = readArchivedContract(projectRoot, options.previousContract!);
+          const previous =
+            trustBase === undefined || trustBase === ""
+              ? readArchivedContract(projectRoot, options.previousContract!)
+              : readArchivedContractAtRef(
+                  projectRoot,
+                  trustBase,
+                  options.previousContract!,
+                );
           if (!previous) return undefined;
           return crossSessionDrift(previous, contract!, signals);
         })()
@@ -229,6 +254,27 @@ export function renderConductorReportMarkdown(report: ConductorReport): string {
     `Status: ${report.status}`,
     `Recommendation: ${report.recommendation}`,
   ];
+
+  // First, and before the contract summary, because it changes what every
+  // line under it means: which contract was read, and what the pull request
+  // asked to change about the gate itself.
+  const trust = report.gate.trustBase;
+  if (trust) {
+    lines.push(
+      "",
+      "## Pull-request mode",
+      `- control inputs read from: ${trust.ref}`,
+      ...(trust.proposals.length > 0
+        ? trust.proposals.map((proposal) => `- proposed: ${proposal}`)
+        : ["- no control input changed in this pull request"]),
+    );
+    if (!trust.baseContractFound) {
+      lines.push(`- no contract on ${trust.ref}; a contract here is a proposal`);
+    }
+    if (trust.selfApproval) {
+      lines.push("- refused: the contract change approved itself");
+    }
+  }
 
   if (report.contract) {
     lines.push(

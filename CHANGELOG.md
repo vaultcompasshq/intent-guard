@@ -7,6 +7,140 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-05
+
+Minor bump on all four packages. **The rule: on a pull-request run, every
+control input comes from the base ref and the head tree is the thing judged.**
+A new flag and a new refusal, so this is a minor rather than a patch.
+
+### Added
+
+- **`--trust-base <ref>` on `check`, `report` and `drift`.** Pull-request mode.
+  The frozen contract, `config.yaml`, and the contracts archive are read from
+  `<ref>` with `git show`, and the head tree is judged against them. A control
+  input the head changed never takes effect for the run and is reported on one
+  line: `contract changed in this pull request`, or `config changed in this
+  pull request`. Reads only: no checkout switch, no worktree, and nothing
+  written into the repository. Fails closed, exit 2, when the ref will not
+  resolve; a missing base is never a reason to fall back to trusting the head.
+  Pass it alongside `--base`, which continues to decide only which paths are
+  judged.
+- **A self-approval refusal.** When the gate is enforcing a frozen contract and
+  a pull request both changes the contract and gives it an approval that is not
+  the base ref's, the run fails closed with a reason beginning `Self-approval
+  refused:`. A contract change that leaves the approval block alone is not
+  refused; it is reported as a proposal and judged against the base contract's
+  scope and budgets.
+- **A `Control input refused:` reason** for a pull request that changes what the
+  contract path *is* rather than what the contract says: a symlink, a
+  directory, a deletion, or a change to the file's mode bits. Reported as a
+  proposal in every case, refused while the gate is enforcing a frozen
+  contract.
+- **A `Pull-request mode` section in the markdown report**, and a `trustBase`
+  block in the JSON from `check` and `report`, naming the ref, every proposed
+  control-input change, whether self-approval was refused, and how the head
+  changed the contract file's type or mode.
+
+### Security
+
+- **A pull request could turn the gate off in the same commit that carried what
+  the gate exists to catch.** The gate read its contract and its config out of
+  the tree it was judging, so one commit could widen `in_scope`, delete
+  `budget.protected_paths`, set `allowed_paths` to everything, and write its own
+  `frozen_by: user` plus an `approval` block; the gate agreed with the rewritten
+  contract and returned ok. Closed by `--trust-base`, which is how CI should now
+  invoke the gate on a pull request. Local and pre-commit behaviour is unchanged
+  except for the symlink refusal below, and is pinned byte for byte by a parity
+  test for every control input that is a regular file at the path it names.
+- **`config.yaml` now has a schema and floors, validated on every load.** It had
+  neither, so `hard_block: 101` disabled drift blocking outright, since the
+  drift score is capped at 100 and every band is tested with a
+  greater-or-equal comparison. Thresholds must now be numbers from 0 to 100,
+  `hard_block_on_critical_constraints` must be a boolean, `drift.mode` must be
+  one of the three known modes, and an unknown key is refused by its full path
+  rather than silently dropped. A refused config prints one line and exits 2,
+  because nothing was judged. These bound what a value may be, not what a
+  project may decide.
+- **A trust base that resolves to the commit being judged is refused**, exit 2,
+  even though it names a real commit. `--trust-base HEAD` was accepted and put
+  the boundary back exactly where it started: every control input came from the
+  tree under judgment, no contract change could ever differ from its own base,
+  and the report said pull-request mode was on. The realistic way in is
+  `--trust-base ${{ github.sha }}`, because on a `pull_request` event with the
+  default `actions/checkout` that SHA is the merge commit, which is HEAD. The
+  comparison is on resolved commits, so an alias, a tag or a raw SHA naming the
+  head commit is refused alike.
+- **A trust base whose TREE equals the head's is refused too**, exit 2, even
+  when it is a different commit. The commit comparison alone let the forgery
+  through in the ordinary pull-request shape: what GitHub publishes as
+  `refs/pull/N/merge` is a merge commit whose tree, when the base has not moved
+  since the fork, *is* the head branch's tree, and `actions/checkout` leaves that
+  commit checked out, so `--trust-base ${{ github.event.pull_request.head.sha }}`
+  named a different commit carrying an identical tree and every control input
+  still came from the tree under judgment. Merging the base into the branch
+  changes the head's tree, so a pull request that does that is judged normally.
+- **A control input that is not a regular file at the path it names is refused,
+  everywhere.** Replacing the contract with a link whose target holds the
+  approved bytes changed nothing any content comparison could see, so
+  pull-request mode reported "no control input changed"; once that landed, a
+  second pull request editing only the link target widened the contract without
+  the contract path appearing in its diff at all. All of it is closed, at three
+  paths and on both sides:
+  - the head side of the base-versus-head comparison is read through git rather
+    than from the working tree, so a symlink is compared as the link target
+    string it is and a type or mode change is visible at all;
+  - `readContract` lstats the contract path and refuses to follow a link;
+  - `stateDir` and `ensureStateDir` lstat the `.intent-guard` directory itself
+    and refuse a symlinked state directory, which was the same trick one level
+    up: `isDirectory` used `statSync`, which follows links, so the contract
+    underneath looked like an ordinary file all the way down;
+  - `loadConfig` lstats `config.yaml` for the same reason, so one rule covers
+    every control input rather than one with an exception.
+
+  The last three are a hardening **outside** pull-request mode: they apply to
+  every local run and pre-commit hook, and they narrow behaviour that used to
+  work, so a setup that deliberately links its state directory somewhere else
+  has to put the real directory back. A dangling link now reports itself instead
+  of reading as an absent contract.
+
+### Changed
+
+- **`mergeConductorConfig` validates.** It keeps its name and signature and
+  moves from `config-types` to `config-schema`, and now throws where it used to
+  silently accept. Leaving an unvalidated merge exported beside the validating
+  one would have left the second door into the config open.
+- **Exit 2 now also means a refused config, an unresolvable trust base, or a
+  trust base that is the head commit or carries the head's tree**, in addition
+  to an unresolvable `--base`. It has always meant could-not-run.
+- **An unresolvable trust base is described in plain words.** `--quiet`
+  suppresses git's own explanation, so the message fell back to the exception
+  text and printed `Command failed: git rev-parse --verify --quiet ...` at the
+  user, handing them a command line to run instead of a thing to fix.
+- **A config value of `.nan` or `.inf` is named by the token the user typed.**
+  It was reported as "got null", because `JSON.stringify` renders both that
+  way, which sent a reader looking for an empty value that was nowhere in their
+  file.
+
+### Documentation
+
+- **The workflow that passes `--trust-base` has to be put on the protected side
+  deliberately.** For a same-repo `pull_request` event GitHub runs the workflow
+  file from the pull request head, so the job is as editable as any other file
+  in the branch unless the check is required by name in branch protection or the
+  gate lives in a reusable workflow on a protected ref. The docs asserted the
+  workflow was protected without saying it has to be arranged; both the README
+  and the CLI reference now say so, and say that no flag can detect a job a pull
+  request deleted.
+- **A genuine re-freeze on a branch trips the self-approval refusal, by
+  design**, because `freeze` writes a new approval and from the base ref that is
+  indistinguishable from a forged one. The README and the CLI reference now say
+  it plainly and give the two ways through: land the contract change on the base
+  branch first, or set up the human-approval tightening.
+- **The human-approval tightening is described as repository configuration, not
+  as a feature.** It reads as GitHub's own controls, a required review or a
+  CODEOWNERS entry with branch protection, because there is no flag for it and
+  the previous wording invited readers to look for one.
+
 ## [1.3.1] - 2026-09-05
 
 Patch bump on all four packages. Three security fixes. Two are in files this
