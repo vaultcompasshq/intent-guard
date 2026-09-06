@@ -7,6 +7,63 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-05
+
+Minor bump on all four packages. **The rule: on a pull-request run, every
+control input comes from the base ref and the head tree is the thing judged.**
+A new flag and a new refusal, so this is a minor rather than a patch.
+
+### Added
+
+- **`--trust-base <ref>` on `check`, `report` and `drift`.** Pull-request mode.
+  The frozen contract, `config.yaml`, and the contracts archive are read from
+  `<ref>` with `git show`, and the head tree is judged against them. A control
+  input the head changed never takes effect for the run and is reported on one
+  line: `contract changed in this pull request`, or `config changed in this
+  pull request`. Reads only: no checkout switch, no worktree, and nothing
+  written into the repository. Fails closed, exit 2, when the ref will not
+  resolve; a missing base is never a reason to fall back to trusting the head.
+  Pass it alongside `--base`, which continues to decide only which paths are
+  judged.
+- **A self-approval refusal.** When the gate is enforcing a frozen contract and
+  a pull request both changes the contract and gives it an approval that is not
+  the base ref's, the run fails closed with a reason beginning `Self-approval
+  refused:`. A contract change that leaves the approval block alone is not
+  refused; it is reported as a proposal and judged against the base contract's
+  scope and budgets.
+- **A `Pull-request mode` section in the markdown report**, and a `trustBase`
+  block in the JSON from `check` and `report`, naming the ref, every proposed
+  control-input change, and whether self-approval was refused.
+
+### Security
+
+- **A pull request could turn the gate off in the same commit that carried what
+  the gate exists to catch.** The gate read its contract and its config out of
+  the tree it was judging, so one commit could widen `in_scope`, delete
+  `budget.protected_paths`, set `allowed_paths` to everything, and write its own
+  `frozen_by: user` plus an `approval` block; the gate agreed with the rewritten
+  contract and returned ok. Closed by `--trust-base`, which is how CI should now
+  invoke the gate on a pull request. Local and pre-commit behaviour is
+  unchanged, and is pinned byte for byte by a parity test.
+- **`config.yaml` now has a schema and floors, validated on every load.** It had
+  neither, so `hard_block: 101` disabled drift blocking outright, since the
+  drift score is capped at 100 and every band is tested with a
+  greater-or-equal comparison. Thresholds must now be numbers from 0 to 100,
+  `hard_block_on_critical_constraints` must be a boolean, `drift.mode` must be
+  one of the three known modes, and an unknown key is refused by its full path
+  rather than silently dropped. A refused config prints one line and exits 2,
+  because nothing was judged. These bound what a value may be, not what a
+  project may decide.
+
+### Changed
+
+- **`mergeConductorConfig` validates.** It keeps its name and signature and
+  moves from `config-types` to `config-schema`, and now throws where it used to
+  silently accept. Leaving an unvalidated merge exported beside the validating
+  one would have left the second door into the config open.
+- **Exit 2 now also means a refused config or an unresolvable trust base**, in
+  addition to an unresolvable `--base`. It has always meant could-not-run.
+
 ## [1.3.1] - 2026-09-05
 
 Patch bump on all four packages. Three security fixes. Two are in files this

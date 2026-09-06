@@ -79,7 +79,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.3.1`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.4.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -164,6 +164,39 @@ Intent Guard and vault-guard are independent gates for the same workflow:
 | Secret leakage | `vault-guard scan --staged` | Credentials in staged files |
 
 Use `intent-guard doctor` to verify setup, `intent-guard report --staged` for PR/agent handoffs, and `intent-guard report --staged --with-secrets` when vault-guard is installed.
+
+### Checking a pull request
+
+On CI, pass `--trust-base` as well as `--base`:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- run: |
+    npx intent-guard check --project . \
+      --base origin/${{ github.base_ref }} \
+      --trust-base origin/${{ github.base_ref }}
+```
+
+`--base` says which paths are judged. `--trust-base` says where the rules come
+from: the contract, the config and the contracts archive are read from the base
+ref, so a pull request cannot widen its own contract, delete its protected
+paths, or write its own approval and have the gate agree. A control input the
+branch changed is reported as a proposal and ignored for the run, and a
+contract change that also grants itself a new approval is refused as
+self-approval. Nothing changes for the pre-commit hook or a local run.
+
+**Optional tightening: require a human approval too.** Base-ref judgment is the
+floor and is not a setting. A team with reviewers may additionally require that
+a contract change carry a human approval before it takes effect on merge, as a
+pull-request review approval or a CODEOWNERS approval on `.intent-guard/**`.
+Configure that in the CI workflow or in branch protection, which live on the
+protected base side, and never in the in-repo config: a mode switch stored in a
+file the pull request can edit is one the pull request sets to whichever mode is
+weaker, so a knob that can only tighten is safe to offer and a knob that can
+loosen is the vulnerability wearing a settings label. See
+[docs/cli-reference.md](./docs/cli-reference.md) for the full behaviour.
 
 ### Develop from source
 
