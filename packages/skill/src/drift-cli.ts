@@ -2,9 +2,11 @@
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import {
+  CONFIG_PROPOSAL_LINE,
   appendDriftEvent,
   formatDriftMessage,
   loadConfig,
+  loadTrustedControls,
   scoreDrift,
 } from "@vaultcompass/intent-guard-core";
 import { assertValidIntentContract } from "@vaultcompass/intent-guard-schema";
@@ -18,16 +20,25 @@ the Change Budget. Use intent-guard check to enforce.
 Flags:
   --contract <path>    Contract file to score (required)
   --project <root>     Project root for config and logs (default: .)
+  --trust-base <ref>   Pull-request mode: take the drift thresholds from <ref>
   --paths a,b          Changed paths
   --signals "x,y"      Free-text descriptions of what changed
   --message "<text>"   Latest user message
   --log                Append the result to the drift log
   --help, -h           Show this help
-  --version, -v        Print the version`;
+  --version, -v        Print the version
+
+--trust-base belongs here because intent-guard drift --ci turns this score
+into an exit code, and the thresholds that decide it live in a file a pull
+request can edit. The contract is named explicitly with --contract, so it is
+the caller's own choice on either side and is never read from the ref. A ref
+that will not resolve exits 2, and a changed config is noted on stderr so
+stdout stays parseable JSON.`;
 
 function parseArgs(argv: string[]) {
   let contractPath = "";
   let projectRoot = ".";
+  let trustBase = "";
   const paths: string[] = [];
   const signals: string[] = [];
   let userMessage = "";
@@ -41,6 +52,14 @@ function parseArgs(argv: string[]) {
       contractPath = argv[++i];
     } else if (arg === "--project" && argv[i + 1]) {
       projectRoot = argv[++i];
+    } else if (arg === "--trust-base") {
+      const next = argv[i + 1];
+      if (!next || next.startsWith("--")) {
+        console.error(USAGE);
+        process.exit(1);
+      }
+      trustBase = next;
+      i++;
     } else if (arg === "--paths" && argv[i + 1]) {
       paths.push(...argv[++i].split(",").filter(Boolean));
     } else if (arg === "--signals" && argv[i + 1]) {
@@ -56,7 +75,17 @@ function parseArgs(argv: string[]) {
     }
   }
 
-  return { contractPath, projectRoot, paths, signals, userMessage, log, help, version };
+  return {
+    contractPath,
+    projectRoot,
+    trustBase,
+    paths,
+    signals,
+    userMessage,
+    log,
+    help,
+    version,
+  };
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -72,7 +101,19 @@ if (!args.contractPath) {
 
 const raw = parse(readFileSync(args.contractPath, "utf8"));
 const contract = assertValidIntentContract(raw);
-const config = loadConfig(args.projectRoot);
+
+// The thresholds, and only the thresholds, move to the base ref. The contract
+// was named by the caller, so it is already outside the file set a pull
+// request could quietly swap.
+const trusted = args.trustBase
+  ? loadTrustedControls(args.projectRoot, args.trustBase)
+  : null;
+const config = trusted === null ? loadConfig(args.projectRoot) : trusted.config;
+if (trusted !== null && trusted.configChanged) {
+  // stderr, because stdout is JSON that intent-guard drift --ci parses.
+  console.error(`intent-guard: ${CONFIG_PROPOSAL_LINE} (scored against ${trusted.ref})`);
+}
+
 const score = scoreDrift(
   contract,
   {

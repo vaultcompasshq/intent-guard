@@ -119,7 +119,21 @@ export {
   type CheckGateOptions,
   type TrustBaseSummary,
 } from "./gate.js";
-// PLACEHOLDER-TRUST-BASE-EXPORTS
+export {
+  CONFIG_PROPOSAL_LINE,
+  CONTRACT_PROPOSAL_LINE,
+  SELF_APPROVAL_REASON_PREFIX,
+  TrustBaseError,
+  assertTrustBaseResolvable,
+  loadTrustedControls,
+  readArchivedContractAtRef,
+  readControlFileAtHead,
+  readControlFileAtRef,
+  readFileAtRef,
+  selfApprovalReason,
+  type ControlFile,
+  type TrustedControls,
+} from "./trust-base.js";
 export {
   runDoctor,
   type DoctorFinding,

@@ -18,7 +18,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { StateDirError } from "@vaultcompass/intent-guard-core";
+import { ConfigError, StateDirError, TrustBaseError } from "@vaultcompass/intent-guard-core";
 
 /**
  * A refused state directory is a designed outcome with a message written for a
@@ -28,9 +28,21 @@ import { StateDirError } from "@vaultcompass/intent-guard-core";
  * to fix. Installed on import because every one of the sixteen bins imports
  * this module, so there is no entry point left to forget it.
  *
+ * Two more designed outcomes join it, and both exit 2 rather than 1. A config
+ * file the schema refuses and a base ref that will not resolve are both
+ * COULD NOT RUN: nothing was judged, so reporting either as exit 1 would say
+ * the gate blocked the change, and a caller that only distinguishes zero from
+ * non-zero would read "your config is broken" as "your code is wrong". Exit 2
+ * is the code this tool already uses for a base ref it could not resolve, and
+ * the umbrella already treats anything above 1 as could-not-run.
+ *
  * Anything else keeps Node's own behaviour: the stack, then exit 1.
  */
 process.on("uncaughtException", (error) => {
+  if (error instanceof ConfigError || error instanceof TrustBaseError) {
+    console.error(error.message);
+    process.exit(2);
+  }
   if (error instanceof StateDirError) {
     console.error(error.message);
   } else {
