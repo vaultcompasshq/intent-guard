@@ -8,6 +8,12 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # id-token: write stays at job scope rather than a publish-only job:
+    # GitHub grants permissions per job, not per step, so narrowing it would
+    # mean splitting publish into its own job and shipping the built packages
+    # between jobs as artifacts, which is not a small change. The tag-ancestry
+    # check below is what keeps an off-main tag from ever reaching the publish
+    # step that uses this token.
     permissions:
       contents: write
       id-token: write
@@ -24,6 +30,38 @@ jobs:
           node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
+
+      # Runs before install, build, test and publish on purpose. This workflow
+      # fires on any "v*" tag, and "git tag v9.9.9 <any-commit> && git push
+      # --tags" fires it from any commit, on or off main. Without this check a
+      # tag pushed at a commit off main walks straight into an OIDC trusted
+      # publish to the latest dist-tag, around branch protection, with a real
+      # tag and a matching GitHub Release to show for it. The job grants
+      # id-token: write, so anyone who can push a tag could publish arbitrary
+      # code under the package names.
+      #
+      # actions/checkout@v4 uses its default fetch-depth (1) above, so this
+      # job's working copy holds only the tagged commit, with no history
+      # connecting it to origin/main and no origin/main ref yet. Unshallow
+      # first (only when the repo actually is shallow, since --unshallow on a
+      # complete repo is a hard error), then fetch main by name into an
+      # explicit local ref, since a tag-triggered checkout never sets one up.
+      #
+      # Ported from dep-guard's release.yml. Per the family release-discipline
+      # rule this guard is first exercised on the next real tag push, so it is
+      # placed early and cheaply where a disposable tag can prove it.
+      - name: Assert the tagged commit is on main
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+            git fetch --unshallow origin
+          fi
+          git fetch origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points at ${GITHUB_SHA}, which is not an ancestor of origin/main. A tag pushed at a commit off main would otherwise walk straight into an OIDC trusted publish around branch protection. Refusing to publish."
+            exit 1
+          fi
+          echo "Ancestry check passed: ${GITHUB_SHA} is on origin/main."
 
       - name: Install
         run: pnpm install --frozen-lockfile
