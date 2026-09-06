@@ -7,6 +7,9 @@ name: Intent Guard and Vault Guard
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   guardrails:
     runs-on: ubuntu-latest
@@ -30,18 +33,27 @@ jobs:
       - name: Collect changed paths
         id: changed
         shell: bash
+        # github.base_ref is attacker-influenced only in name, but a step
+        # output built from file names is not: pass both through env and read
+        # them as shell variables, never as ${{ }} inside the run body, so a
+        # branch or file named with a $(...) or backtick payload is data, not
+        # code, when bash sees it.
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          paths="$(git -c core.quotePath=false diff --name-only "origin/${{ github.base_ref }}...HEAD" | paste -sd, -)"
+          git fetch origin "$BASE_REF" --depth=1
+          paths="$(git -c core.quotePath=false diff --name-only "origin/$BASE_REF...HEAD" | paste -sd, -)"
           echo "paths=${paths}" >> "$GITHUB_OUTPUT"
 
       # `check` runs the full gate (drift + change-budget enforcement), matching
       # the pre-commit hook. `drift` is score-only and skips the budget.
       - name: Check intent + budget
+        env:
+          CHANGED: ${{ steps.changed.outputs.paths }}
         run: |
           pnpm dlx @vaultcompass/intent-guard@latest check \
             --project . \
-            --paths "${{ steps.changed.outputs.paths }}"
+            --paths "$CHANGED"
 
       - name: Check secrets
         run: npx --yes @vaultcompass/vault-guard@latest -- scan . --format text

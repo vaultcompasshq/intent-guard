@@ -7,6 +7,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-05
+
+Patch bump on all four packages. Three security fixes. Two are in files this
+package ships as samples or uses only at release time, and one is in the
+`import-spec` code path.
+
+### Security
+
+- **`import-spec` no longer follows a symlink out of the project or reads an
+  unbounded file.** The spec bridge resolved any path with no containment
+  check and read it with a call that follows symlinks, with no size cap, and
+  auto-discovery takes the newest markdown under `docs/superpowers/specs`. A
+  pull request that dropped a symlink there pointing at any local file made a
+  maintainer running `import-spec` read that file into the contract's
+  `original_ask` and print it to stdout. Both discovered and explicitly passed
+  spec and plan paths are now canonicalised and required to sit inside the
+  project, and reads are capped at 2 MiB with a clear error. Contained-only is
+  the default and the only mode today; a deliberate escape flag can widen it
+  later.
+- **The shipped GitHub Actions samples no longer interpolate untrusted text
+  into a shell script.** Both samples in `integrations/github-actions` built a
+  `run` body by substituting `github.base_ref` and a step output straight into
+  the script with the GitHub expression syntax, which is textual substitution
+  performed before the shell runs. A pull request that added a file whose name
+  held a command substitution or backtick payload executed arbitrary commands
+  on the runner of every repository that copied a sample. Both values now pass
+  through the step `env` block and are read as quoted shell variables, and each
+  sample declares a minimal `contents: read` permission block.
+- **The release workflow refuses to publish a tag that is not on `main`.**
+  `release.yml` fires on any `v*` tag and grants the release job
+  `id-token: write` with no ancestry check, so anyone who could push a tag
+  could publish arbitrary code to the latest dist-tag around branch
+  protection. The workflow now refuses unless the tagged commit is an ancestor
+  of `origin/main`, before install, build, and publish. This guard is first
+  exercised on the next real tag push.
+
 ## [1.3.0] - 2026-09-05
 
 Minor bump on all four packages. There is one user-visible change. The

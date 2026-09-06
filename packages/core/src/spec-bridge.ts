@@ -1,5 +1,11 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ChangeBudget, IntentContract } from "@vaultcompass/intent-guard-schema";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
@@ -140,12 +146,63 @@ function resolvePath(projectRoot: string, path: string): string {
   return path.startsWith("/") ? path : join(projectRoot, path);
 }
 
-function readOptional(role: SpecBridgeFile["role"], path?: string): SpecBridgeFile | null {
+// A spec or plan is prose a human wrote, not a data file: a few hundred
+// kilobytes is already a large one. The cap exists so a symlink or an
+// explicit path aimed at something enormous cannot pull an unbounded read
+// into the contract and stdout, and it fails closed with a clear error rather
+// than reading a truncated prefix.
+const MAX_SPEC_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The real path a spec or plan resolves to must sit inside the project. Both
+ * the candidate and projectRoot are canonicalised with realpathSync, so a
+ * symlink anywhere along either side resolves to its target before the
+ * containment test. import-spec auto-discovers the newest markdown under a
+ * repository directory and also accepts explicit --spec/--plan paths, so
+ * without this a pull request that dropped a symlink under
+ * docs/superpowers/specs pointing at any local file would have a maintainer
+ * read that file into the contract's original_ask and print it to stdout.
+ *
+ * Contained-only is the default and the only mode today. A deliberate escape
+ * flag could widen it later; there is no supported way to point outside the
+ * tree on purpose right now, so none is preserved.
+ */
+function assertContained(projectRoot: string, path: string): string {
+  const realRoot = realpathSync(projectRoot);
+  const realPath = realpathSync(path);
+  const rel = relative(realRoot, realPath);
+  // An empty rel is the root itself; a rel that is ".." or begins a ".."
+  // segment, or is absolute, has climbed out of the tree.
+  const escapes =
+    rel === "" ||
+    rel === ".." ||
+    rel.startsWith(`..${sep}`) ||
+    isAbsolute(rel);
+  if (escapes) {
+    throw new Error(
+      `Refusing to read a spec outside the project: ${path} resolves to ${realPath}, which is not contained under ${realRoot}.`,
+    );
+  }
+  return realPath;
+}
+
+function readOptional(
+  role: SpecBridgeFile["role"],
+  projectRoot: string,
+  path?: string,
+): SpecBridgeFile | null {
   if (!path || !existsSync(path)) return null;
+  const realPath = assertContained(projectRoot, path);
+  const size = statSync(realPath).size;
+  if (size > MAX_SPEC_BYTES) {
+    throw new Error(
+      `Spec file too large to import: ${path} is ${size} bytes, over the ${MAX_SPEC_BYTES}-byte limit.`,
+    );
+  }
   return {
     role,
     path,
-    content: readFileSync(path, "utf8"),
+    content: readFileSync(realPath, "utf8"),
   };
 }
 
@@ -219,18 +276,21 @@ function readSpecKitFiles(
   return [
     readOptional(
       "requirements",
+      projectRoot,
       options.requirementsPath
         ? resolvePath(projectRoot, options.requirementsPath)
         : join(specDir, SPEC_KIT_FILES.requirements),
     ),
     readOptional(
       "design",
+      projectRoot,
       options.designPath
         ? resolvePath(projectRoot, options.designPath)
         : join(specDir, SPEC_KIT_FILES.design),
     ),
     readOptional(
       "tasks",
+      projectRoot,
       options.tasksPath
         ? resolvePath(projectRoot, options.tasksPath)
         : join(specDir, SPEC_KIT_FILES.tasks),
@@ -252,15 +312,17 @@ function readKiroFiles(
         ]);
 
   return [
-    readOptional("requirements", requirementsPath),
+    readOptional("requirements", projectRoot, requirementsPath),
     readOptional(
       "design",
+      projectRoot,
       options.designPath
         ? resolvePath(projectRoot, options.designPath)
         : join(specDir, KIRO_FILES.design),
     ),
     readOptional(
       "tasks",
+      projectRoot,
       options.tasksPath
         ? resolvePath(projectRoot, options.tasksPath)
         : join(specDir, KIRO_FILES.tasks),
@@ -271,9 +333,10 @@ function readKiroFiles(
 function readRequired(
   role: SpecBridgeFile["role"],
   label: string,
+  projectRoot: string,
   path: string,
 ): SpecBridgeFile {
-  const file = readOptional(role, path);
+  const file = readOptional(role, projectRoot, path);
   if (!file) throw new Error(`${label} not found: ${path}`);
   return file;
 }
@@ -313,17 +376,18 @@ function readSuperpowersFiles(
         : discoverSuperpowersPlan(projectRoot, specPath);
 
   return [
-    readRequired("requirements", "Superpowers spec", specPath),
+    readRequired("requirements", "Superpowers spec", projectRoot, specPath),
     options.designPath
       ? readRequired(
           "design",
           "Design file",
+          projectRoot,
           resolvePath(projectRoot, options.designPath),
         )
       : null,
     options.planPath != null
-      ? readRequired("tasks", "Superpowers plan", planPath as string)
-      : readOptional("tasks", planPath),
+      ? readRequired("tasks", "Superpowers plan", projectRoot, planPath as string)
+      : readOptional("tasks", projectRoot, planPath),
   ].filter((file): file is SpecBridgeFile => file != null);
 }
 
