@@ -24,11 +24,17 @@ export {
   configPath,
   defaultConfigYaml,
   loadConfig,
+  parseConfigText,
 } from "./config.js";
+export {
+  ConfigError,
+  MAX_DRIFT_SCORE,
+  mergeConductorConfig,
+  validateConductorConfig,
+} from "./config-schema.js";
 export {
   DEFAULT_CONDUCTOR_CONFIG,
   driftActionForScore,
-  mergeConductorConfig,
   type ConductorConfig,
   type DriftThresholds,
 } from "./config-types.js";
@@ -111,7 +117,9 @@ export {
   type GateResult,
   type GateStatus,
   type CheckGateOptions,
+  type TrustBaseSummary,
 } from "./gate.js";
+// PLACEHOLDER-TRUST-BASE-EXPORTS
 export {
   runDoctor,
   type DoctorFinding,
