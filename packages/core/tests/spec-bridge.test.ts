@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { importSpecContract } from "../src/spec-bridge.js";
@@ -524,6 +530,62 @@ describe("spec bridge: superpowers", () => {
     const imported = importSpecContract(dir, { format: "superpowers" });
 
     expect(imported.files[0].path).toBe(join(specs, "2026-09-02-latest-design.md"));
+  });
+
+  it("refuses a discovered spec that symlinks outside the project root", () => {
+    const dir = tmpProject();
+    const specs = join(dir, "docs", "superpowers", "specs");
+    mkdirSync(specs, { recursive: true });
+    mkdirSync(join(dir, "docs", "superpowers", "plans"), { recursive: true });
+    // A secret file living outside the project.
+    const outside = mkdtempSync(join(tmpdir(), "conductor-spec-outside-"));
+    const secret = join(outside, "secret.md");
+    writeFileSync(secret, "# Secret\n\ntop secret contents\n", "utf8");
+    // A pull request drops a symlink into the discovered specs directory
+    // pointing at that outside file.
+    symlinkSync(secret, join(specs, "2026-09-05-evil-design.md"));
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /outside the project/i,
+    );
+  });
+
+  it("refuses an explicit spec path that symlinks outside the project root", () => {
+    const dir = tmpProject();
+    const specs = join(dir, "docs", "superpowers", "specs");
+    mkdirSync(specs, { recursive: true });
+    const outside = mkdtempSync(join(tmpdir(), "conductor-spec-outside-"));
+    const secret = join(outside, "secret.md");
+    writeFileSync(secret, "# Secret\n\ntop secret contents\n", "utf8");
+    symlinkSync(secret, join(specs, "2026-09-05-evil-design.md"));
+
+    expect(() =>
+      importSpecContract(dir, {
+        format: "superpowers",
+        specPath: "docs/superpowers/specs/2026-09-05-evil-design.md",
+      }),
+    ).toThrow(/outside the project/i);
+  });
+
+  it("reads an in-root spec normally", () => {
+    const dir = superpowersProject("2026-09-05-inroot-design.md");
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+
+    expect(imported.files.map((file) => file.role)).toEqual(["requirements"]);
+    expect(imported.contract.original_ask).toMatch(/Import superpowers spec/);
+  });
+
+  it("refuses a spec larger than the size cap", () => {
+    const dir = tmpProject();
+    const specs = join(dir, "docs", "superpowers", "specs");
+    mkdirSync(specs, { recursive: true });
+    const huge = `# Huge\n\n${"x".repeat(3 * 1024 * 1024)}\n`;
+    writeFileSync(join(specs, "2026-09-05-huge-design.md"), huge, "utf8");
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /too large/i,
+    );
   });
 
   it("keeps fenced code out of the drafted contract", () => {
