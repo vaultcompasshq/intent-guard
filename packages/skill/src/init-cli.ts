@@ -4,8 +4,9 @@ import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js"
 
 const USAGE = `Usage: intent-guard init [flags]
 
-Create a .conductor project skeleton: config, contracts directory, and the
-generated index.
+Create a .intent-guard project skeleton: config, contracts directory, and the
+generated index. Before 1.3.0 this directory was named .conductor; an existing
+one is renamed on the first write.
 
 Flags:
   --project <root>   Project root (default: .)
@@ -48,13 +49,15 @@ if (args.version) printVersion();
 const result = initConductor(args.projectRoot);
 
 if (args.human) {
-  console.log(`Intent Guard initialized in ${result.conductor_dir}`);
+  console.log(`Intent Guard initialized in ${result.state_dir}`);
   if (result.created.length > 0) {
     console.log(`Created: ${result.created.join(", ")}`);
   }
   if (result.skipped.length > 0) {
     console.log(`Skipped (already present): ${result.skipped.join(", ")}`);
   }
+  console.log("");
+  console.log(result.gitignore_hint);
   console.log("");
   console.log("Next steps:");
   for (const step of result.next_steps) {

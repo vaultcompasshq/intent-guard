@@ -14,7 +14,12 @@ intent-guard-check --project . --staged
 
 Renamed in 1.2.0: the binary was `conductor` and the per-command bins were
 `conductor-*` through 1.1.0. The old names are gone, so update any hook or
-script that still calls them. The `.conductor/` project directory is unchanged.
+script that still calls them.
+
+Renamed in 1.3.0: the per-project state directory is `.intent-guard/`, not
+`.conductor/`. An existing `.conductor/` is read with a notice and renamed on
+the first write; both present is a hard error. See
+[docs/schemas/directory-layout.md](./schemas/directory-layout.md).
 
 The session lifecycle: **coach → extract/import-spec (draft) → freeze
 (approve) → check (gate) → report/rules → pivot/correct → brief/resume**.
@@ -115,7 +120,7 @@ repo with an existing layout resolves the way it always did.
 Two things to look for in the draft before freezing it. A plan's prose often
 carries machine-specific absolute paths (a `Run: pnpm --dir /Users/...` line, for
 example), and those land in the drafted contract verbatim, so scrub them during
-review: `.conductor/intent-contract.yaml` is a committed file. And an
+review: `.intent-guard/intent-contract.yaml` is a committed file. And an
 unterminated fence swallows the rest of the document, because the fence toggle
 never flips back, so a plan with an unclosed block contributes nothing after it.
 
@@ -362,7 +367,8 @@ Diagnose whether a project is ready to use Intent Guard before a gate fails.
 | `--project <root>` | target project |
 | `--json` | machine-readable output |
 
-Checks include `.conductor/config.yaml`, active contract validity, frozen
+Checks include which state directory is in use and whether a legacy
+`.conductor/` remains, `.intent-guard/config.yaml`, active contract validity, frozen
 approval state, archived contracts, generated index freshness, package version,
 visible hook/workflow integrations, and optional vault-guard pairing signals.
 Missing setup or an invalid/unfrozen contract exits `1`; warnings such as stale
@@ -458,18 +464,19 @@ a resumed agent session after context compaction or a new day.
 
 ## intent-guard index / intent-guard-index
 
-Render or regenerate `.conductor/index.md` from real contract history, pivots,
+Render or regenerate `.intent-guard/index.md` from real contract history, pivots,
 constraints, and acknowledged corrections.
 
 | Flag | Meaning |
 |------|---------|
 | `--project <root>` | target project |
-| `--write` | write `.conductor/index.md`; default prints markdown |
+| `--write` | write `.intent-guard/index.md`; default prints markdown |
 | `--json` | machine-readable output |
 
 ## intent-guard init / intent-guard-init
 
-Create the `.conductor/` skeleton (`config.yaml`, `index.md`, `contracts/`).
+Create the `.intent-guard/` skeleton (`config.yaml`, `index.md`, `contracts/`).
+An existing `.conductor/` from before 1.3.0 is renamed rather than duplicated.
 
 | Flag | Meaning |
 |------|---------|
@@ -477,4 +484,5 @@ Create the `.conductor/` skeleton (`config.yaml`, `index.md`, `contracts/`).
 | `--json` | JSON output with `next_steps` (default) |
 | `--human` | readable output with next-step hints |
 
-JSON includes `next_steps` with the recommended lifecycle commands after init.
+JSON includes `state_dir`, `next_steps` with the recommended lifecycle commands
+after init, and `gitignore_hint` saying what to commit and what to ignore.

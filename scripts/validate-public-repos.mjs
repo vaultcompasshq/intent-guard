@@ -1,4 +1,23 @@
 #!/usr/bin/env node
+//
+// Read this before quoting the pass count.
+//
+// This harness measures LAYOUT COMPATIBILITY, not drift-detection accuracy.
+// Against each repository it runs init, extract on an ask this file wrote,
+// freeze, and doctor, then stages three synthetic probes whose expected
+// verdicts follow from the file path alone: a README append that the contract
+// allows, and a bare newline appended to a source or package file, with and
+// without a drift signal, that the contract disallows. A pass means the CLI
+// produced the expected verdict on those three probes across eight real
+// repository layouts, so it found a README, found a source or package file,
+// and ran the whole lifecycle without tripping on anything in the tree.
+//
+// It says nothing about whether drift detection is right on a real change. No
+// probe here is a judgment call: none is a genuine change a person made, and
+// none is a case where the correct verdict is arguable. Eight identical rows
+// are the expected shape of a good result, not eight independent confirmations
+// of accuracy, and "8/8" is not an accuracy figure.
+//
 import { spawnSync } from "node:child_process";
 import {
   appendFileSync,
@@ -299,6 +318,20 @@ function renderReport({ revision, results }) {
     `**Intent Guard revision:** \`${revision}\``,
     "**Mode:** local built CLI, public repos cloned into a temporary workdir, no upstream changes.",
     "",
+    "## Read this before quoting the pass count",
+    "",
+    "**This measures layout compatibility, not drift-detection accuracy.** A pass",
+    "means the CLI produced the expected verdicts on three synthetic probes whose",
+    "answers follow from the file path alone, across real repository layouts: it",
+    "found a README, found a source or package file, and ran init, extract, freeze,",
+    "doctor and check without tripping on anything in the tree.",
+    "",
+    "It does not measure whether drift detection is right on a real change. No probe",
+    "below is a change a person actually made, and none is a case where the correct",
+    "verdict is arguable. Identical rows are the expected shape of a good result, not",
+    "independent confirmations of accuracy, and the pass count is not an accuracy",
+    "figure.",
+    "",
     "## Repos",
     "",
     "| Repo | Init | Extract | Freeze | Doctor | README pass | Source/package block | Path-only block |",
@@ -313,7 +346,8 @@ function renderReport({ revision, results }) {
 
   lines.push(
     "",
-    `Passed \`${passed}/${results.length}\`.`,
+    `Passed \`${passed}/${results.length}\` repository layouts. This is a layout`,
+    "compatibility count, not an accuracy score. See the section above.",
     "",
     "## Controls",
     "",

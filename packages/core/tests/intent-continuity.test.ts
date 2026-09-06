@@ -59,7 +59,7 @@ describe("intent continuity", () => {
       "ic-20260701-aaaaaa",
     ]);
     expect(archivedContractPath(dir, older.contract_id)).toContain(
-      ".conductor/contracts/ic-20260701-aaaaaa.yaml",
+      ".intent-guard/contracts/ic-20260701-aaaaaa.yaml",
     );
   });
 

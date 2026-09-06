@@ -72,7 +72,7 @@ if (!args.change) {
 
 const contract = readContract(args.projectRoot);
 if (!contract) {
-  console.error("No .conductor/intent-contract.yaml found. Run intent-guard-extract first.");
+  console.error("No .intent-guard/intent-contract.yaml found. Run intent-guard-extract first.");
   process.exit(1);
 }
 

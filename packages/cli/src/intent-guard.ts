@@ -28,7 +28,7 @@ type Command = keyof typeof COMMANDS;
 const HELP = `Usage: intent-guard <command> [flags]
 
 Commands:
-  init      Create a .conductor project skeleton
+  init      Create a .intent-guard project skeleton
   coach     Score a prompt for scope and clarity risks
   extract   Draft an unfrozen Intent Contract from an ask
   import-spec Import Spec Kit, Kiro, or superpowers artifacts as a draft
@@ -42,7 +42,7 @@ Commands:
   report    Emit a PR/CI handoff report
   rules     Inspect project rule files
   resume    Emit a Session Brief plus recent history
-  index     Render or regenerate .conductor/index.md
+  index     Render or regenerate .intent-guard/index.md
   pivot     Record an intentional scope change
 
 Global flags:
@@ -64,13 +64,14 @@ Examples:
   intent-guard rules audit --project .
   intent-guard check --project . --staged
   intent-guard check --project . --base origin/main
-  intent-guard drift --ci --contract .conductor/intent-contract.yaml --paths src/app/api/export/route.ts
+  intent-guard drift --ci --contract .intent-guard/intent-contract.yaml --paths src/app/api/export/route.ts
 
 For command flags, see docs/cli-reference.md. Per-command bins such as
 intent-guard-check and intent-guard-resume come from intent-guard-skill.
 
-This tool was published as conductor through 1.1.0. The project directory is
-still .conductor; only the package and binary names changed.`;
+This tool was published as conductor through 1.1.0. Its project directory kept
+that name until 1.3.0, which renamed it to .intent-guard. An existing
+.conductor directory is read as-is and renamed on the first write.`;
 
 function packageVersion(): string {
   const pkgUrl = new URL("../package.json", import.meta.url);

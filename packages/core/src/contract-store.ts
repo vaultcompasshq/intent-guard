@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import {
@@ -6,19 +6,36 @@ import {
   type IntentContract,
 } from "@vaultcompass/intent-guard-schema";
 import { archiveContract } from "./history.js";
+import { LEGACY_STATE_DIR, ensureStateDir, stateDir } from "./state-dir.js";
 
-export const CONDUCTOR_DIR = ".conductor";
+/**
+ * The pre-1.3.0 state directory name, `.conductor`.
+ *
+ * @deprecated since 1.3.0. Use `STATE_DIR` for the directory this tool now
+ * writes, or `LEGACY_STATE_DIR`, which this aliases, for the old name. Its
+ * value is frozen at what it meant in 1.2 so that code compiled against it
+ * keeps behaving the same for one minor release. Removed in 2.0.
+ */
+export const CONDUCTOR_DIR = LEGACY_STATE_DIR;
 export const DEFAULT_CONTRACT_FILE = "intent-contract.yaml";
 
+/**
+ * The pre-1.3.0 state directory path, `<projectRoot>/.conductor`.
+ *
+ * @deprecated since 1.3.0. Use `stateDir()` to resolve the directory to read
+ * from, or `ensureStateDir()` for the directory to write to. This is a plain
+ * join, frozen at its 1.2 behaviour: it does not resolve between the two
+ * directory names, never writes to stderr, and never throws. Removed in 2.0.
+ */
 export function conductorDir(projectRoot: string): string {
-  return join(projectRoot, CONDUCTOR_DIR);
+  return join(projectRoot, LEGACY_STATE_DIR);
 }
 
 export function contractPath(
   projectRoot: string,
   filename = DEFAULT_CONTRACT_FILE,
 ): string {
-  return join(conductorDir(projectRoot), filename);
+  return join(stateDir(projectRoot), filename);
 }
 
 export function readContract(
@@ -37,8 +54,7 @@ export function writeContract(
   filename = DEFAULT_CONTRACT_FILE,
 ): string {
   assertValidIntentContract(contract);
-  const dir = conductorDir(projectRoot);
-  mkdirSync(dir, { recursive: true });
+  const dir = ensureStateDir(projectRoot);
   const path = join(dir, filename);
   writeFileSync(path, stringify(contract), "utf8");
   if (

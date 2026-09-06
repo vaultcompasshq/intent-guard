@@ -51,14 +51,31 @@ async function frozenProjectWith(text: string): Promise<string> {
 }
 
 describe("conductor-init", () => {
-  it("creates the .conductor skeleton", async () => {
+  it("creates the .intent-guard skeleton", async () => {
     const dir = tmpProject();
     const res = await run("init-cli.js", ["--project", dir]);
     expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
-    expect(out.created).toContain(".conductor/config.yaml");
+    expect(out.created).toContain(".intent-guard/config.yaml");
     expect(out.next_steps?.length).toBeGreaterThan(0);
-    expect(existsSync(join(dir, ".conductor", "config.yaml"))).toBe(true);
+    expect(existsSync(join(dir, ".intent-guard", "config.yaml"))).toBe(true);
+  });
+
+  it("answers a both-directories conflict with one line, not a stack trace", async () => {
+    const dir = tmpProject();
+    mkdirSync(join(dir, ".intent-guard"), { recursive: true });
+    mkdirSync(join(dir, ".conductor"), { recursive: true });
+    writeFileSync(join(dir, ".conductor", "config.yaml"), "drift:\n", "utf8");
+
+    const res = await run("init-cli.js", ["--project", dir]);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain(".intent-guard");
+    expect(res.stderr).toContain(".conductor");
+    // A designed refusal, not a crash: no stack frames, and one line.
+    expect(res.stderr).not.toContain("    at ");
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
+    expect(res.stdout).toBe("");
   });
 });
 
@@ -105,7 +122,7 @@ describe("conductor-extract", () => {
     const out = JSON.parse(res.stdout);
     expect(out.valid).toBe(true);
     expect(out.written_path).toBeNull();
-    expect(existsSync(join(dir, ".conductor", "intent-contract.yaml"))).toBe(false);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
 
   it("rejects deprecated --freeze with a clear message", async () => {
@@ -118,7 +135,7 @@ describe("conductor-extract", () => {
     expect(res.code).toBe(2);
     expect(res.stderr).toMatch(/removed/i);
     expect(res.stderr).toMatch(/intent-guard-freeze/i);
-    expect(existsSync(join(dir, ".conductor", "intent-contract.yaml"))).toBe(false);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
 
   it("writes an UNFROZEN draft (no approval)", async () => {
@@ -183,7 +200,7 @@ describe("conductor-import-spec", () => {
     expect(out.format).toBe("spec-kit");
     expect(out.written_path).toBeNull();
     expect(out.contract_yaml).toContain("Build CSV export");
-    expect(existsSync(join(dir, ".conductor", "intent-contract.yaml"))).toBe(false);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
 
   it("imports a superpowers spec and plan with --dry-run", async () => {
@@ -274,12 +291,12 @@ describe("conductor-freeze (approval gate)", () => {
     expect(out.frozen).toBe(true);
     expect(out.approved_by).toBe("alice");
     expect(out.method).toBe("explicit-flag");
-    const written = readFileSync(join(dir, ".conductor", "intent-contract.yaml"), "utf8");
+    const written = readFileSync(join(dir, ".intent-guard", "intent-contract.yaml"), "utf8");
     const contractId = written.match(/contract_id: (ic-[a-z0-9-]+)/)?.[1];
     expect(written).toContain("frozen_by: user");
     expect(written).toContain("approved_by: alice");
-    expect(existsSync(join(dir, ".conductor", "index.md"))).toBe(true);
-    expect(existsSync(join(dir, ".conductor", "contracts", `${contractId}.yaml`))).toBe(true);
+    expect(existsSync(join(dir, ".intent-guard", "index.md"))).toBe(true);
+    expect(existsSync(join(dir, ".intent-guard", "contracts", `${contractId}.yaml`))).toBe(true);
   });
 
   it("is idempotent on an already-frozen contract", async () => {
@@ -360,7 +377,7 @@ describe("conductor-check (enforcement gate)", () => {
     const dir = await frozenProjectWith(
       "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
     );
-    const contractFile = join(dir, ".conductor", "intent-contract.yaml");
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
     writeFileSync(
       contractFile,
       readFileSync(contractFile, "utf8") +
@@ -381,7 +398,7 @@ describe("conductor-check (enforcement gate)", () => {
     const dir = await frozenProjectWith(
       "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
     );
-    const contractFile = join(dir, ".conductor", "intent-contract.yaml");
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
     writeFileSync(
       contractFile,
       readFileSync(contractFile, "utf8") + "\nbudget:\n  max_files: 5\n",
@@ -404,7 +421,7 @@ describe("conductor-check (enforcement gate)", () => {
       "--text", "Add a CSV export button. No new API endpoints. Verify file downloads.",
     ]);
     await run("freeze-cli.js", ["--project", dir, "--approved-by", "tester"]);
-    const first = readFileSync(join(dir, ".conductor", "intent-contract.yaml"), "utf8");
+    const first = readFileSync(join(dir, ".intent-guard", "intent-contract.yaml"), "utf8");
     const firstId = first.match(/contract_id: (ic-[a-z0-9-]+)/)?.[1]!;
 
     await run("extract-cli.js", [
@@ -579,7 +596,7 @@ describe("conductor-index, conductor-resume, conductor-pivot", { timeout: 60_000
 
     const write = await run("index-cli.js", ["--project", dir, "--write", "--json"]);
     expect(write.code).toBe(0);
-    expect(JSON.parse(write.stdout).written_path).toContain(".conductor/index.md");
+    expect(JSON.parse(write.stdout).written_path).toContain(".intent-guard/index.md");
   });
 
   it("prints a resume brief for the active contract", async () => {
@@ -604,9 +621,9 @@ describe("conductor-index, conductor-resume, conductor-pivot", { timeout: 60_000
     const out = JSON.parse(res.stdout);
     expect(out.pending).toBe(false);
     expect(out.pivot.acknowledged_by).toBe("user");
-    const written = readFileSync(join(dir, ".conductor", "intent-contract.yaml"), "utf8");
+    const written = readFileSync(join(dir, ".intent-guard", "intent-contract.yaml"), "utf8");
     expect(written).toContain("Keyboard shortcut toggles theme");
-    expect(readFileSync(join(dir, ".conductor", "index.md"), "utf8")).toContain(
+    expect(readFileSync(join(dir, ".intent-guard", "index.md"), "utf8")).toContain(
       "Also support keyboard shortcut",
     );
   });

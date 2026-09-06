@@ -3,6 +3,7 @@ import { readContract, isContractFrozen } from "./contract-store.js";
 import { scoreDrift, type DriftSignals, type DriftScore } from "./drift.js";
 import { evaluateBudget, type BudgetResult } from "./budget.js";
 import { loadConfig } from "./config.js";
+import { STATE_DIR } from "./state-dir.js";
 
 export type GateStatus = "ok" | "blocked";
 
@@ -59,7 +60,7 @@ export function checkGate(
   if (!contractFound) {
     if (requireFrozen) {
       reasons.push(
-        "No .conductor/intent-contract.yaml found. Draft intent with intent-guard-extract, then approve with intent-guard-freeze before implementing.",
+        `No ${STATE_DIR}/intent-contract.yaml found. Draft intent with intent-guard-extract, then approve with intent-guard-freeze before implementing.`,
       );
     }
     return {

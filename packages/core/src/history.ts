@@ -6,14 +6,14 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { join, relative } from "node:path";
 import { parse, stringify } from "yaml";
 import {
   assertValidIntentContract,
   type IntentContract,
 } from "@vaultcompass/intent-guard-schema";
+import { ensureStateDir, stateDir } from "./state-dir.js";
 
-const CONDUCTOR_DIR = ".conductor";
 const CONTRACTS_DIR = "contracts";
 
 export interface ArchivedContractSummary {
@@ -26,7 +26,7 @@ export interface ArchivedContractSummary {
 }
 
 export function contractsDir(projectRoot: string): string {
-  return join(projectRoot, CONDUCTOR_DIR, CONTRACTS_DIR);
+  return join(stateDir(projectRoot), CONTRACTS_DIR);
 }
 
 export function archivedContractPath(
@@ -41,9 +41,10 @@ export function archiveContract(
   contract: IntentContract,
 ): string {
   assertValidIntentContract(contract);
-  const dir = contractsDir(projectRoot);
+  // Archiving is a write, so it migrates a legacy directory before resolving.
+  const dir = join(ensureStateDir(projectRoot), CONTRACTS_DIR);
   mkdirSync(dir, { recursive: true });
-  const path = archivedContractPath(projectRoot, contract.contract_id);
+  const path = join(dir, `${contract.contract_id}.yaml`);
   writeFileSync(path, stringify(contract), "utf8");
   return path;
 }
@@ -73,7 +74,9 @@ export function listContracts(projectRoot: string): ArchivedContractSummary[] {
         contract_id: contract.contract_id,
         original_ask: contract.original_ask,
         frozen_at: contract.frozen_at,
-        archived_path: join(CONDUCTOR_DIR, CONTRACTS_DIR, basename(path)),
+        // Relative to the project root, so it names whichever state directory
+        // is actually in use rather than a hard-coded one.
+        archived_path: relative(projectRoot, path),
         updated_at: stat.mtime.toISOString(),
         approved_by: contract.approval?.approved_by,
       };

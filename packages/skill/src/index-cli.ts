@@ -4,7 +4,7 @@ import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js"
 
 const USAGE = `Usage: intent-guard index [flags]
 
-Render .conductor/index.md, or regenerate it on disk with --write.
+Render .intent-guard/index.md, or regenerate it on disk with --write.
 
 Flags:
   --project <root>   Project root (default: .)

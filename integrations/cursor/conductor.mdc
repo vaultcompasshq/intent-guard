@@ -5,7 +5,7 @@ alwaysApply: true
 
 Before implementation work:
 
-1. If `.conductor/intent-contract.yaml` is missing, draft one with
+1. If `.intent-guard/intent-contract.yaml` is missing, draft one with
    `intent-guard extract --project . --text "<user ask>"`.
 2. Do not treat a draft as approved. Ask the user to review it, then run
    `intent-guard freeze --project . --approved-by "<name>"`.

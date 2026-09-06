@@ -71,7 +71,7 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["--version"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).toBe("1.2.1\n");
+    expect(res.stdout).toBe("1.3.0\n");
     expect(res.stderr).toBe("");
     expect(readdirSync(dir)).toEqual([]);
   });
@@ -80,7 +80,7 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["-v"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).toBe("1.2.1\n");
+    expect(res.stdout).toBe("1.3.0\n");
     expect(res.stderr).toBe("");
     expect(readdirSync(dir)).toEqual([]);
   });
@@ -96,8 +96,8 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["init", "--project", dir]);
     expect(res.code).toBe(0);
-    expect(JSON.parse(res.stdout).created).toContain(".conductor/config.yaml");
-    expect(existsSync(join(dir, ".conductor", "config.yaml"))).toBe(true);
+    expect(JSON.parse(res.stdout).created).toContain(".intent-guard/config.yaml");
+    expect(existsSync(join(dir, ".intent-guard", "config.yaml"))).toBe(true);
   });
 
   it("runs doctor through the unified binary", () => {

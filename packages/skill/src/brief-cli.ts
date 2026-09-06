@@ -33,7 +33,7 @@ if (args.version) printVersion();
 
 const contract = readContract(args.projectRoot);
 if (!contract) {
-  console.error("No frozen .conductor/intent-contract.yaml found.");
+  console.error("No frozen .intent-guard/intent-contract.yaml found.");
   process.exit(1);
 }
 

@@ -9,7 +9,11 @@ dist/
 .local/
 *.local.*
 audit.md
-# Local Intent Guard state (contracts and runtime files belong in consuming app repos)
+# Local Intent Guard state (contracts and runtime files belong in consuming app
+# repos). This repo ignores the whole directory; a consuming repo should commit
+# it and ignore only .intent-guard/drift-log.jsonl. The legacy name is kept here
+# so a working copy that has not been migrated yet stays untracked.
+.intent-guard/
 .conductor/
 .cursor/
 # The umbrella's hook manifest, under .guardrails, records absolute paths on

@@ -1,7 +1,7 @@
 # GitHub Actions Integration
 
 Use these samples when a repository already has a frozen
-`.conductor/intent-contract.yaml` and wants CI to fail on blocking drift.
+`.intent-guard/intent-contract.yaml` and wants CI to fail on blocking drift.
 
 The package-install samples assume `@vaultcompass/intent-guard@latest`
 has been published to npm. Until publish, run Intent Guard from a local checkout

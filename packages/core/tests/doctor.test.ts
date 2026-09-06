@@ -61,7 +61,7 @@ describe("runDoctor", { timeout: 15_000 }, () => {
     const dir = tmpProject();
     initConductor(dir);
     writeContract(dir, freezeContract(draft(), { approvedBy: "tester" }));
-    writeFileSync(join(dir, ".conductor", "index.md"), "# stale\n", "utf8");
+    writeFileSync(join(dir, ".intent-guard", "index.md"), "# stale\n", "utf8");
 
     const result = runDoctor(dir);
     expect(result.status).toBe("warn");
@@ -72,7 +72,7 @@ describe("runDoctor", { timeout: 15_000 }, () => {
   it("errors on invalid config", () => {
     const dir = tmpProject();
     initConductor(dir);
-    writeFileSync(join(dir, ".conductor", "config.yaml"), "drift: [", "utf8");
+    writeFileSync(join(dir, ".intent-guard", "config.yaml"), "drift: [", "utf8");
 
     const result = runDoctor(dir);
     expect(result.status).toBe("error");

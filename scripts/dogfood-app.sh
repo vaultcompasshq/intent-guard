@@ -32,7 +32,12 @@ echo ""
 
 echo "--- init ---"
 "$INTENT_GUARD" init --project "$TARGET" --human
-test -f "$TARGET/.conductor/config.yaml"
+# Either path passes. This script installs a PUBLISHED intent-guard (default
+# @latest), so it runs against whatever is on npm, not this tree: 1.2.1 and
+# earlier write .conductor/config.yaml, 1.3.0 and later write
+# .intent-guard/config.yaml. Asserting only the new path fails every run until
+# 1.3.0 ships. Drop the legacy arm once @latest is 1.3.0 or newer.
+test -f "$TARGET/.intent-guard/config.yaml" || test -f "$TARGET/.conductor/config.yaml"
 
 echo ""
 echo "--- extract (dry run) ---"

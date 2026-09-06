@@ -1,14 +1,20 @@
-# `.conductor/` directory layout
+# `.intent-guard/` directory layout
 
 **Version:** 1.0.0  
 **Phase:** 2
 
-Per-project Intent Guard state lives at the repository root of the app being governed (not necessarily the Intent Guard OSS repo). The directory is still named `.conductor/`: it was not renamed in 1.2.0, so existing projects keep working untouched.
+Per-project Intent Guard state lives at the repository root of the app being governed (not necessarily the Intent Guard OSS repo).
+
+The directory was named `.conductor/` through 1.2.1 and became `.intent-guard/` in 1.3.0, because the umbrella product over the three gates now owns the name `conductor` and writes `.guardrails.yaml` and `.guardrails/` into the same repositories. Migration:
+
+- If `.intent-guard/` exists, it is used.
+- Otherwise, if `.conductor/` exists and holds Intent Guard state (`config.yaml`, `intent-contract.yaml`, `index.md`, `drift-log.jsonl`, or `contracts/`), it is read from, with one notice per invocation, and renamed to `.intent-guard/` on the first write. A `.conductor/` holding none of those belongs to something else and is left alone.
+- If both exist, every command fails closed and names both. Move what you need into `.intent-guard/` and delete `.conductor/`.
 
 ## Layout
 
 ```
-.conductor/
+.intent-guard/
 ├── config.yaml              # Drift thresholds, coach settings, integration hooks
 ├── intent-contract.yaml     # Active frozen intent (or draft before approval)
 ├── index.md                 # MEMORY.md-style pointer file (Phase 3 expands this)

@@ -31,7 +31,7 @@ Intent Guard is the upstream governance layer. The downstream pipeline owns prod
 | Design | UI/UX mockups | Design spec must reference `contract_id` |
 | Implementation | Builds code | Plans tied to `acceptance_criteria` |
 | Audits | Code/UX/business | Unchanged |
-| Alignment review | Guesses spec from README | Uses `.conductor/intent-contract.yaml` as primary spec |
+| Alignment review | Guesses spec from README | Uses `.intent-guard/intent-contract.yaml` as primary spec |
 | Aggregator | Existing audit scores | Optional extra Intent Guard drift score |
 
 ---
@@ -49,7 +49,7 @@ Intent Guard is the upstream governance layer. The downstream pipeline owns prod
     },
     "session": {
       "trigger": "any implementation task",
-      "output": ".conductor/intent-contract.yaml",
+      "output": ".intent-guard/intent-contract.yaml",
       "skill": "intent-contract",
       "runsBefore": ["planning", "implementation"]
     }
@@ -69,7 +69,7 @@ Pipeline-specific modes stay in the downstream repo. Session mode can call the p
 
 ```javascript
 // Priority 1: Intent Guard contract
-const contractPath = path.join(projectPath, ".conductor", "intent-contract.yaml");
+const contractPath = path.join(projectPath, ".intent-guard", "intent-contract.yaml");
 if (fs.existsSync(contractPath)) {
   return parseIntentContract(contractPath);
 }
@@ -93,7 +93,7 @@ Add to `AGENTS.md`:
 
 ```markdown
 ## Intent Guard
-Before implementation, ensure `.conductor/intent-contract.yaml` exists and is frozen.
+Before implementation, ensure `.intent-guard/intent-contract.yaml` exists and is frozen.
 Run drift check before review handoff.
 ```
 

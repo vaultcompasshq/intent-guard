@@ -61,7 +61,7 @@ describe("draftContract", () => {
   it("extracts multiple scope items from a multi-sentence paragraph ask", () => {
     const contract = draftContract({
       userText:
-        "Build a resume flow. Archive frozen contracts to .conductor/contracts. Regenerate index.md from the active contract and recent pivots. Show acknowledged corrections in the brief.",
+        "Build a resume flow. Archive frozen contracts to .intent-guard/contracts. Regenerate index.md from the active contract and recent pivots. Show acknowledged corrections in the brief.",
     });
 
     expect(contract.in_scope.length).toBeGreaterThanOrEqual(4);
@@ -325,7 +325,7 @@ describe("contract store", () => {
     expect(isContractFrozen(draft)).toBe(false);
     const frozen = freezeContract(draft, { approvedBy: "tester" });
     const path = writeContract(dir, frozen);
-    expect(path).toContain(".conductor/intent-contract.yaml");
+    expect(path).toContain(".intent-guard/intent-contract.yaml");
     const loaded = readContract(dir);
     expect(loaded?.contract_id).toBe(frozen.contract_id);
     expect(isContractFrozen(loaded!)).toBe(true);
