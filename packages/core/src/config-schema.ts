@@ -64,10 +64,6 @@ function describe(value: unknown): string {
   // `warn: .nan` used to be reported as "got null", sending a reader off to
   // look for an empty value that is not in their file. YAML's own tokens for
   // these are what they typed, so those are what the message says.
-  // JSON.stringify renders NaN and Infinity as the literal "null", so
-  // `warn: .nan` used to be reported as "got null", sending a reader off to
-  // look for an empty value that is not in their file. YAML's own tokens for
-  // these are what they typed, so those are what the message says.
   if (typeof value === "number" && !Number.isFinite(value)) {
     if (Number.isNaN(value)) return ".nan";
     return value > 0 ? ".inf" : "-.inf";

@@ -284,6 +284,131 @@ describe("intent-guard check --trust-base refuses the head as its own base", {
 });
 
 /**
+ * Two different commits can hold the same tree, and then the commit check
+ * passes while the boundary is still off.
+ *
+ * The realistic shape is not contrived. What GitHub publishes as
+ * refs/pull/N/merge is a merge commit whose tree, when the base has not moved
+ * since the fork, is byte for byte the head branch's tree. actions/checkout
+ * leaves that commit checked out detached, so `--trust-base` pointed at
+ * `github.event.pull_request.head.sha` names a DIFFERENT commit carrying an
+ * IDENTICAL tree: every control input still comes from the tree under
+ * judgment, and there is nothing for base-versus-head to compare.
+ */
+describe("intent-guard check --trust-base refuses an identical tree", {
+  timeout: 60_000,
+}, () => {
+  function forgedBranch(): string {
+    return repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { [CONTRACT]: FORGED_CONTRACT, [OUT_OF_SCOPE_FILE]: "export const x = 1;\n" },
+    });
+  }
+
+  function rev(dir: string, args: string[]): string {
+    return execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+  }
+
+  it("refuses a different commit that carries the head's tree", async () => {
+    const dir = forgedBranch();
+    const tree = rev(dir, ["rev-parse", "HEAD^{tree}"]);
+    const twin = rev(dir, ["commit-tree", tree, "-p", "main", "-m", "same tree"]);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", twin,
+      "--json",
+    ]);
+
+    expect(res.code).toBe(2);
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
+    expect(res.stderr).toContain(twin);
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+
+  it("refuses the merge-ref shape a pull-request checkout produces", async () => {
+    const dir = forgedBranch();
+    const main = rev(dir, ["rev-parse", "main"]);
+    const feature = rev(dir, ["rev-parse", "feature"]);
+    const tree = rev(dir, ["rev-parse", "feature^{tree}"]);
+    // commit-tree with both parents and the head's tree: refs/pull/N/merge.
+    const merge = rev(dir, ["commit-tree", tree, "-p", main, "-p", feature, "-m", "merge"]);
+    git(dir, ["checkout", "--detach", merge]);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", feature,
+      "--json",
+    ]);
+
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain(feature);
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("accepts a base whose only difference is a file no control input names", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { "docs/usage.md": "usage\n" },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    // The trees differ by one ordinary file, which is the whole normal case.
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.stdout).trustBase.proposals).toEqual([]);
+  });
+
+  it("still blocks a pull request that merged the base into itself", async () => {
+    const dir = forgedBranch();
+    git(dir, ["checkout", "main"]);
+    writeAt(dir, "docs/unrelated.md", "moved on\n");
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-m", "main moves on"]);
+    git(dir, ["checkout", "feature"]);
+    git(dir, ["merge", "--no-edit", "main"]);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    // Merging the base in changes the head's tree, so the trees differ and the
+    // run proceeds to judge the forgery. This is the case the tree check must
+    // NOT swallow.
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).trustBase.selfApproval).toBe(true);
+  });
+
+  it("names an unresolvable ref in plain words, without git plumbing", async () => {
+    const dir = forgedBranch();
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--trust-base", "origin/nope",
+      "--paths", "docs/usage.md",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("origin/nope");
+    // The --quiet flag suppresses git's own stderr, so the fallback used to
+    // print the exception text and hand the user a command line to run.
+    expect(res.stderr).not.toContain("Command failed");
+    expect(res.stderr).not.toContain("rev-parse");
+  });
+});
+
+/**
  * The control input is a FILE, and what kind of file it is counts.
  *
  * Replacing the contract with a symlink whose target holds the base contract's
@@ -315,7 +440,36 @@ describe("intent-guard check --trust-base sees the file's type", { timeout: 60_0
 
     const out = JSON.parse(res.stdout);
     expect(out.trustBase.contractChanged).toBe(true);
+    expect(out.trustBase.contractShapeChange).toBe("symlink");
     expect(out.trustBase.proposals.join(" ")).toContain("symlink");
+  });
+
+  it("reports a gitlink at the contract path as not a regular file", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { "docs/usage.md": "usage\n" },
+    });
+    const someCommit = execFileSync("git", ["rev-parse", "main"], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
+    // A submodule entry, mode 160000, sitting where the contract belongs.
+    git(dir, ["rm", "-q", "--cached", "--", CONTRACT]);
+    git(dir, ["update-index", "--add", "--cacheinfo", `160000,${someCommit},${CONTRACT}`]);
+    git(dir, ["commit", "-m", "gitlink at the contract path"]);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.contractShapeChange).toBe("not-a-file");
+    expect(out.trustBase.proposals.join(" ")).toContain("not a regular file");
+    expect(out.reasons.join(" ")).toContain("Control input refused:");
   });
 
   it("refuses the symlinked contract when the gate is enforcing", async () => {
@@ -369,6 +523,7 @@ describe("intent-guard check --trust-base sees the file's type", { timeout: 60_0
 
     const out = JSON.parse(res.stdout);
     expect(out.trustBase.contractChanged).toBe(true);
+    expect(out.trustBase.contractShapeChange).toBe("mode");
     expect(out.trustBase.proposals.join(" ")).toContain("mode");
   });
 
@@ -389,6 +544,7 @@ describe("intent-guard check --trust-base sees the file's type", { timeout: 60_0
 
     expect(res.code).toBe(1);
     const out = JSON.parse(res.stdout);
+    expect(out.trustBase.contractShapeChange).toBe("removed");
     expect(out.trustBase.proposals.join(" ")).toContain("removed");
     expect(out.reasons.join(" ")).toContain("Control input refused:");
   });
@@ -402,6 +558,50 @@ describe("intent-guard check --trust-base sees the file's type", { timeout: 60_0
  * about pull-request mode helps here, so the read itself has to refuse to
  * follow the link.
  */
+/**
+ * The link does not have to be on the contract file.
+ *
+ * Refusing a symlinked contract while following a symlinked STATE DIRECTORY
+ * leaves the same two-step open one level up: link `.intent-guard` at a
+ * directory the pull request added, and every read underneath it lands
+ * somewhere nobody approved, with the contract path itself looking like an
+ * ordinary file the whole way.
+ */
+describe("the state directory is a directory, not a link", { timeout: 60_000 }, () => {
+  function repoWithLinkedStateDir(): string {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { [OUT_OF_SCOPE_FILE]: "export const charge = () => 999;\n" },
+    });
+    git(dir, ["rm", "-r", "-q", "--", ".intent-guard"]);
+    writeAt(dir, "real-state/intent-contract.yaml", FORGED_CONTRACT);
+    symlinkSync("real-state", join(dir, ".intent-guard"));
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-m", "link the state directory"]);
+    return dir;
+  }
+
+  it("refuses a symlinked state directory on the trusted path, with no flag", async () => {
+    const dir = repoWithLinkedStateDir();
+
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+
+    expect(res.code).not.toBe(0);
+    expect(`${res.stdout}${res.stderr}`).toContain("symlink");
+    expect(`${res.stdout}${res.stderr}`).toContain(".intent-guard");
+  });
+
+  it("does not read the forged contract the link points at", async () => {
+    const dir = repoWithLinkedStateDir();
+
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+
+    // The forgery widens scope to everything; obeying it is what "ok" here
+    // would have meant.
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+});
+
 describe("the trusted checkout refuses a symlinked contract", { timeout: 60_000 }, () => {
   function repoLinkedOnBothSides(target: string): string {
     const dir = mkdtempSync(join(tmpdir(), "intent-guard-twostep-"));

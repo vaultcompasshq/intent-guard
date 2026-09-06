@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 import { parse, stringify } from "yaml";
 import {
@@ -42,10 +42,28 @@ export function parseConfigText(text: string, origin: string): ConductorConfig {
  * somebody has to remember to run is not a check. Every command that loads
  * config now refuses a config file that would put a drift band out of the
  * scorer's reach.
+ *
+ * The path must also be a regular file. The schema floors already bound what
+ * a linked config could do, so this is the smaller of the two risks, but
+ * having the contract read refuse a link while the config read followed one
+ * would be a rule with a hole in it that nobody could remember the shape of.
+ * One rule: a control input is a file at the path it is named at.
  */
 export function loadConfig(projectRoot: string): ConductorConfig {
   const path = configPath(projectRoot);
-  if (!existsSync(path)) return { ...DEFAULT_CONDUCTOR_CONFIG };
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch {
+    return { ...DEFAULT_CONDUCTOR_CONFIG };
+  }
+  if (!stat.isFile()) {
+    throw new ConfigError(
+      `Invalid ${path}: it is ${stat.isSymbolicLink() ? "a symlink" : "not a regular file"}. ` +
+        "Intent Guard reads its config from a file at that path, not through a " +
+        "link to somewhere else. Replace it with a regular file.",
+    );
+  }
   return parseConfigText(readFileSync(path, "utf8"), path);
 }
 

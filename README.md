@@ -186,10 +186,18 @@ paths, or write its own approval and have the gate agree. A control input the
 branch changed is reported as a proposal and ignored for the run, and a
 contract change that also grants itself a new approval is refused as
 self-approval, as is one that turns the contract path into a symlink or deletes
-it. Nothing changes for the pre-commit hook or a local run. Pass the base
-branch, not `github.sha`: on a `pull_request` event that SHA is the merge
-commit, and a trust base resolving to the head commit is refused with exit 2
-rather than quietly putting the boundary back where it started.
+it. Pass the base branch, not `github.sha`: on a `pull_request` event that SHA
+is the merge commit, and a trust base that resolves to the head commit, or to a
+different commit carrying an identical tree, is refused with exit 2 rather than
+quietly putting the boundary back where it started.
+
+For the pre-commit hook and a local run, behaviour is unchanged **except** that
+a control input which is not a regular file at the path it is named at is now
+refused everywhere: a symlinked contract, a symlinked `.intent-guard` directory,
+or a symlinked `config.yaml`. Following any of those lets the files this gate
+trusts live outside the path a reviewer reads, and lets a later edit to a link
+target change them without the control path appearing in any diff. If your setup
+links the state directory somewhere else, put the real directory back.
 
 **Put the workflow itself on the protected side.** For a same-repo
 `pull_request` event GitHub runs the workflow file from the pull request head,
@@ -202,16 +210,20 @@ repository-configuration step you have to take, not one the flag takes for you.
 **A genuine re-freeze on a branch trips the refusal, by design.** `freeze`
 writes a new approval, and from the base ref that is indistinguishable from a
 forged one. The way through is to land the contract change on the base branch
-first, in its own reviewed pull request, or to configure the human-approval
-add-on below. Until then the branch shows drift against the old contract, which
-is the honest description of work outside the scope anyone has approved.
+first, in its own reviewed pull request, or to set up the human-approval
+tightening described below. Until then the branch shows drift against the old
+contract, which is the honest description of work outside the scope anyone has
+approved.
 
-**Optional tightening: require a human approval too.** Base-ref judgment is the
-floor and is not a setting. A team with reviewers may additionally require that
-a contract change carry a human approval before it takes effect on merge, as a
-pull-request review approval or a CODEOWNERS approval on `.intent-guard/**`.
-Configure that in the CI workflow or in branch protection, on the protected base
-side, and never in the in-repo config: a mode switch stored in a file the pull
+**Optional tightening: require a human approval too.** This is not a feature of
+this tool and there is no flag for it. It is a way of configuring your own
+repository, described here because it composes with the flag above. Base-ref
+judgment is the floor and is not a setting. A team with reviewers can
+additionally require that a contract change carry a human approval before it
+takes effect on merge, using GitHub's own controls: a required pull-request
+review, or a CODEOWNERS entry for `.intent-guard/**` plus branch protection that
+requires code-owner review. Those live on the protected base side; never put such
+a switch in the in-repo config, because a mode switch stored in a file the pull
 request can edit is one the pull request sets to whichever mode is weaker, so a
 knob that can only tighten is safe to offer and a knob that can loosen is the
 vulnerability wearing a settings label. See

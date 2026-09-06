@@ -49,8 +49,9 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   `budget.protected_paths`, set `allowed_paths` to everything, and write its own
   `frozen_by: user` plus an `approval` block; the gate agreed with the rewritten
   contract and returned ok. Closed by `--trust-base`, which is how CI should now
-  invoke the gate on a pull request. Local and pre-commit behaviour is
-  unchanged, and is pinned byte for byte by a parity test.
+  invoke the gate on a pull request. Local and pre-commit behaviour is unchanged
+  except for the symlink refusal below, and is pinned byte for byte by a parity
+  test for every control input that is a regular file at the path it names.
 - **`config.yaml` now has a schema and floors, validated on every load.** It had
   neither, so `hard_block: 101` disabled drift blocking outright, since the
   drift score is capped at 100 and every band is tested with a
@@ -69,18 +70,38 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   default `actions/checkout` that SHA is the merge commit, which is HEAD. The
   comparison is on resolved commits, so an alias, a tag or a raw SHA naming the
   head commit is refused alike.
-- **A contract path that is a symlink is refused, on both paths.** Replacing the
-  contract with a link whose target holds the approved bytes changed nothing any
-  content comparison could see, so pull-request mode reported "no control input
-  changed"; once that landed, a second pull request editing only the link target
-  widened the contract without the contract path appearing in its diff at all.
-  Both halves are closed. The head side of the base-versus-head comparison is
-  now read through git rather than from the working tree, so a symlink is
-  compared as the link target string it is and a type or mode change is visible
-  at all; and `readContract` lstats the contract path and refuses to follow a
-  link, which is a small hardening **outside** pull-request mode that applies to
-  every local run and pre-commit hook. A dangling link now reports itself
-  instead of reading as an absent contract.
+- **A trust base whose TREE equals the head's is refused too**, exit 2, even
+  when it is a different commit. The commit comparison alone let the forgery
+  through in the ordinary pull-request shape: what GitHub publishes as
+  `refs/pull/N/merge` is a merge commit whose tree, when the base has not moved
+  since the fork, *is* the head branch's tree, and `actions/checkout` leaves that
+  commit checked out, so `--trust-base ${{ github.event.pull_request.head.sha }}`
+  named a different commit carrying an identical tree and every control input
+  still came from the tree under judgment. Merging the base into the branch
+  changes the head's tree, so a pull request that does that is judged normally.
+- **A control input that is not a regular file at the path it names is refused,
+  everywhere.** Replacing the contract with a link whose target holds the
+  approved bytes changed nothing any content comparison could see, so
+  pull-request mode reported "no control input changed"; once that landed, a
+  second pull request editing only the link target widened the contract without
+  the contract path appearing in its diff at all. All of it is closed, at three
+  paths and on both sides:
+  - the head side of the base-versus-head comparison is read through git rather
+    than from the working tree, so a symlink is compared as the link target
+    string it is and a type or mode change is visible at all;
+  - `readContract` lstats the contract path and refuses to follow a link;
+  - `stateDir` and `ensureStateDir` lstat the `.intent-guard` directory itself
+    and refuse a symlinked state directory, which was the same trick one level
+    up: `isDirectory` used `statSync`, which follows links, so the contract
+    underneath looked like an ordinary file all the way down;
+  - `loadConfig` lstats `config.yaml` for the same reason, so one rule covers
+    every control input rather than one with an exception.
+
+  The last three are a hardening **outside** pull-request mode: they apply to
+  every local run and pre-commit hook, and they narrow behaviour that used to
+  work, so a setup that deliberately links its state directory somewhere else
+  has to put the real directory back. A dangling link now reports itself instead
+  of reading as an absent contract.
 
 ### Changed
 
@@ -89,8 +110,12 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   silently accept. Leaving an unvalidated merge exported beside the validating
   one would have left the second door into the config open.
 - **Exit 2 now also means a refused config, an unresolvable trust base, or a
-  trust base that is the head commit**, in addition to an unresolvable
-  `--base`. It has always meant could-not-run.
+  trust base that is the head commit or carries the head's tree**, in addition
+  to an unresolvable `--base`. It has always meant could-not-run.
+- **An unresolvable trust base is described in plain words.** `--quiet`
+  suppresses git's own explanation, so the message fell back to the exception
+  text and printed `Command failed: git rev-parse --verify --quiet ...` at the
+  user, handing them a command line to run instead of a thing to fix.
 - **A config value of `.nan` or `.inf` is named by the token the user typed.**
   It was reported as "got null", because `JSON.stringify` renders both that
   way, which sent a reader looking for an empty value that was nowhere in their
@@ -110,7 +135,11 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   design**, because `freeze` writes a new approval and from the base ref that is
   indistinguishable from a forged one. The README and the CLI reference now say
   it plainly and give the two ways through: land the contract change on the base
-  branch first, or configure the human-approval add-on.
+  branch first, or set up the human-approval tightening.
+- **The human-approval tightening is described as repository configuration, not
+  as a feature.** It reads as GitHub's own controls, a required review or a
+  CODEOWNERS entry with branch protection, because there is no flag for it and
+  the previous wording invited readers to look for one.
 
 ## [1.3.1] - 2026-09-05
 

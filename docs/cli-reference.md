@@ -274,8 +274,14 @@ or a change to the file's mode bits. A content comparison is blind to all of
 these. Turning the contract into a link whose target holds the approved bytes
 changes nothing any text comparison can see, and is the first half of a
 two-step whose second half edits only the link target, in a pull request where
-the contract path never appears in the diff at all. The gate also refuses to
-follow such a link on the trusted path, so the second half cannot land either.
+the contract path never appears in the diff at all.
+
+Independently of this flag and of pull-request mode, the gate refuses to follow
+a link at any of the three control paths: the contract file, the
+`.intent-guard` directory itself, and `config.yaml`. That is what stops the
+second half from landing on the trusted path, where pull-request mode is not in
+play. A link at the directory level is the same trick one level up, and the
+refusal has to cover it or the rule has a hole in it.
 
 **A genuine re-freeze on a branch trips the self-approval refusal, by design.**
 `intent-guard freeze` writes a new `approved_at`, so re-approving a widened
@@ -301,6 +307,18 @@ SHA pointing at the head commit are all refused alike. The realistic way in is
 `origin/${{ github.base_ref }}` instead. A branch with no commits ahead of its
 base is refused by the same rule, which is not a case this can tell apart.
 
+**A `--trust-base` whose TREE equals the head's is refused too**, exit 2, even
+when it is a different commit. Two commits can carry one identical tree, and
+then every control input still comes from the tree under judgment while a
+commit comparison waves it through. This is the ordinary shape of a pull
+request's merge ref: what GitHub publishes as `refs/pull/N/merge` is a merge
+commit whose tree, when the base has not moved since the fork, *is* the head
+branch's tree, and `actions/checkout` leaves that commit checked out. A
+workflow passing `--trust-base ${{ github.event.pull_request.head.sha }}` then
+names a different commit holding the same tree. Merging the base into the
+branch changes the head's tree, so a pull request that does that is judged
+normally rather than swallowed by this rule.
+
 **No contract on the base ref** is first adoption, not an attack. The gate
 reports no-contract exactly as it does outside pull-request mode, and names the
 head's contract as a proposal.
@@ -309,18 +327,26 @@ It fails closed like `--base`: a ref that will not resolve, and a base
 `config.yaml` the schema refuses, each print one line and exit **2**. A missing
 base is never a reason to fall back to trusting the head.
 
-Outside pull-request mode nothing changes. A pre-commit hook and a direct CLI
-run on a checkout you control are already inside the trust boundary, and their
-output is byte for byte what it was before this flag existed.
+Outside pull-request mode, behaviour is unchanged except for the link refusal
+above. A pre-commit hook and a direct CLI run on a checkout you control are
+already inside the trust boundary, and their output is byte for byte what it
+was before this flag existed, for every control input that is a regular file at
+the path it is named at.
 
 #### Requiring a human approval as well (optional, workflow-level)
 
+This is not a feature of this tool and there is no flag for it. It describes a
+way of configuring your own repository with GitHub's own controls, written down
+here because it composes with `--trust-base` and because the refusal above sends
+readers looking for it.
+
 Base-ref judgment is the floor and is not configurable. A team that has
-reviewers may additionally require that a contract change carry a **human
-approval** before it takes effect on merge: a pull-request review approval, or
-a CODEOWNERS approval on `.intent-guard/**`. That check belongs in the CI
-workflow or in branch protection, and it is never read from a file in the
-repository.
+reviewers can additionally require that a contract change carry a **human
+approval** before it takes effect on merge: a required pull-request review, or a
+CODEOWNERS entry for `.intent-guard/**` together with branch protection that
+requires code-owner review. Those controls live in the repository's settings or
+in a workflow on the protected base side, and none of them is ever read from a
+file in the repository.
 
 **Arrange for the workflow itself to be on the protected side.** For a
 same-repo `pull_request` event GitHub runs the workflow file **from the pull
@@ -582,6 +608,13 @@ These are bounds on what a value may be, not on what a project may decide. A
 team that only wants to block on maximum drift can still set every band to
 100, and a team that trusts its own critical constraints can still turn
 `hard_block_on_critical_constraints` off.
+
+The path must also be a regular file: a symlinked `config.yaml`, like a
+symlinked contract or a symlinked `.intent-guard` directory, is refused rather
+than followed. The schema floors already bound what a linked config could do,
+so this is the smaller of the two link risks, but one rule that holds for every
+control input is easier to rely on than a rule with an exception nobody can
+remember the shape of.
 
 ## intent-guard correct / intent-guard-correct
 

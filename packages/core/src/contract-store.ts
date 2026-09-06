@@ -39,6 +39,25 @@ export function contractPath(
 }
 
 /**
+ * Why a contract path that is not a regular file is refused, said once.
+ *
+ * Lives here, on the side that both readers already depend on, so the sentence
+ * a user gets does not depend on whether the trusted read or the base-versus-
+ * head comparison noticed first. `isSymlink` rather than a git mode, because
+ * one caller has an lstat and the other has a tree entry, and neither should
+ * have to speak the other's vocabulary to ask for this string.
+ */
+export function notAFileMessage(path: string, isSymlink: boolean): string {
+  return (
+    `the contract path ${path} is ${isSymlink ? "a symlink" : "not a regular file"}. ` +
+    "Intent Guard will not follow a link to a contract: the file it points at is " +
+    "not the file anyone approved, and a later edit to the link target would " +
+    "change the contract without the contract path ever appearing in the diff. " +
+    "Replace it with a regular file."
+  );
+}
+
+/**
  * The active contract, or null when the project has none.
  *
  * The contract path must be a REGULAR FILE, and lstat is what says so.
@@ -69,14 +88,8 @@ export function readContract(
     return null;
   }
   if (!stat.isFile()) {
-    const shown = relative(projectRoot, path) || path;
-    const kind = stat.isSymbolicLink() ? "a symlink" : "not a regular file";
     throw new Error(
-      `the contract path ${shown} is ${kind}. Intent Guard will not follow a ` +
-        "link to a contract: the file it points at is not the file anyone " +
-        "approved, and a later edit to the link target would change the " +
-        "contract without the contract path ever appearing in the diff. " +
-        "Replace it with a regular file.",
+      notAFileMessage(relative(projectRoot, path) || path, stat.isSymbolicLink()),
     );
   }
   const raw = parse(readFileSync(path, "utf8"));

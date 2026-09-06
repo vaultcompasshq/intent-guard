@@ -146,11 +146,50 @@ function noticeLegacyRead(projectRoot: string): void {
 }
 
 /**
+ * Refuse a state directory that is a symlink.
+ *
+ * The contract read already refuses to follow a link at the contract path,
+ * which left the same trick available one level up: link `.intent-guard`
+ * itself at a directory the change added, and every read underneath lands
+ * somewhere nobody approved while the contract path looks like an ordinary
+ * file the whole way. `isDirectory` above uses statSync, which follows links,
+ * so the link read as a perfectly good directory.
+ *
+ * This one is checked with lstat on BOTH the read and the write path. A read
+ * that refused while a write accepted would let `init` create state inside the
+ * link and then fail on every command afterwards.
+ *
+ * It is a deliberate narrowing: `ln -s /somewhere/else .intent-guard` used to
+ * work. Somewhere else is exactly the problem, because the whole gate rests on
+ * the contract being a file a reviewer saw in a diff.
+ */
+function assertCanonicalNotSymlink(projectRoot: string): void {
+  const path = join(projectRoot, STATE_DIR);
+  let link = false;
+  try {
+    link = lstatSync(path).isSymbolicLink();
+  } catch {
+    return;
+  }
+  if (!link) return;
+  throw new StateDirError(
+    `Intent Guard needs ${path} to be a real directory, but it is a symlink. ` +
+      "Following it would let the contract and config this gate trusts live " +
+      "outside the path anybody reviews, and a change to the link target would " +
+      "move the whole state directory without the state directory ever appearing " +
+      "in a diff. Move it aside, put the real directory there, and run the " +
+      "command again.",
+  );
+}
+
+/**
  * The state directory to READ from. Prefers the canonical directory; falls
  * back to the legacy one, with a one-line notice per invocation. Throws when
- * both exist, because picking one would silently discard the other.
+ * both exist, because picking one would silently discard the other, and when
+ * the canonical path is a symlink.
  */
 export function stateDir(projectRoot: string): string {
+  assertCanonicalNotSymlink(projectRoot);
   const status = inspectStateDir(projectRoot);
   if (status.conflict) throw conflictError(status);
   if (status.usingLegacy) noticeLegacyRead(projectRoot);
@@ -164,6 +203,7 @@ export function stateDir(projectRoot: string): string {
  * about. The rename happens only when the canonical directory does not exist.
  */
 export function ensureStateDir(projectRoot: string): string {
+  assertCanonicalNotSymlink(projectRoot);
   const status = inspectStateDir(projectRoot);
   if (status.conflict) throw conflictError(status);
 

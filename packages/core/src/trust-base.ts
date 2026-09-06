@@ -39,8 +39,6 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { parse } from "yaml";
 import {
   assertValidIntentContract,
@@ -50,7 +48,7 @@ import { parseConfigText } from "./config.js";
 import { DEFAULT_CONDUCTOR_CONFIG, type ConductorConfig } from "./config-types.js";
 import { LEGACY_STATE_DIR, STATE_DIR } from "./state-dir.js";
 import { CONFIG_FILE } from "./config.js";
-import { DEFAULT_CONTRACT_FILE } from "./contract-store.js";
+import { DEFAULT_CONTRACT_FILE, notAFileMessage } from "./contract-store.js";
 
 /**
  * A base ref this tool cannot judge against, described for a user. Every CLI
@@ -89,24 +87,25 @@ const CONTROL_DIRS = [STATE_DIR, LEGACY_STATE_DIR] as const;
 
 const CONTRACTS_SUBDIR = "contracts";
 
-function gitFirstLine(error: unknown): string {
-  const raw = (error as { stderr?: string | Buffer }).stderr;
-  const fromGit = typeof raw === "string" ? raw : raw ? raw.toString("utf8") : "";
-  const firstLine = fromGit
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
-  if (firstLine) return firstLine;
-  return error instanceof Error ? error.message.split("\n")[0].trim() : String(error);
-}
-
-/** The commit a rev names, or a TrustBaseError built by the caller's handler. */
-function resolveCommit(projectRoot: string, rev: string): string {
-  return execFileSync("git", ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], {
-    cwd: projectRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
+/**
+ * What a rev resolves to, or null when it does not resolve here.
+ *
+ * `--quiet` suppresses git's own explanation, so there is nothing worth
+ * forwarding on failure: an earlier version fell back to the exception text
+ * and printed "Command failed: git rev-parse --verify --quiet origin/nope"
+ * at the user, which is a command line to run rather than a thing to fix.
+ * Null, and the caller writes the sentence.
+ */
+function resolve(projectRoot: string, rev: string, kind: "commit" | "tree"): string | null {
+  try {
+    return execFileSync("git", ["rev-parse", "--verify", "--quiet", `${rev}^{${kind}}`], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -134,34 +133,44 @@ function resolveCommit(projectRoot: string, rev: string): string {
  * on the spelling, since the same commit reached through a branch name, a tag
  * or a raw SHA is the same hole.
  *
+ * AND THE TREES MUST DIFFER TOO, which the commit comparison alone does not
+ * give. Two different commits can carry one identical tree, and then every
+ * control input still comes from the tree under judgment while the commit
+ * check waves it through. This is not a curiosity: what GitHub publishes as
+ * refs/pull/N/merge is a merge commit whose tree, when the base has not moved
+ * since the fork, IS the head branch's tree, and actions/checkout leaves that
+ * commit checked out. A workflow passing
+ * `--trust-base ${{ github.event.pull_request.head.sha }}` then names a
+ * different commit holding the same tree, and the forgery passes.
+ *
+ * Merging the base into the branch changes the head's tree, so a pull request
+ * that does that is judged normally rather than swallowed by this rule.
+ *
  * A branch with no commits ahead of its base resolves to the same commit and
  * is refused too. That is not a case this can tell apart from the
  * misconfiguration, and a pull request with nothing in it has nothing for the
  * gate to judge either way.
  */
 export function assertTrustBaseResolvable(projectRoot: string, ref: string): void {
-  let base: string;
-  try {
-    base = resolveCommit(projectRoot, ref);
-  } catch (error) {
+  const base = resolve(projectRoot, ref, "commit");
+  if (base === null) {
     throw new TrustBaseError(
-      `intent-guard: cannot read control inputs from base ref "${ref}": ` +
-        `${gitFirstLine(error)}. Nothing was checked. In CI, fetch the base ` +
-        "branch (actions/checkout with fetch-depth: 0) before running the gate.",
+      `intent-guard: cannot read control inputs from base ref "${ref}": it does ` +
+        "not resolve to a commit in this repository. Nothing was checked. In CI, " +
+        "fetch the base branch (actions/checkout with fetch-depth: 0) before " +
+        "running the gate.",
     );
   }
 
-  let head: string;
-  try {
-    head = resolveCommit(projectRoot, "HEAD");
-  } catch (error) {
+  const head = resolve(projectRoot, "HEAD", "commit");
+  if (head === null) {
     // No head commit to compare against, so the one property that makes
     // pull-request mode mean anything cannot be established. Fail closed:
     // this is could-not-run, not a quiet downgrade to trusting the head.
     throw new TrustBaseError(
       `intent-guard: cannot resolve HEAD to compare against base ref "${ref}": ` +
-        `${gitFirstLine(error)}. Pull-request mode needs both a base commit and ` +
-        "a head commit. Nothing was checked.",
+        "this is not a git repository with any commits. Pull-request mode needs " +
+        "both a base commit and a head commit. Nothing was checked.",
     );
   }
 
@@ -172,6 +181,20 @@ export function assertTrustBaseResolvable(projectRoot: string, ref: string): voi
         "being judged and pull-request mode would be off while still reporting as " +
         "on. Pass the base branch (for example origin/main), not the head commit: " +
         "on a pull_request event github.sha is the merge commit, which is HEAD. " +
+        "Nothing was checked.",
+    );
+  }
+
+  const baseTree = resolve(projectRoot, ref, "tree");
+  const headTree = resolve(projectRoot, "HEAD", "tree");
+  if (baseTree !== null && headTree !== null && baseTree === headTree) {
+    throw new TrustBaseError(
+      `intent-guard: refusing "${ref}" as the trust base: it is a different ` +
+        `commit from HEAD but carries an identical tree (${headTree}), so every ` +
+        "control input would come from the tree being judged and there would be " +
+        "nothing for pull-request mode to compare. A pull request's merge ref " +
+        "looks exactly like this when the base has not moved. Pass the base " +
+        "branch (for example origin/main), not the head or merge commit. " +
         "Nothing was checked.",
     );
   }
@@ -368,22 +391,6 @@ function approvalOf(contract: IntentContract | null): string {
   ]);
 }
 
-/**
- * Why a contract path that is not a regular file is refused, said once.
- *
- * Shared with the trusted-checkout read in contract-store, so the message a
- * user sees does not depend on which of the two paths noticed first.
- */
-export function notAFileMessage(file: { path: string; mode?: string }): string {
-  const kind = file.mode === "120000" ? "a symlink" : "not a regular file";
-  return (
-    `the contract path ${file.path} is ${kind}. Intent Guard will not follow a ` +
-    "link to a contract: the file it points at is not the file anyone approved, " +
-    "and a later edit to the link target would change the contract without the " +
-    "contract path ever appearing in the diff. Replace it with a regular file."
-  );
-}
-
 /** A contract at a ref, or null when that ref carries none. */
 function contractAtRef(
   projectRoot: string,
@@ -400,7 +407,11 @@ function contractAtRef(
     // link's target string yields the schema's "/ must be object", which tells
     // a reader nothing at all about the link, so the error is written here
     // instead and travels through the gate's existing contract-invalid reason.
-    return { contract: null, file, error: new Error(notAFileMessage(file)) };
+    return {
+      contract: null,
+      file,
+      error: new Error(notAFileMessage(file.path, file.mode === "120000")),
+    };
   }
   try {
     return {
