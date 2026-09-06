@@ -185,17 +185,36 @@ ref, so a pull request cannot widen its own contract, delete its protected
 paths, or write its own approval and have the gate agree. A control input the
 branch changed is reported as a proposal and ignored for the run, and a
 contract change that also grants itself a new approval is refused as
-self-approval. Nothing changes for the pre-commit hook or a local run.
+self-approval, as is one that turns the contract path into a symlink or deletes
+it. Nothing changes for the pre-commit hook or a local run. Pass the base
+branch, not `github.sha`: on a `pull_request` event that SHA is the merge
+commit, and a trust base resolving to the head commit is refused with exit 2
+rather than quietly putting the boundary back where it started.
+
+**Put the workflow itself on the protected side.** For a same-repo
+`pull_request` event GitHub runs the workflow file from the pull request head,
+so the job above is as editable as any other file in the branch until you
+arrange otherwise: require the check by name in branch protection, or move the
+gate into a reusable workflow held on a protected ref and call it with `uses:`.
+Nothing in this tool can detect a job that a pull request deleted, so this is a
+repository-configuration step you have to take, not one the flag takes for you.
+
+**A genuine re-freeze on a branch trips the refusal, by design.** `freeze`
+writes a new approval, and from the base ref that is indistinguishable from a
+forged one. The way through is to land the contract change on the base branch
+first, in its own reviewed pull request, or to configure the human-approval
+add-on below. Until then the branch shows drift against the old contract, which
+is the honest description of work outside the scope anyone has approved.
 
 **Optional tightening: require a human approval too.** Base-ref judgment is the
 floor and is not a setting. A team with reviewers may additionally require that
 a contract change carry a human approval before it takes effect on merge, as a
 pull-request review approval or a CODEOWNERS approval on `.intent-guard/**`.
-Configure that in the CI workflow or in branch protection, which live on the
-protected base side, and never in the in-repo config: a mode switch stored in a
-file the pull request can edit is one the pull request sets to whichever mode is
-weaker, so a knob that can only tighten is safe to offer and a knob that can
-loosen is the vulnerability wearing a settings label. See
+Configure that in the CI workflow or in branch protection, on the protected base
+side, and never in the in-repo config: a mode switch stored in a file the pull
+request can edit is one the pull request sets to whichever mode is weaker, so a
+knob that can only tighten is safe to offer and a knob that can loosen is the
+vulnerability wearing a settings label. See
 [docs/cli-reference.md](./docs/cli-reference.md) for the full behaviour.
 
 ### Develop from source

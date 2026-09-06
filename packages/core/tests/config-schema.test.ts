@@ -44,6 +44,20 @@ describe("config schema and floors", () => {
     ).toThrow(/drift\.thresholds\.info/);
   });
 
+  it("names .nan and .inf by the token the user typed, not as null", () => {
+    // JSON.stringify renders both as the literal "null", which sent a reader
+    // looking for an empty value that is nowhere in their file.
+    expect(() =>
+      parseConfigText("drift:\n  thresholds:\n    warn: .nan\n", "config.yaml"),
+    ).toThrow(/got \.nan/);
+    expect(() =>
+      parseConfigText("drift:\n  thresholds:\n    warn: .inf\n", "config.yaml"),
+    ).toThrow(/got \.inf/);
+    expect(() =>
+      parseConfigText("coach:\n  show_when_score_below: -.inf\n", "config.yaml"),
+    ).toThrow(/got -\.inf/);
+  });
+
   it("rejects a non-boolean hard_block_on_critical_constraints", () => {
     const body = "drift:\n  hard_block_on_critical_constraints: \"false\"\n";
     expect(() => parseConfigText(body, "config.yaml")).toThrow(ConfigError);

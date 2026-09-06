@@ -5,8 +5,10 @@ import { evaluateBudget, type BudgetResult } from "./budget.js";
 import { loadConfig } from "./config.js";
 import { STATE_DIR } from "./state-dir.js";
 import {
+  controlShapeReason,
   loadTrustedControls,
   selfApprovalReason,
+  type ControlShapeChange,
   type TrustedControls,
 } from "./trust-base.js";
 
@@ -27,6 +29,12 @@ export interface TrustBaseSummary {
   baseContractFound: boolean;
   /** Whether this run refused a contract change that approved itself. */
   selfApproval: boolean;
+  /**
+   * How the head changed the contract file's type or mode, or null. Carried
+   * separately from `proposals` so a consumer can act on the fact rather than
+   * on the sentence.
+   */
+  contractShapeChange: ControlShapeChange | null;
 }
 
 export interface GateResult {
@@ -107,6 +115,7 @@ export function checkGate(
           configChanged: trusted.configChanged,
           baseContractFound: trusted.contract !== null || trusted.contractError !== null,
           selfApproval: false,
+          contractShapeChange: trusted.contractShapeChange,
         };
   const withSummary = <T extends object>(result: T): T =>
     summary === null ? result : { ...result, trustBase: summary };
@@ -180,10 +189,25 @@ export function checkGate(
     trusted.headContractFound &&
     (trusted.contractChanged ||
       changedSetNamesContract(options.signals?.changedPaths ?? [])) &&
-    trusted.approvalDiffers
+    trusted.approvalDiffers &&
+    // A shape change gets its own, more specific refusal below. Saying "the
+    // approval differs" about a contract that is now a symlink is true and
+    // useless: the approval differs because there is no longer a contract to
+    // read one from.
+    trusted.contractShapeChange === null
   ) {
     summary.selfApproval = true;
     reasons.push(selfApprovalReason(trusted.ref));
+  }
+
+  // A change to WHAT THE CONTRACT PATH IS, rather than to what the contract
+  // says. A symlink, a directory, a deletion, or a mode-bit change: none of
+  // them is a contract, and none of them shows up in a content comparison. It
+  // is refused on the same terms as self-approval, only while the gate is
+  // enforcing a frozen contract, because with enforcement off there is no
+  // approval to protect and reporting it is enough.
+  if (trusted !== null && requireFrozen && trusted.contractShapeChange !== null) {
+    reasons.push(controlShapeReason(trusted.ref, trusted.contractShapeChange));
   }
 
   let drift: DriftScore | undefined;

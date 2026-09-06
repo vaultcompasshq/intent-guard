@@ -210,6 +210,9 @@ or fetch the base ref explicitly before running the gate:
 - run: npx intent-guard check --project . --base origin/${{ github.base_ref }}
 ```
 
+When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
+this does not change the gate exit code.
+
 ### Pull-request mode with `--trust-base`
 
 `--base` decides **which paths are judged**. `--trust-base` decides **where the
@@ -256,13 +259,47 @@ The `--json` output carries the same facts under `trustBase`:
   "contractChanged":true,"configChanged":false,"baseContractFound":true,"selfApproval":false}}
 ```
 
-**The one refusal.** When the gate is enforcing a frozen contract and the pull
-request both changes the contract and gives it an approval that is not the base
-ref's, the run fails closed with a reason starting `Self-approval refused:`.
-That is the attack: an approval a pull request granted itself. A widening that
-leaves the approval block alone is not refused; it is reported as a proposal
-and judged against the base contract's scope and budgets, which is drift until
-it merges. That drift is the intended surface, not a bug.
+**The refusals.** Both fire only while the gate is enforcing a frozen contract,
+so `--no-require-frozen` reports them and blocks on neither.
+
+`Self-approval refused:` when the pull request both changes the contract and
+gives it an approval that is not the base ref's. That is the attack: an
+approval a pull request granted itself. A widening that leaves the approval
+block alone is not refused; it is reported as a proposal and judged against the
+base contract's scope and budgets.
+
+`Control input refused:` when the pull request changed what the contract path
+**is** rather than what the contract says: a symlink, a directory, a deletion,
+or a change to the file's mode bits. A content comparison is blind to all of
+these. Turning the contract into a link whose target holds the approved bytes
+changes nothing any text comparison can see, and is the first half of a
+two-step whose second half edits only the link target, in a pull request where
+the contract path never appears in the diff at all. The gate also refuses to
+follow such a link on the trusted path, so the second half cannot land either.
+
+**A genuine re-freeze on a branch trips the self-approval refusal, by design.**
+`intent-guard freeze` writes a new `approved_at`, so re-approving a widened
+contract on the pull-request branch is indistinguishable, from the base ref, from
+forging one. Two ways through, and there is no third:
+
+1. Land the contract change on the base branch first, in its own pull request,
+   then rebase the work onto it. The contract change gets reviewed as the change
+   to the gate that it is.
+2. Configure the human-approval add-on below, which lets a reviewer's approval
+   stand in for the base ref's.
+
+Until then the pull request shows drift against the old contract. That is the
+intended surface: the work really is outside the scope anybody has approved yet.
+
+**A `--trust-base` that resolves to the head commit is refused**, exit 2, even
+though it names a real commit. Control inputs would come from the tree under
+judgment, so the boundary would be off while the report said it was on. The
+comparison is on resolved commits, not spellings, so a branch, a tag or a raw
+SHA pointing at the head commit are all refused alike. The realistic way in is
+`--trust-base ${{ github.sha }}`: on a `pull_request` event with the default
+`actions/checkout`, that SHA is the merge commit, which is HEAD. Pass
+`origin/${{ github.base_ref }}` instead. A branch with no commits ahead of its
+base is refused by the same rule, which is not a case this can tell apart.
 
 **No contract on the base ref** is first adoption, not an attack. The gate
 reports no-contract exactly as it does outside pull-request mode, and names the
@@ -282,8 +319,26 @@ Base-ref judgment is the floor and is not configurable. A team that has
 reviewers may additionally require that a contract change carry a **human
 approval** before it takes effect on merge: a pull-request review approval, or
 a CODEOWNERS approval on `.intent-guard/**`. That check belongs in the CI
-workflow or in branch protection, both of which live on the protected base
-side, and it is never read from a file in the repository.
+workflow or in branch protection, and it is never read from a file in the
+repository.
+
+**Arrange for the workflow itself to be on the protected side.** For a
+same-repo `pull_request` event GitHub runs the workflow file **from the pull
+request head**, so a workflow that merely sits in `.github/workflows` is as
+editable as any other file in the branch: a pull request can drop the
+`--trust-base` argument, or the whole job, in the same commit that carries what
+the gate would have caught. Nothing in this tool can see that, because the tool
+is what was not run. Two ways to close it, and a repository needs one of them:
+
+- Require the check by name in branch protection, so a pull request that
+  removes the job cannot merge on a missing status; or
+- Put the gate in a reusable workflow (or a composite action) held in a
+  protected repository or on a protected ref, and call it with `uses:` so the
+  steps that matter are not in the pull request's copy.
+
+This is a repository-configuration step, not something a flag can do. Say it
+out loud in your own setup docs, because "the workflow is on the protected
+side" is an assumption every claim above rests on.
 
 The reason is the whole point of this flag. A switch that selects between a
 stricter and a weaker mode, stored in a file the pull request can edit, is not
@@ -293,8 +348,6 @@ to offer from the protected side; one that can loosen is not safe anywhere the
 pull request can reach. Teams with reviewers get better ergonomics from it too,
 since an approved contract change can be allowed to settle the drift for that
 pull request rather than waiting for the merge.
-When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
-this does not change the gate exit code.
 
 ### Change budget
 

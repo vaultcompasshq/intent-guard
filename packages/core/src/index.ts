@@ -122,16 +122,21 @@ export {
 export {
   CONFIG_PROPOSAL_LINE,
   CONTRACT_PROPOSAL_LINE,
+  CONTROL_INPUT_REASON_PREFIX,
   SELF_APPROVAL_REASON_PREFIX,
   TrustBaseError,
   assertTrustBaseResolvable,
+  controlShapeReason,
+  isRegularFileMode,
   loadTrustedControls,
+  notAFileMessage,
   readArchivedContractAtRef,
   readControlFileAtHead,
   readControlFileAtRef,
   readFileAtRef,
   selfApprovalReason,
   type ControlFile,
+  type ControlShapeChange,
   type TrustedControls,
 } from "./trust-base.js";
 export {

@@ -31,9 +31,15 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   refused:`. A contract change that leaves the approval block alone is not
   refused; it is reported as a proposal and judged against the base contract's
   scope and budgets.
+- **A `Control input refused:` reason** for a pull request that changes what the
+  contract path *is* rather than what the contract says: a symlink, a
+  directory, a deletion, or a change to the file's mode bits. Reported as a
+  proposal in every case, refused while the gate is enforcing a frozen
+  contract.
 - **A `Pull-request mode` section in the markdown report**, and a `trustBase`
   block in the JSON from `check` and `report`, naming the ref, every proposed
-  control-input change, and whether self-approval was refused.
+  control-input change, whether self-approval was refused, and how the head
+  changed the contract file's type or mode.
 
 ### Security
 
@@ -54,6 +60,27 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   rather than silently dropped. A refused config prints one line and exits 2,
   because nothing was judged. These bound what a value may be, not what a
   project may decide.
+- **A trust base that resolves to the commit being judged is refused**, exit 2,
+  even though it names a real commit. `--trust-base HEAD` was accepted and put
+  the boundary back exactly where it started: every control input came from the
+  tree under judgment, no contract change could ever differ from its own base,
+  and the report said pull-request mode was on. The realistic way in is
+  `--trust-base ${{ github.sha }}`, because on a `pull_request` event with the
+  default `actions/checkout` that SHA is the merge commit, which is HEAD. The
+  comparison is on resolved commits, so an alias, a tag or a raw SHA naming the
+  head commit is refused alike.
+- **A contract path that is a symlink is refused, on both paths.** Replacing the
+  contract with a link whose target holds the approved bytes changed nothing any
+  content comparison could see, so pull-request mode reported "no control input
+  changed"; once that landed, a second pull request editing only the link target
+  widened the contract without the contract path appearing in its diff at all.
+  Both halves are closed. The head side of the base-versus-head comparison is
+  now read through git rather than from the working tree, so a symlink is
+  compared as the link target string it is and a type or mode change is visible
+  at all; and `readContract` lstats the contract path and refuses to follow a
+  link, which is a small hardening **outside** pull-request mode that applies to
+  every local run and pre-commit hook. A dangling link now reports itself
+  instead of reading as an absent contract.
 
 ### Changed
 
@@ -61,8 +88,29 @@ A new flag and a new refusal, so this is a minor rather than a patch.
   moves from `config-types` to `config-schema`, and now throws where it used to
   silently accept. Leaving an unvalidated merge exported beside the validating
   one would have left the second door into the config open.
-- **Exit 2 now also means a refused config or an unresolvable trust base**, in
-  addition to an unresolvable `--base`. It has always meant could-not-run.
+- **Exit 2 now also means a refused config, an unresolvable trust base, or a
+  trust base that is the head commit**, in addition to an unresolvable
+  `--base`. It has always meant could-not-run.
+- **A config value of `.nan` or `.inf` is named by the token the user typed.**
+  It was reported as "got null", because `JSON.stringify` renders both that
+  way, which sent a reader looking for an empty value that was nowhere in their
+  file.
+
+### Documentation
+
+- **The workflow that passes `--trust-base` has to be put on the protected side
+  deliberately.** For a same-repo `pull_request` event GitHub runs the workflow
+  file from the pull request head, so the job is as editable as any other file
+  in the branch unless the check is required by name in branch protection or the
+  gate lives in a reusable workflow on a protected ref. The docs asserted the
+  workflow was protected without saying it has to be arranged; both the README
+  and the CLI reference now say so, and say that no flag can detect a job a pull
+  request deleted.
+- **A genuine re-freeze on a branch trips the self-approval refusal, by
+  design**, because `freeze` writes a new approval and from the base ref that is
+  indistinguishable from a forged one. The README and the CLI reference now say
+  it plainly and give the two ways through: land the contract change on the base
+  branch first, or configure the human-approval add-on.
 
 ## [1.3.1] - 2026-09-05
 

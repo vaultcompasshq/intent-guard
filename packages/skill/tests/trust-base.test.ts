@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFile, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -207,6 +214,244 @@ function repo(spec: RepoSpec): string {
 const CONTRACT = ".intent-guard/intent-contract.yaml";
 const CONFIG = ".intent-guard/config.yaml";
 const OUT_OF_SCOPE_FILE = "src/payment/charge.ts";
+
+/**
+ * A forged pull request, and a trust base that is the commit being judged.
+ *
+ * The realistic way in is a workflow author writing `${{ github.sha }}`, which
+ * after actions/checkout on a pull request is the MERGE COMMIT, so the flag is
+ * accepted, the report says pull-request mode is on, and the boundary is off.
+ * A run in that state must refuse rather than pass with a green tick.
+ */
+function forgedRepoWithAlias(): string {
+  const dir = repo({
+    base: { [CONTRACT]: BASE_CONTRACT },
+    head: { [CONTRACT]: FORGED_CONTRACT, [OUT_OF_SCOPE_FILE]: "export const x = 1;\n" },
+  });
+  git(dir, ["branch", "ci-head"]);
+  return dir;
+}
+
+describe("intent-guard check --trust-base refuses the head as its own base", {
+  timeout: 60_000,
+}, () => {
+  it("refuses --trust-base HEAD with exit 2 and one line", async () => {
+    const dir = forgedRepoWithAlias();
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "HEAD",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(2);
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
+    expect(res.stderr).toContain("HEAD");
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+
+  it("refuses a ref that resolves to the head commit under another name", async () => {
+    const dir = forgedRepoWithAlias();
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "ci-head",
+      "--json",
+    ]);
+
+    // The name is different and it resolves cleanly, so only comparing the
+    // resolved commits catches this one.
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("ci-head");
+    expect(res.stderr.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("still accepts a base ref that is a different commit", async () => {
+    const dir = forgedRepoWithAlias();
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).trustBase.selfApproval).toBe(true);
+  });
+});
+
+/**
+ * The control input is a FILE, and what kind of file it is counts.
+ *
+ * Replacing the contract with a symlink whose target holds the base contract's
+ * exact bytes changes nothing a content comparison can see, and git records it
+ * as a type change. Left alone it is the first half of a two-step: land the
+ * link, then widen the link target in a later pull request, where the contract
+ * path itself never appears in the diff.
+ */
+describe("intent-guard check --trust-base sees the file's type", { timeout: 60_000 }, () => {
+  function repoWithSymlinkedContract(base: Record<string, string>): string {
+    const dir = repo({ base, head: { "docs/usage.md": "usage\n" } });
+    writeAt(dir, "docs/contract.yaml", BASE_CONTRACT);
+    unlinkSync(join(dir, CONTRACT));
+    symlinkSync("../docs/contract.yaml", join(dir, CONTRACT));
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-m", "make the contract a link"]);
+    return dir;
+  }
+
+  it("reports a contract turned into a symlink even when the bytes match", async () => {
+    const dir = repoWithSymlinkedContract({ [CONTRACT]: BASE_CONTRACT });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.contractChanged).toBe(true);
+    expect(out.trustBase.proposals.join(" ")).toContain("symlink");
+  });
+
+  it("refuses the symlinked contract when the gate is enforcing", async () => {
+    const dir = repoWithSymlinkedContract({ [CONTRACT]: BASE_CONTRACT });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const refusals = (JSON.parse(res.stdout).reasons as string[]).filter((reason) =>
+      reason.startsWith("Control input refused:"),
+    );
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toContain("symlink");
+  });
+
+  it("reports but does not refuse the symlink with enforcement off", async () => {
+    const dir = repoWithSymlinkedContract({ [CONTRACT]: BASE_CONTRACT });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--no-require-frozen",
+      "--json",
+    ]);
+
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.proposals.join(" ")).toContain("symlink");
+    expect(out.reasons.join(" ")).not.toContain("Control input refused");
+  });
+
+  it("reports a contract whose mode bits changed and nothing else", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { "docs/usage.md": "usage\n" },
+    });
+    git(dir, ["update-index", "--chmod=+x", CONTRACT]);
+    git(dir, ["commit", "-m", "chmod the contract"]);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.contractChanged).toBe(true);
+    expect(out.trustBase.proposals.join(" ")).toContain("mode");
+  });
+
+  it("refuses a pull request that deletes the approved contract", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { "docs/usage.md": "usage\n" },
+    });
+    git(dir, ["rm", "-q", "--", CONTRACT]);
+    git(dir, ["commit", "-m", "drop the contract"]);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.proposals.join(" ")).toContain("removed");
+    expect(out.reasons.join(" ")).toContain("Control input refused:");
+  });
+});
+
+/**
+ * The second half of the two-step, on the TRUSTED path with no flag at all.
+ *
+ * With the link already committed on both sides, the widened contract lives in
+ * docs/contract.yaml and the contract path never appears in the diff. Nothing
+ * about pull-request mode helps here, so the read itself has to refuse to
+ * follow the link.
+ */
+describe("the trusted checkout refuses a symlinked contract", { timeout: 60_000 }, () => {
+  function repoLinkedOnBothSides(target: string): string {
+    const dir = mkdtempSync(join(tmpdir(), "intent-guard-twostep-"));
+    git(dir, ["init", "-b", "main"]);
+    git(dir, ["config", "user.email", "tester@example.com"]);
+    git(dir, ["config", "user.name", "tester"]);
+    writeAt(dir, "README.md", "# Project\n");
+    writeAt(dir, OUT_OF_SCOPE_FILE, "export const charge = () => 0;\n");
+    writeAt(dir, "docs/contract.yaml", BASE_CONTRACT);
+    mkdirSync(join(dir, ".intent-guard"), { recursive: true });
+    symlinkSync("../docs/contract.yaml", join(dir, CONTRACT));
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-m", "base already carries the link"]);
+    git(dir, ["checkout", "-b", "feature"]);
+    writeAt(dir, "docs/contract.yaml", target);
+    writeAt(dir, OUT_OF_SCOPE_FILE, "export const charge = () => 999;\n");
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-m", "widen through the link target"]);
+    return dir;
+  }
+
+  it("blocks with a message naming the symlink, with no flag", async () => {
+    const dir = repoLinkedOnBothSides(FORGED_CONTRACT);
+
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+
+    expect(res.code).toBe(1);
+    const reasons = (JSON.parse(res.stdout).reasons as string[]).join(" ");
+    expect(reasons).toContain("symlink");
+    // The old failure mode was an unintelligible schema error about "/ must be
+    // object", which told a reader nothing about the link.
+    expect(reasons).not.toContain("must be object");
+  });
+
+  it("blocks in pull-request mode too, with the same readable message", async () => {
+    const dir = repoLinkedOnBothSides(FORGED_CONTRACT);
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const reasons = (JSON.parse(res.stdout).reasons as string[]).join(" ");
+    expect(reasons).toContain("symlink");
+    expect(reasons).not.toContain("must be object");
+  });
+});
 
 describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
   it("refuses a contract rewrite that grants itself a new approval", async () => {
