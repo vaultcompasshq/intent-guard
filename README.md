@@ -79,7 +79,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.4.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.5.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`

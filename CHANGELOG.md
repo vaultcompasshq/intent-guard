@@ -7,6 +7,49 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-11
+
+Minor bump on all four packages. **The rule: a repository should not have to
+remember `--trust-base`.** A composite action at the repository root now runs
+the gate on a pull request and decides both refs from the event, so this is a
+new feature rather than a fix.
+
+### Added
+
+- **A GitHub Action, `vaultcompasshq/intent-guard`.** Composite, so it adds no
+  container and no second runner. On a `pull_request` event it runs
+  `intent-guard check` with `--base origin/$GITHUB_BASE_REF` for the paths it
+  judges and `--trust-base origin/$GITHUB_BASE_REF` for where the contract, the
+  config and the contracts archive are read from. A workflow that uses it
+  cannot enter a pull-request run without pull-request mode, which is the
+  mistake a hand-written workflow makes by leaving one flag out.
+
+  Inputs: `version` (exact semver recommended, and the default is one),
+  `project`, `base`, `paths`, `trust-base`, `require-frozen`, `json-output`.
+  Outputs: `exit-code` and `result-file`. Every input is validated in a step of
+  its own, through the environment rather than through an expression, because
+  Actions substitutes an expression into a run script before the shell parses
+  it. `trust-base: off` is refused by name: on a same-repository
+  `pull_request` event the workflow file runs from the pull request's own head,
+  so an opt-out input would be settable by the pull request it governs.
+
+  Off a `pull_request` event the action refuses a run that names neither `base`
+  nor `paths`, rather than running the gate on an empty path set, which passes
+  every time.
+
+  `require-frozen: false` passes `--no-require-frozen`. `json-output` runs the
+  gate with `--json` and redirects stdout to that path; left empty, the verdict
+  stays readable in the job log.
+
+  There is no SARIF and nothing is uploaded to code scanning: the gate reports
+  one verdict about a change set rather than per-file findings with locations,
+  so the job's own pass or fail is the signal, and that is what a branch
+  protection rule reads.
+
+- **`examples/validate-action.test.ts`**, which runs the action's three bash
+  scripts under the flags GitHub uses with `npx` replaced by a recorder, and
+  asserts the argument vector rather than matching the YAML.
+
 ## [1.4.0] - 2026-09-05
 
 Minor bump on all four packages. **The rule: on a pull-request run, every
