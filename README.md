@@ -79,7 +79,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.4.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.5.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -167,7 +167,9 @@ Use `intent-guard doctor` to verify setup, `intent-guard report --staged` for PR
 
 ### Checking a pull request
 
-On CI, pass `--trust-base` as well as `--base`:
+On CI, pass `--trust-base` as well as `--base`. The
+[GitHub Action](#github-action) below passes both for you and is the shape to
+reach for first; this is what it runs:
 
 ```yaml
 - uses: actions/checkout@v4
@@ -229,6 +231,74 @@ knob that can only tighten is safe to offer and a knob that can loosen is the
 vulnerability wearing a settings label. See
 [docs/cli-reference.md](./docs/cli-reference.md) for the full behaviour.
 
+### GitHub Action
+
+The workflow above written out, with both refs decided from the event. This is
+the recommended shape: a repository that uses it cannot forget `--trust-base`,
+because the action passes it whether or not the workflow says anything.
+
+```yaml
+name: intent-guard
+on: pull_request
+
+jobs:
+  intent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # required: the base branch has to be present
+      - uses: vaultcompasshq/intent-guard@v1.5.0
+```
+
+No `version` input, because the default is the version the action shipped with,
+so the tag you pin the action to is the version that judges the pull request.
+
+`fetch-depth: 0` is not optional on a pull request. Both `--base` and
+`--trust-base` resolve a branch the default shallow checkout does not fetch, and
+without it intent-guard exits 2 and the job fails rather than falling back to
+judging the head against itself.
+
+The action installs `@vaultcompass/intent-guard` from the registry into a prefix
+under the runner temp and calls that copy by absolute path. It never runs the
+checkout's own `node_modules`, and never starts npm with the checkout as its
+working directory, so neither a committed `.npmrc` nor a package the head's
+lockfile put in `node_modules` can decide which program does the judging. What
+that does not cover is the workflow file itself, which a pull request can edit
+like any other CI step; branch protection on the base branch, with review
+required for `.github/workflows/**`, is the control for that.
+
+| Input | Default | What it does |
+|-------|---------|--------------|
+| `version` | `1.5.0` | Exact version of `@vaultcompass/intent-guard` to install, matching `^[0-9]+\.[0-9]+\.[0-9]+$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
+| `project` | `.` | Project root, relative to the workspace. No `..`, no absolute path, no leading `-`. |
+| `base` | *(from the event)* | Ref the changed paths are measured against. On a `pull_request` event, `origin/$GITHUB_BASE_REF`. It decides which paths are judged, never where the rules are read from; the action warns on a run that has one and no trust base. |
+| `paths` | *(empty)* | Explicit comma-separated paths instead of, or as well as, `base`. One line: a newline in the value is refused rather than read as another separator. |
+| `trust-base` | *(from the event)* | Ref the contract, config and contracts archive are read from. An explicit value redirects pull-request mode; there is no value that turns it off, and `off` is refused. |
+| `require-frozen` | `true` | `false` lets a project with no frozen contract pass instead of blocking. |
+| `json-output` | *(empty)* | Write the JSON result to this path and expose it as the `result-file` output. Left empty, the verdict is plain text in the job log. Not under `.github/`, which holds the files that decide how this gate runs. |
+
+Outputs are `exit-code` (intent-guard's own: 0 pass, 1 blocked, 2 could not run)
+and `result-file`, which is set only when a JSON file was asked for and
+something was written to it. Any other exit code means the gate never ran at
+all, and the job fails with 2 and a message saying so rather than reporting a
+verdict nobody produced.
+
+Off a `pull_request` event there is no ref to decide `base` from, so set `base`
+or `paths` yourself. The action refuses a run that names neither rather than
+running the gate on an empty path set, which would pass every time.
+
+**There is no SARIF and nothing is uploaded to code scanning.** Intent Guard
+reports one verdict about a change set rather than per-file findings with line
+numbers, so there is nothing for the security tab to show that the job's own
+pass or fail does not already say. The verdict and its reasons are in the job
+log, under the run step; `json-output` is there for a workflow that wants to
+post them somewhere itself.
+
+To run this gate alongside dep-guard and vault-guard in a single job, use
+[the Conductor action](https://github.com/vaultcompasshq/conductor) instead,
+which installs and runs all three.
+
 ### Develop from source
 
 ```bash
@@ -288,7 +358,9 @@ The gate
 (`intent-guard check`, or `intent-guard-check`) is the one place Intent Guard
 *enforces* rather than *suggests*:
 wire it via [integrations/git-hooks/pre-commit.sample](./integrations/git-hooks/pre-commit.sample)
-or [integrations/github-actions/conductor-drift-ci.yml.sample](./integrations/github-actions/conductor-drift-ci.yml.sample).
+locally, and the [GitHub Action](#github-action) on CI
+([workflow samples](./integrations/github-actions) if you would rather write the
+steps out yourself).
 Use [pre-commit-with-vault-guard.sample](./integrations/git-hooks/pre-commit-with-vault-guard.sample)
 or [conductor-vault-guard-ci.yml.sample](./integrations/github-actions/conductor-vault-guard-ci.yml.sample)
 when you want a separate secret-scanning gate beside Intent Guard.
