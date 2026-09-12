@@ -27,6 +27,13 @@ inputs:
       in `.tgz`, is not a version at all: npm reads it as a PATH, which on a run
       that starts in a checkout would let the tree being judged hand over its
       own gate.
+
+      A PRERELEASE CANNOT BE PINNED HERE. `1.6.0-rc.1` does not match, so a
+      release candidate cannot be gated through this action before it ships.
+      That is deliberate and matches the conductor action: the version that
+      judges a pull request is a released one, and the pattern stays the
+      narrowest one that names a release. Run a candidate through the CLI
+      directly.
     required: false
     default: 1.5.0
   project:
@@ -127,7 +134,13 @@ inputs:
 
 outputs:
   exit-code:
-    description: intent-guard's own exit code (0 pass, 1 blocked, 2 could not run), or the shell's if the binary never ran
+    description: >-
+      intent-guard's own exit code (0 pass, 1 blocked, 2 could not run), or the
+      shell's if the binary never ran. EMPTY when the run step never reached its
+      output lines at all, which is what an input that failed validation or an
+      install that failed looks like from here; the job still fails, because the
+      report step treats an empty code as could-not-run and exits 2. A caller
+      branching on this output has four cases to handle, not three.
     value: ${{ steps.run.outputs.exit_code }}
   result-file:
     description: Absolute path to the written JSON file, empty when json-output was not set or no JSON was written
