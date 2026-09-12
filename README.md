@@ -260,7 +260,7 @@ judging the head against itself.
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `version` | `1.4.0` | npm version or dist-tag for `@vaultcompass/intent-guard`. Pin an exact version: with a tag, the program judging a pull request is whichever one the registry served that morning. |
+| `version` | `1.5.0` | npm version or dist-tag for `@vaultcompass/intent-guard`. Pin an exact version: with a tag, the program judging a pull request is whichever one the registry served that morning. |
 | `project` | `.` | Project root, relative to the workspace. No `..`, no absolute path. |
 | `base` | *(from the event)* | Ref the changed paths are measured against. On a `pull_request` event, `origin/$GITHUB_BASE_REF`. |
 | `paths` | *(empty)* | Explicit comma-separated paths instead of, or as well as, `base`. |

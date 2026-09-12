@@ -26,7 +26,7 @@ inputs:
       request is whichever one the registry served that morning rather than the
       one decided on the base branch.
     required: false
-    default: 1.4.0
+    default: 1.5.0
   project:
     description: |
       Path to the Intent Guard project root, relative to the workspace root.

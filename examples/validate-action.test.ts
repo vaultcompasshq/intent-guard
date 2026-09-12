@@ -293,7 +293,7 @@ describe("action.yml builds the check command line", () => {
     expect(status).toBe(0);
     expect(argv).toEqual([
       "--yes",
-      "@vaultcompass/intent-guard@1.4.0",
+      "@vaultcompass/intent-guard@1.5.0",
       "check",
       "--project",
       ".",
