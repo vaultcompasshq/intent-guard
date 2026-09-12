@@ -1,0 +1,398 @@
+name: Intent Guard
+description: Gate a pull request against its frozen intent contract, read from the base ref. Run after actions/checkout.
+author: Vault & Compass LLC
+branding:
+  icon: shield
+  color: purple
+
+# There is no SARIF here, and this action deliberately does not upload anything
+# to code scanning. intent-guard reports a single verdict about a change set
+# rather than per-file findings with locations, so a SARIF log would carry one
+# result pinned to no line, and the GitHub security tab would show an alert that
+# never resolves. The verdict shows in the job log, and the job's own pass or
+# fail is the signal a branch-protection rule reads. `json-output` is for a
+# workflow that wants to post the verdict somewhere itself.
+
+inputs:
+  version:
+    description: |
+      npm dist-tag or semver for @vaultcompass/intent-guard. Validated against
+      `^(latest|next|beta|[0-9A-Za-z.+-]{1,64})$` so an attacker-controlled
+      workflow input cannot inject an npm tag or a shell fragment.
+
+      An EXACT version is the recommended shape, and the default is one. A
+      dist-tag is still accepted because a repository that wants to track the
+      line should be able to, but `latest` means the program judging a pull
+      request is whichever one the registry served that morning rather than the
+      one decided on the base branch.
+    required: false
+    default: 1.4.0
+  project:
+    description: |
+      Path to the Intent Guard project root, relative to the workspace root.
+      Must be 1..256 characters of `[A-Za-z0-9._/-]` and must not contain `..`,
+      so it cannot escape GITHUB_WORKSPACE. (The charset is checked with `+`
+      plus a separate length guard, never `{1,256}`: BSD regex sets RE_DUP_MAX
+      to 255, so `{1,256}` fails to compile on macOS and rejects every path
+      including `.`.)
+    required: false
+    default: .
+  base:
+    description: |
+      Git ref the changed paths are measured against. intent-guard judges the
+      paths changed since the merge base with this ref.
+
+      Left at the default, this is decided by the event: on a `pull_request`
+      event the action passes `origin/$GITHUB_BASE_REF`. On any other event
+      there is nothing to decide it, so `base` or `paths` has to be set and the
+      action refuses the run otherwise. That refusal is deliberate: the gate
+      fails closed on an empty path set, so a push run with no paths would pass
+      every time, for the wrong reason.
+
+      Same charset rules as `project`, and additionally may not begin with `-`,
+      so it cannot be read as a git option.
+    required: false
+    default: ''
+  paths:
+    description: |
+      Explicit changed paths, comma separated, instead of or in addition to
+      `base`. Each element has the same rules as `project`.
+    required: false
+    default: ''
+  trust-base:
+    description: |
+      Pull-request mode. intent-guard reads every control input (the frozen
+      contract, `config.yaml`, and the contracts archive) from this git ref
+      instead of from the tree it is judging, so a pull request cannot widen
+      its own contract, delete its protected paths, or write its own approval
+      in the same commit that carries what the gate exists to catch. A
+      head-side change to any of them is reported as a proposal and ignored.
+
+      Left at the default, this is decided by the event: on a `pull_request`
+      event the action passes `origin/$GITHUB_BASE_REF`, and on any other event
+      it passes nothing and behaviour is unchanged. Set it to a ref to point
+      pull-request mode at a different base.
+
+      There is deliberately NO value that turns pull-request mode off, and
+      `off` is refused with an error rather than ignored. On a same-repository
+      `pull_request` event the workflow file runs from the pull request's own
+      head, so an opt-out input would be settable by the very pull request
+      whose control inputs it governs, which is the switch this mode exists to
+      take away. Base-ref judging is the floor, not a knob.
+
+      A pull_request run using this REQUIRES `actions/checkout` with
+      `fetch-depth: 0`, so the base branch is present to read. Without it
+      intent-guard exits 2 and the job fails, which is deliberate: a missing
+      base is never a reason to fall back to trusting the head.
+
+      Same charset rules as `project`, and additionally may not begin with `-`,
+      so it cannot be read as a git option.
+    required: false
+    default: ''
+  require-frozen:
+    description: |
+      Set to `false` to let a project without a frozen contract pass instead of
+      blocking. Closed enum: `true` or `false`. The default is `true`, which is
+      the enforcing shape: no frozen contract means nothing has been approved,
+      and passing that is how a repository ends up with a gate that never
+      blocks anything.
+    required: false
+    default: 'true'
+  json-output:
+    description: |
+      Where to write intent-guard's JSON result, relative to the workspace
+      root. Same path rules as `project`. Left empty, the action runs in text
+      mode so the verdict and its reasons are readable in the job log; set it
+      and stdout is JSON, redirected into this file and exposed as the
+      `result-file` output for a later step to read.
+    required: false
+    default: ''
+
+outputs:
+  exit-code:
+    description: intent-guard's own exit code (0 pass, 1 blocked, 2 could not run)
+    value: ${{ steps.run.outputs.exit_code }}
+  result-file:
+    description: Absolute path to the written JSON file, or empty when json-output was not set
+    value: ${{ steps.run.outputs.result_file }}
+
+runs:
+  using: composite
+  steps:
+    # Consumers must run actions/checkout on their repository BEFORE this
+    # action, with fetch-depth: 0 on a pull_request run so the base ref is
+    # present for both --base and --trust-base to resolve.
+
+    - name: Setup Node.js
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: '22'
+
+    # Every input is validated before it can reach a shell.
+    #
+    # The reason this is a step of its own rather than inline guards in the
+    # run script: GitHub substitutes `${{ inputs.* }}` into the script text
+    # BEFORE the shell ever parses it, so no amount of quoting in the script
+    # body can contain a hostile value. Values are passed through `env:`
+    # instead, which the shell expands at runtime, and validated there.
+    - name: Validate inputs
+      id: validate
+      shell: bash
+      env:
+        IG_VERSION: ${{ inputs.version }}
+        IG_PROJECT: ${{ inputs.project }}
+        IG_BASE: ${{ inputs.base }}
+        IG_PATHS: ${{ inputs.paths }}
+        IG_TRUST_BASE: ${{ inputs.trust-base }}
+        IG_REQUIRE_FROZEN: ${{ inputs.require-frozen }}
+        IG_JSON_OUTPUT: ${{ inputs.json-output }}
+      run: |
+        set -euo pipefail
+
+        if [[ ! "${IG_VERSION}" =~ ^(latest|next|beta|[0-9A-Za-z.+-]{1,64})$ ]]; then
+          printf '::error::intent-guard: invalid `version` input: %q\n' "${IG_VERSION}"
+          printf '::error::Allowed: latest | next | beta | semver-like (1..64 chars of [0-9A-Za-z.+-])\n'
+          exit 1
+        fi
+
+        case "${IG_REQUIRE_FROZEN}" in
+          true|false) ;;
+          *)
+            printf '::error::intent-guard: invalid `require-frozen` input: %q\n' "${IG_REQUIRE_FROZEN}"
+            printf '::error::Allowed: true | false\n'
+            exit 1
+            ;;
+        esac
+
+        # project / json-output / each element of paths: relative, inside the
+        # workspace. No `..` segments, no leading `/`.
+        #
+        # The charset check uses `+` and a separate length guard, NOT
+        # `{1,256}`: macOS bash uses a BSD regex engine with RE_DUP_MAX 255,
+        # where `{1,256}` fails to compile and the match then rejects every
+        # value, including the default `.`.
+        validate_path() {
+          local name="$1"
+          local value="$2"
+          if [[ ! "${value}" =~ ^[A-Za-z0-9._/-]+$ ]] || (( ${#value} > 256 )); then
+            printf '::error::intent-guard: invalid `%s` input: %q\n' "${name}" "${value}"
+            printf '::error::Allowed: 1..256 chars of [A-Za-z0-9._/-]\n'
+            exit 1
+          fi
+          if [[ "${value}" == *".."* ]]; then
+            printf '::error::intent-guard: `%s` must not contain `..`: %q\n' "${name}" "${value}"
+            exit 1
+          fi
+          if [[ "${value}" == /* ]]; then
+            printf '::error::intent-guard: `%s` must be relative to the workspace: %q\n' "${name}" "${value}"
+            exit 1
+          fi
+        }
+
+        validate_path "project" "${IG_PROJECT}"
+
+        if [[ -n "${IG_JSON_OUTPUT}" ]]; then
+          validate_path "json-output" "${IG_JSON_OUTPUT}"
+        fi
+
+        # Each element separately rather than the joined string: a single
+        # check with `,` added to the charset would accept `a,/etc/passwd`,
+        # because the leading-slash rule would only ever see the first
+        # character of the whole value.
+        if [[ -n "${IG_PATHS}" ]]; then
+          IFS=',' read -r -a IG_PATHS_LIST <<< "${IG_PATHS}"
+          for element in "${IG_PATHS_LIST[@]}"; do
+            validate_path "paths" "${element}"
+          done
+        fi
+
+        # There is no opt-out value, and `off` is refused BY NAME rather than
+        # left to fail the charset check with a confusing message.
+        #
+        # The reason is the same reason the mode exists: on a same-repository
+        # `pull_request` event the workflow file runs from the pull request's
+        # own head, so the pull request whose contract and config are being
+        # held at arm's length could add `trust-base: off` to the workflow in
+        # the very commit being judged, and the boundary would be back to
+        # being a setting the untrusted side controls. Refusing loudly is what
+        # keeps someone from quietly re-adding it.
+        if [[ "${IG_TRUST_BASE}" == "off" ]]; then
+          printf '::error::intent-guard: `trust-base: off` is not supported. Pull-request mode is not optional: on a same-repository pull_request event the workflow file runs from the pull request head, so an opt-out input would be settable by the pull request it governs.\n'
+          exit 1
+        fi
+
+        # base and trust-base are git refs, not paths, but the same charset
+        # serves: a ref is letters, digits, dots, dashes, underscores and
+        # slashes. Empty means "decide from the event", so neither is
+        # validated as a ref when it is empty.
+        #
+        # The leading-dash check is the one that is not about paths. A ref
+        # beginning with `-` would be read as an OPTION by whichever git
+        # command intent-guard hands it to; this catches it a layer earlier,
+        # where the message can name the workflow input that produced it.
+        validate_ref() {
+          local name="$1"
+          local value="$2"
+          validate_path "${name}" "${value}"
+          if [[ "${value}" == -* ]]; then
+            printf '::error::intent-guard: `%s` must not begin with a dash: %q\n' "${name}" "${value}"
+            exit 1
+          fi
+        }
+
+        if [[ -n "${IG_BASE}" ]]; then
+          validate_ref "base" "${IG_BASE}"
+        fi
+        if [[ -n "${IG_TRUST_BASE}" ]]; then
+          validate_ref "trust-base" "${IG_TRUST_BASE}"
+        fi
+
+        # Off a pull request there is no ref for the action to fall back to,
+        # and the gate fails closed on an empty path set: a run that named
+        # neither would hand intent-guard nothing to judge, and nothing to
+        # judge passes. Refused here rather than left to look like a clean
+        # run. GITHUB_BASE_REF is the variable the run step actually falls
+        # back to, so it is the one checked, and Actions defines it EMPTY
+        # outside a pull request rather than leaving it unset.
+        if [[ -z "${IG_BASE}" && -z "${IG_PATHS}" && -z "${GITHUB_BASE_REF:-}" ]]; then
+          printf '::error::intent-guard: this run is not a pull_request event, so the action has no base ref to fall back to. Set the `base` input to a git ref, or the `paths` input to the paths to judge.\n'
+          printf '::error::The gate fails closed on an empty path set, so there is no safe default here: a run with no paths would pass every time.\n'
+          exit 1
+        fi
+
+    - name: Run intent-guard
+      id: run
+      shell: bash
+      env:
+        IG_VERSION: ${{ inputs.version }}
+        IG_PROJECT: ${{ inputs.project }}
+        IG_BASE: ${{ inputs.base }}
+        IG_PATHS: ${{ inputs.paths }}
+        IG_TRUST_BASE: ${{ inputs.trust-base }}
+        IG_REQUIRE_FROZEN: ${{ inputs.require-frozen }}
+        IG_JSON_OUTPUT: ${{ inputs.json-output }}
+      run: |
+        # NOT `set -euo pipefail`. GitHub invokes a composite bash step as
+        # `bash --noprofile --norc -eo pipefail {0}`, so errexit is ALREADY ON
+        # before this script's first line. A `set` line here would re-state
+        # that and clear nothing, and the shell would abort at the npx line
+        # the moment intent-guard exited non-zero, which is the entire
+        # interesting case: GITHUB_OUTPUT would stay empty and the report step
+        # below would have no code to re-raise. Errexit is cleared narrowly,
+        # around the one command that is EXPECTED to exit non-zero, and
+        # restored immediately afterwards, so every other line in this script
+        # still fails the step if it breaks.
+
+        ROOT="${GITHUB_WORKSPACE}"
+        OUT=""
+
+        ARGS=(check --project "${IG_PROJECT}")
+
+        # --base decides which paths are judged. GITHUB_BASE_REF is set by
+        # GitHub on, and only on, a pull_request event, which is exactly the
+        # run where the tree being judged was written by someone who is not
+        # yet trusted, so the event decides the default and no workflow has to
+        # remember to.
+        #
+        # origin/ prefixed, not bare: GITHUB_BASE_REF is a branch NAME
+        # ("main"), and after actions/checkout only the remote-tracking ref
+        # exists locally. A bare "main" would resolve to nothing on a
+        # detached-HEAD checkout and intent-guard would exit 2, which is safe
+        # but for the wrong reason.
+        if [[ -n "${IG_BASE}" ]]; then
+          ARGS+=(--base "${IG_BASE}")
+        elif [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+          ARGS+=(--base "origin/${GITHUB_BASE_REF}")
+        fi
+
+        # --trust-base decides WHERE THE RULES COME FROM, which is a different
+        # question from which paths are judged, so it is built separately even
+        # though both usually resolve to the same ref.
+        #
+        # There is no opt-out branch here on purpose: an explicit ref
+        # REDIRECTS pull-request mode, it never disables it, and the validate
+        # step refuses `off` before this line is reached. Empty on a
+        # non-pull_request event simply passes nothing, so a push run that
+        # named its own paths is unchanged.
+        if [[ -n "${IG_TRUST_BASE}" ]]; then
+          ARGS+=(--trust-base "${IG_TRUST_BASE}")
+        elif [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+          ARGS+=(--trust-base "origin/${GITHUB_BASE_REF}")
+        fi
+
+        # Passed as the one comma-separated value intent-guard's own --paths
+        # takes, not split here: the CLI splits it, and splitting it twice
+        # would turn a path list into positional arguments.
+        if [[ -n "${IG_PATHS}" ]]; then
+          ARGS+=(--paths "${IG_PATHS}")
+        fi
+
+        if [[ "${IG_REQUIRE_FROZEN}" == "false" ]]; then
+          ARGS+=(--no-require-frozen)
+        fi
+
+        if [[ -n "${IG_JSON_OUTPUT}" ]]; then
+          OUT="${ROOT}/${IG_JSON_OUTPUT}"
+          mkdir -p "$(dirname "${OUT}")"
+          ARGS+=(--json)
+        fi
+
+        # Two calls rather than one with a computed redirect: in text mode the
+        # verdict and its reasons belong in the job log, where the person
+        # reading the failed check will look, and a redirect into a file would
+        # take them out of it. In JSON mode the JSON is the whole of stdout,
+        # so this redirects rather than tees: a tee of a text banner into a
+        # JSON file is how a sibling action in this family broke its own
+        # output.
+        cd "${ROOT}"
+        set +e
+        if [[ -n "${OUT}" ]]; then
+          npx --yes "@vaultcompass/intent-guard@${IG_VERSION}" "${ARGS[@]}" > "${OUT}"
+        else
+          npx --yes "@vaultcompass/intent-guard@${IG_VERSION}" "${ARGS[@]}"
+        fi
+        CHECK_STATUS=$?
+        set -e
+
+        echo "exit_code=${CHECK_STATUS}" >> "${GITHUB_OUTPUT}"
+        echo "result_file=${OUT}" >> "${GITHUB_OUTPUT}"
+
+        # Deliberately exits 0 here, whatever intent-guard said. The real
+        # exit code is re-raised in the last step, which runs with always() so
+        # a caller can put its own steps in between and still have them run.
+        exit 0
+
+    # The gate, re-raised in a step of its own. Passes intent-guard's own exit
+    # code through rather than collapsing every non-zero to 1: 2 means
+    # intent-guard could not run its checks at all, which is a different fact
+    # from "the change is blocked" and must not be reported as one. This is
+    # the same rule the generated pre-commit hook follows.
+    - name: Report intent-guard result
+      id: report
+      if: ${{ always() }}
+      shell: bash
+      env:
+        IG_EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+      run: |
+        set -uo pipefail
+
+        # Empty means the run step never got far enough to record a code: an
+        # input failed validation, or the step itself died. That is not a
+        # clean run and must not be reported as one, so it fails here rather
+        # than passing through a bare `exit ""`, which bash rejects as a bad
+        # argument and which would then exit 1 for a reason that has nothing
+        # to do with the gate.
+        if [[ -z "${IG_EXIT_CODE}" ]]; then
+          printf '::error::intent-guard did not run to completion, so no result was recorded. See the earlier steps.\n'
+          exit 1
+        fi
+        if [[ "${IG_EXIT_CODE}" == "0" ]]; then
+          echo "intent-guard: gate ok."
+          exit 0
+        fi
+        if [[ "${IG_EXIT_CODE}" == "2" ]]; then
+          printf '::error::intent-guard could not complete its checks (exit 2): an unresolvable ref, a missing merge base, or a trust base that will not resolve. This is not a passing gate.\n'
+        else
+          printf '::error::intent-guard blocked this change (exit %s). See the verdict in the run step log.\n' "${IG_EXIT_CODE}"
+        fi
+        exit "${IG_EXIT_CODE}"

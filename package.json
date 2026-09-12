@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm validate:portfolio-names && pnpm build && pnpm -r test && vitest run examples/validate-examples.test.ts examples/validate-integrations.test.ts examples/validate-offline-lifecycle.test.ts",
+    "test": "pnpm validate:portfolio-names && pnpm build && pnpm -r test && vitest run examples/validate-action.test.ts examples/validate-examples.test.ts examples/validate-integrations.test.ts examples/validate-offline-lifecycle.test.ts",
     "typecheck": "pnpm -r typecheck",
     "release:smoke": "pnpm build && node scripts/release-smoke.mjs",
     "validate:portfolio-names": "node scripts/validate-no-portfolio-names.mjs",
