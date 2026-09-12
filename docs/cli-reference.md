@@ -225,6 +225,11 @@ rules come from**. They are independent, and a pull-request run passes both:
       --trust-base origin/${{ github.base_ref }}
 ```
 
+The `vaultcompasshq/intent-guard` action builds exactly that command line and
+decides both refs from the event, so a workflow using it cannot omit
+`--trust-base` by forgetting to type it. See the
+[README](../README.md#github-action).
+
 Without it, the gate reads its contract and its config out of the branch it is
 judging, so a pull request can widen `in_scope`, delete `protected_paths`,
 write its own `frozen_by: user` and `approval`, and make the change all of

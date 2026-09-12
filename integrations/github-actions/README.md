@@ -1,11 +1,40 @@
 # GitHub Actions Integration
 
+## Use the action
+
+The recommended shape is the published composite action, not a hand-written
+workflow:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: vaultcompasshq/intent-guard@v1.5.0
+  with:
+    version: 1.5.0
+```
+
+It decides both refs from the event: `--base origin/$GITHUB_BASE_REF` for the
+paths it judges, and `--trust-base` for where the contract, the config and the
+contracts archive are read from. That second one is the reason to prefer it over
+the samples below, which pass neither: a workflow that forgets `--trust-base`
+reads the rules out of the branch it is judging, so a pull request can widen its
+own contract in the commit being judged and the gate agrees. The action cannot
+forget. See the [README](../../README.md#github-action) for every input, and
+note that there is no SARIF: the verdict is in the job log, and the job's own
+pass or fail is what branch protection reads.
+
+## The samples, for a workflow you write yourself
+
+Use these when the action does not fit: a self-hosted runner without registry
+access, a job that has to do something between the steps, or a repository that
+pins its own copy of the workflow. They are the manual alternative, not the
+starting point, and neither passes `--trust-base`. Add it, as
+`--trust-base origin/$GITHUB_BASE_REF`, to any of them that runs on a pull
+request.
+
 Use these samples when a repository already has a frozen
 `.intent-guard/intent-contract.yaml` and wants CI to fail on blocking drift.
-
-The package-install samples assume `@vaultcompass/intent-guard@latest`
-has been published to npm. Until publish, run Intent Guard from a local checkout
-or a release artifact in the consuming repository's workflow.
 
 For Intent Guard only, copy
 [conductor-drift-ci.yml.sample](./conductor-drift-ci.yml.sample) to:
