@@ -268,6 +268,13 @@ that does not cover is the workflow file itself, which a pull request can edit
 like any other CI step; branch protection on the base branch, with review
 required for `.github/workflows/**`, is the control for that.
 
+**Linux and macOS runners.** The action calls the installed binary at
+`<prefix>/bin/intent-guard`, which is where a global npm install puts its shims
+on those two. Windows puts them in the prefix directory itself, so the path
+would not exist and the job would fail as could-not-run with a message about the
+binary rather than about the change. Run this on `ubuntu-latest` or
+`macos-latest`.
+
 | Input | Default | What it does |
 |-------|---------|--------------|
 | `version` | `1.5.0` | Exact version of `@vaultcompass/intent-guard` to install, matching `^[0-9]+\.[0-9]+\.[0-9]+$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
@@ -283,6 +290,12 @@ and `result-file`, which is set only when a JSON file was asked for and
 something was written to it. Any other exit code means the gate never ran at
 all, and the job fails with 2 and a message saying so rather than reporting a
 verdict nobody produced.
+
+`exit-code` has a fourth value: **empty**, when the run step never reached its
+output lines, which is what a rejected input or a failed install looks like from
+outside. The job still fails — the report step reads an empty code as
+could-not-run and exits 2 — but a workflow that branches on this output should
+treat empty as could-not-run too, rather than as a pass it did not get.
 
 Off a `pull_request` event there is no ref to decide `base` from, so set `base`
 or `paths` yourself. The action refuses a run that names neither rather than

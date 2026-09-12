@@ -337,9 +337,23 @@ function makeHarness(overrides: Record<string, string> = {}): Harness {
   };
 }
 
+/**
+ * The environment a step gets from the runner, with the head's own
+ * `node_modules/.bin` AHEAD of everything else on PATH.
+ *
+ * That ordering is the hostile case, not a convenience: a workflow that ran its
+ * install step before this action has the checkout's `node_modules/.bin` on
+ * PATH already, and that directory's contents come from the head's package.json
+ * and lockfile. Putting it first is what gives "the planted copy never ran" its
+ * meaning. Without it the assertion holds for the uninteresting reason that
+ * nothing could have reached the planted copy in the first place, and a run
+ * step that resolved the gate by bare name would look isolated while being
+ * exactly the thing this boundary exists to stop.
+ */
 function ambientFor(harness: Harness, event: Record<string, string>): Record<string, string> {
+  const headBin = join(harness.workspace, "node_modules/.bin");
   return {
-    PATH: `${harness.pathDir}${delimiter}${process.env.PATH ?? ""}`,
+    PATH: `${headBin}${delimiter}${harness.pathDir}${delimiter}${process.env.PATH ?? ""}`,
     GITHUB_WORKSPACE: harness.workspace,
     GITHUB_OUTPUT: harness.outputsFile,
     ...event,
@@ -568,18 +582,40 @@ describe("action.yml runs the installed binary and nothing else", () => {
     );
   });
 
+  it("puts the head's copy somewhere a bare-name resolution would reach it", () => {
+    // The negative control for the test below, and the reason it is a test
+    // rather than a comment: `plantedRecord.ran === false` is only evidence if
+    // something could have run the planted copy. If this ever fails, that
+    // assertion has stopped meaning anything and starts passing for the
+    // uninteresting reason.
+    const harness = makeHarness();
+    const reached = spawnSync("intent-guard", ["--version"], {
+      encoding: "utf8",
+      cwd: harness.runnerTemp,
+      env: ambientFor(harness, PULL_REQUEST_EVENT),
+    });
+    expect(reached.status).toBe(0);
+    expect(reached.stdout).toContain("PLANTED");
+    expect(readRecord(harness.plantedRecord).ran).toBe(true);
+  });
+
   it("ignores a node_modules copy and an .npmrc the head committed", () => {
     // The two redirects this boundary exists to close. The head controls both:
     // node_modules content comes from its package.json and lockfile, and a
     // committed .npmrc repoints the registry npm fetches from. Proved by what
-    // ran, not by reading the script.
+    // ran, not by reading the script: the planted copy is first on PATH for
+    // this run, so the gate reaching the installed binary instead is a fact
+    // about the step rather than about the fixture.
     const harness = makeHarness();
     runInstall(harness);
     const run = runGate(harness);
-    expect(run.status).toBe(0);
-    expect(readRecord(harness.gateRecord).ran).toBe(true);
+    // The head's copy first, so a step that took the wrong binary fails with a
+    // message naming the attack rather than with "expected false to be true"
+    // about the recorder that did not get its turn.
     expect(readRecord(harness.plantedRecord).ran).toBe(false);
     expect(readRecord(harness.npxRecord).ran).toBe(false);
+    expect(run.status).toBe(0);
+    expect(readRecord(harness.gateRecord).ran).toBe(true);
     expect(run.stdout).toContain(GATE_MARKER);
     expect(run.stdout).not.toContain("PLANTED");
     // And it ran from outside the tree, so nothing in the tree was its cwd.
