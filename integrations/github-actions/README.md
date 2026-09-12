@@ -10,9 +10,11 @@ workflow:
   with:
     fetch-depth: 0
 - uses: vaultcompasshq/intent-guard@v1.5.0
-  with:
-    version: 1.5.0
 ```
+
+There is no `version` input in that example because the default is the version
+the action shipped with, so the tag you pin the action to is the version that
+judges the pull request.
 
 It decides both refs from the event: `--base origin/$GITHUB_BASE_REF` for the
 paths it judges, and `--trust-base` for where the contract, the config and the
@@ -32,6 +34,13 @@ pins its own copy of the workflow. They are the manual alternative, not the
 starting point, and neither passes `--trust-base`. Add it, as
 `--trust-base origin/$GITHUB_BASE_REF`, to any of them that runs on a pull
 request.
+
+They also fetch the gate with `pnpm dlx` from inside the checkout, at `@latest`.
+The action deliberately does neither: it installs an exact pinned version into a
+prefix under the runner temp and calls it from there, so the tree being judged
+cannot repoint the registry with a committed `.npmrc` or hand over its own copy
+out of `node_modules`. A workflow you write yourself should do the same thing,
+and the samples are due an update.
 
 Use these samples when a repository already has a frozen
 `.intent-guard/intent-contract.yaml` and wants CI to fail on blocking drift.

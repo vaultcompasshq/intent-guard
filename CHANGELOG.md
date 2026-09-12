@@ -24,14 +24,33 @@ new feature rather than a fix.
   cannot enter a pull-request run without pull-request mode, which is the
   mistake a hand-written workflow makes by leaving one flag out.
 
-  Inputs: `version` (exact semver recommended, and the default is one),
-  `project`, `base`, `paths`, `trust-base`, `require-frozen`, `json-output`.
-  Outputs: `exit-code` and `result-file`. Every input is validated in a step of
-  its own, through the environment rather than through an expression, because
-  Actions substitutes an expression into a run script before the shell parses
-  it. `trust-base: off` is refused by name: on a same-repository
-  `pull_request` event the workflow file runs from the pull request's own head,
-  so an opt-out input would be settable by the pull request it governs.
+  **The gate comes from outside the tree it judges.** The action installs
+  `@vaultcompass/intent-guard` at the pinned version into a prefix under the
+  runner temp, with npm started from the runner temp rather than the checkout,
+  and calls the installed binary by absolute path with an absolute `--project`.
+  Neither an `.npmrc` committed by the head nor a copy of the package sitting in
+  the head's `node_modules` can decide which program does the judging. What the
+  pin does not cover is the workflow file, which a pull request can edit like
+  any other CI step; branch protection on the base branch, with review required
+  for the workflow path, is the control for that.
+
+  Inputs: `version` (an exact version, nothing else: a dist-tag hands the choice
+  of program to the registry, and a value npm reads as a path lets the tree
+  supply its own gate), `project`, `base`, `paths`, `trust-base`,
+  `require-frozen`, `json-output`. Outputs: `exit-code` and `result-file`, the
+  second set only when JSON was asked for and something was written. Every input
+  is validated in a step of its own, through the environment rather than through
+  an expression, because Actions substitutes an expression into a run script
+  before the shell parses it. `trust-base: off` is refused by name in any
+  capitalisation: on a same-repository `pull_request` event the workflow file
+  runs from the pull request's own head, so an opt-out input would be settable
+  by the pull request it governs.
+
+  Only 0 and 1 are verdicts. 2 and every other code, including the ones the
+  shell produces when the binary never ran, are reported as could-not-run and
+  re-raised as 2, so a required check fails without claiming the change was
+  blocked. A run that has a `base` and no trust base gets a warning, because
+  `base` decides which paths are judged and never where the rules come from.
 
   Off a `pull_request` event the action refuses a run that names neither `base`
   nor `paths`, rather than running the gate on an empty path set, which passes
@@ -46,9 +65,13 @@ new feature rather than a fix.
   so the job's own pass or fail is the signal, and that is what a branch
   protection rule reads.
 
-- **`examples/validate-action.test.ts`**, which runs the action's three bash
-  scripts under the flags GitHub uses with `npx` replaced by a recorder, and
-  asserts the argument vector rather than matching the YAML.
+- **`examples/validate-action.test.ts`**, which runs the action's four bash
+  scripts under the flags GitHub uses, with npm and the installed binary
+  replaced by recorders, and asserts the argument vector and the directory each
+  one was started in rather than matching the YAML. Each step's environment and
+  working directory are derived from that step's own `env:` and
+  `working-directory:`, so a variable a script reads but the file does not
+  declare fails the suite instead of being quietly supplied by the harness.
 
 ## [1.4.0] - 2026-09-05
 
