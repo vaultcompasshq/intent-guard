@@ -970,3 +970,67 @@ describe("intent-guard drift --trust-base", { timeout: 60_000 }, () => {
     expect(JSON.parse(withoutTrust.stdout).action).toBe("proceed");
   });
 });
+
+// A MISTYPED FLAG MUST NOT QUIETLY BECOME A WEAKER RUN.
+//
+// The argv loops in these CLIs are an if/else-if chain with no trailing else,
+// so an unrecognised argument was dropped without a word. That is a fail-OPEN,
+// and the pair of assertions above measures exactly what it costs:
+// `--trust-base` gives hard_block, no `--trust-base` gives proceed. So
+// `--trust-bse` scored the head's own relaxed thresholds and reported proceed,
+// while the workflow that asked for pull-request mode looked like it had it.
+//
+// Same family as the vault-guard defect of 2026-09-16, in the opposite
+// direction: that one failed closed and shouted, this one failed open and said
+// nothing. `--base` and `--trust-base` already refuse a MISSING value, so the
+// parser had a refusal path and simply never reached it for an unknown name.
+describe("mistyped flags are refused, not ignored", { timeout: 60_000 }, () => {
+  it("refuses a misspelled --trust-base instead of silently dropping the mode", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: MEDIUM_CONSTRAINT_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: { [CONFIG]: RELAXED_HEAD_CONFIG, "docs/usage.md": "usage\n" },
+    });
+
+    const typo = await run("drift-cli.js", [
+      "--project", dir,
+      "--contract", join(dir, CONTRACT),
+      "--trust-bse", "main",
+      "--paths", OUT_OF_SCOPE_FILE,
+    ]);
+
+    expect(typo.code).not.toBe(0);
+    expect(typo.stderr).toContain("--trust-bse");
+    // The tell that this is the fail-open rather than an unrelated error: the
+    // old behaviour produced a clean, successful, WEAKER verdict.
+    expect(typo.stdout).not.toContain("proceed");
+  });
+
+  it("refuses an unknown flag on check as well", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: MEDIUM_CONSTRAINT_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: { "docs/usage.md": "usage\n" },
+    });
+
+    const res = await run("check-cli.js", ["--project", dir, "--truts-base", "main"]);
+    expect(res.code).not.toBe(0);
+    expect(res.stderr).toContain("--truts-base");
+  });
+
+  it("still accepts every documented flag", async () => {
+    // The refusal must not catch a real flag. If this goes red the guard is too
+    // broad, which breaks consumers rather than protecting them.
+    const dir = repo({
+      base: { [CONTRACT]: MEDIUM_CONSTRAINT_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: { [CONFIG]: RELAXED_HEAD_CONFIG, "docs/usage.md": "usage\n" },
+    });
+
+    const ok = await run("drift-cli.js", [
+      "--project", dir,
+      "--contract", join(dir, CONTRACT),
+      "--trust-base", "main",
+      "--paths", OUT_OF_SCOPE_FILE,
+    ]);
+    expect(ok.code).toBe(0);
+    expect(JSON.parse(ok.stdout).action).toBe("hard_block");
+  });
+});

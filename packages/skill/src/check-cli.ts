@@ -43,7 +43,10 @@ and a contract change that also grants itself a new approval is refused. It
 fails closed the same way: a ref that will not resolve exits 2.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
-function badUsage(): never {
+// The offending argument is named when there is one, because "here is the
+// usage" leaves the reader to diff their command against it by eye.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
   console.error(USAGE);
   process.exit(1);
 }
@@ -100,6 +103,23 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else {
+      // ANYTHING UNRECOGNISED IS REFUSED, and this arm is the point of the
+      // whole chain rather than tidiness at the end of it.
+      //
+      // Without it the loop dropped an unknown argument silently, which turned
+      // a typo into a QUIETER RUN instead of an error. `--trust-bse origin/main`
+      // left trustBase empty, so the gate read its control inputs from the head
+      // rather than from the base ref, scored against whatever thresholds the
+      // head carried, and reported a pass -- while the workflow that asked for
+      // pull-request mode looked like it had got it. A fail-open, and the
+      // measurements in trust-base.test.ts show the same run answering
+      // hard_block with the flag and proceed without it.
+      //
+      // A bare word is refused for the same reason. `intent-guard check
+      // src/foo.ts` looks like it checks that path and checks nothing, because
+      // paths arrive through `--paths`.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 

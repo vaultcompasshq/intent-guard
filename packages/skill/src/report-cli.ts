@@ -36,7 +36,10 @@ proposes to change. The contract summarised is the base ref's, because that
 is the one the gate judged against.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
-function badUsage(): never {
+// The offending argument is named when there is one, because "here is the
+// usage" leaves the reader to diff their command against it by eye.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
   console.error(USAGE);
   process.exit(1);
 }
@@ -92,6 +95,11 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else {
+      // Refused rather than dropped. See the longer note in check-cli.ts: a
+      // silently ignored `--trust-bse` left this reading its control inputs
+      // from the head instead of the base ref, and said nothing about it.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 
