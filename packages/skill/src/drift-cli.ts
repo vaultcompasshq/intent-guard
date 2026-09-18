@@ -35,6 +35,15 @@ the caller's own choice on either side and is never read from the ref. A ref
 that will not resolve exits 2, and a changed config is noted on stderr so
 stdout stays parseable JSON.`;
 
+// A usage error is not a help request: it goes to stderr and exits non-zero,
+// naming the offending argument rather than leaving the reader to diff their
+// command against the usage by eye.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
 function parseArgs(argv: string[]) {
   let contractPath = "";
   let projectRoot = ".";
@@ -72,6 +81,13 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else {
+      // Refused rather than dropped. See the longer note in check-cli.ts. It
+      // bites hardest here, because this command's own thresholds come from
+      // the ref `--trust-base` names: a silently ignored `--trust-bse` scored
+      // against whatever the head carried and answered `proceed` where the
+      // same run with the flag answers `hard_block`.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 

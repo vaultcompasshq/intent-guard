@@ -7,6 +7,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A mistyped flag is refused instead of silently ignored, on `check`,
+  `report` and `drift`.** The argv loops were an if/else-if chain with no
+  trailing `else`, so an unrecognised argument was dropped without a word. That
+  turned a typo into a **quieter run** rather than an error: `--trust-bse
+  origin/main` left pull-request mode off, so the gate read its control inputs
+  from the head instead of the base ref, scored against whatever thresholds the
+  head carried, and reported a pass — while the workflow that asked for
+  pull-request mode looked like it had got it.
+
+  The cost is measurable on one of this repo's own fixtures: the same `drift`
+  run answers `hard_block` with `--trust-base` and `proceed` without it. A typo
+  silently bought the second answer.
+
+  A bare word is refused for the same reason — `intent-guard check src/foo.ts`
+  looked like it checked that path and checked nothing, because paths arrive
+  through `--paths`. `--base` and `--trust-base` already refused a *missing*
+  value, so the parser had a refusal path and simply never reached it for an
+  unknown name. The message now names the offending argument.
+
+  Found while auditing a vault-guard defect of the same family and the opposite
+  direction: that one exited 1 on an unknown option and was reported as a
+  secrets finding, failing closed and loudly. This one failed open and said
+  nothing.
+
 ## [1.5.0] - 2026-09-11
 
 Minor bump on all four packages. **The rule: a repository should not have to
