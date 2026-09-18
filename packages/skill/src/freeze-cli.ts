@@ -24,6 +24,13 @@ Flags:
   --help, -h              Show this help
   --version, -v           Print the version`;
 
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let approvedBy = "";
@@ -39,6 +46,12 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // Anything unrecognised is refused rather than dropped. A mistyped
+    // --approved-by dropped the approver, and the run below then refuses
+    // anyway -- but with "approval requires --approved-by" rather than naming
+    // the flag the caller actually typed, which sends them looking in the
+    // wrong place.
+    else badUsage(`unknown option '${arg}'`);
   }
   return { projectRoot, approvedBy, yes, json, help, version };
 }

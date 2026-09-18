@@ -15,6 +15,13 @@ Flags:
   --help, -h         Show this help
   --version, -v      Print the version`;
 
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let json = true;
@@ -36,6 +43,11 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else {
+      // Anything unrecognised is refused rather than dropped. init WRITES, so
+      // a mistyped --project scaffolded .intent-guard into the current
+      // directory instead of the one named, and reported success.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 

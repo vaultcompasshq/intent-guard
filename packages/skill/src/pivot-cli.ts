@@ -22,6 +22,13 @@ Flags:
   --help, -h                   Show this help
   --version, -v                Print the version`;
 
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let change = "";
@@ -44,6 +51,11 @@ function parseArgs(argv: string[]) {
     else if (arg === "--acknowledge") acknowledge = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // Anything unrecognised is refused rather than dropped. The scope flags
+    // here are repeatable, so a mistyped --add-scope was the easiest one to
+    // lose in a long command line: the pivot was recorded, and the scope item
+    // it was supposed to carry simply was not.
+    else badUsage(`unknown option '${arg}'`);
   }
 
   return {

@@ -33,6 +33,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   secrets finding, failing closed and loudly. This one failed open and said
   nothing.
 
+- **`hook install` no longer installs a pre-commit hook with the secrets scan
+  silently missing.** This is the security-relevant one in the sweep, and it is
+  the reason the sweep happened rather than being filed as polish.
+  `--with-vault-guard` pairs the generated hook with a `vault-guard scan
+  --staged`. Mistyped, the flag was dropped without a word and the install
+  still SUCCEEDED, exit 0, printing `installed: true`. What landed was a hook
+  with no secrets scanning in it, while the user had every reason to believe
+  they had just installed secrets scanning, so the next commit carrying
+  credentials sails through a gate they think is armed. It cannot change a CI
+  verdict the way `check` and `drift` can, which is why it was out of scope for
+  the fix above, but a control that goes missing quietly is a downgrade
+  wherever it sits.
+
+- **The same refusal on the remaining flag-parsing commands: `brief`,
+  `correct`, `doctor`, `extract`, `freeze`, `index`, `init`, `pivot`, `resume`
+  and `rules audit`.** These are UX rather than security or gate correctness:
+  the worst case is a command that runs with one flag's effect missing and says
+  nothing, such as a mistyped `--json` printing markdown at a caller parsing
+  JSON, a mistyped `--write` on `index` printing the index and writing nothing
+  while exiting 0, or a mistyped `--project` on `init` scaffolding into the
+  current directory instead of the one named. The parser shape was identical to
+  the three above, so the fix is identical, and leaving ten of them behind
+  would have left the same class half-closed.
+
+  `import-spec` already refused an unknown argument; it just never said which
+  one, and now it does.
+
+  **`coach` is deliberately left as it was.** Everything after that command is
+  the prompt text being scored, so there is no flag position to guard past the
+  first token and a refusal there would reject the ordinary case of scoring a
+  sentence. The two commands that take a word before their flags, `hook
+  install` and `rules audit`, take that word off the front before the flag loop
+  runs, so the refusal only ever sees flag-position tokens and cannot swallow a
+  subcommand.
+
 ## [1.5.0] - 2026-09-11
 
 Minor bump on all four packages. **The rule: a repository should not have to

@@ -13,6 +13,13 @@ Flags:
   --help, -h         Show this help
   --version, -v      Print the version`;
 
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let write = false;
@@ -27,6 +34,9 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // Anything unrecognised is refused rather than dropped. A mistyped --write
+    // printed the index and wrote nothing, while exiting 0 as if it had.
+    else badUsage(`unknown option '${arg}'`);
   }
 
   return { projectRoot, write, json, help, version };

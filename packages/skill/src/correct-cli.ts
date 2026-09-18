@@ -21,6 +21,13 @@ Flags:
   --help, -h         Show this help
   --version, -v      Print the version`;
 
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let wrong = "";
@@ -41,6 +48,10 @@ function parseArgs(argv: string[]) {
     else if (arg === "--promote") promote = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // Anything unrecognised is refused rather than dropped. A mistyped
+    // --promote or --acknowledge wrote a correction that looks recorded and
+    // is missing the half the user asked for.
+    else badUsage(`unknown option '${arg}'`);
   }
 
   return { projectRoot, wrong, right, rule, acknowledge, promote, help, version };

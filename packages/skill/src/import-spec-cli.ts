@@ -32,7 +32,10 @@ stripped. --plan without --spec is an error, and so is --spec or --plan
 combined with --from spec-kit, --from kiro, or --spec-dir.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
-function badUsage(): never {
+// The offending argument is named when there is one, because "here is the
+// usage" leaves the reader to diff their command against it by eye.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
   console.error(USAGE);
   process.exit(1);
 }
@@ -84,7 +87,9 @@ function parseArgs(argv: string[]) {
     } else if (isVersionFlag(arg)) {
       version = true;
     } else {
-      badUsage();
+      // This command already refused an unknown argument; it just never said
+      // which one.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 
