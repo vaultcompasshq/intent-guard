@@ -184,3 +184,37 @@ describe("(c) a legitimate out-of-scope diff is a clean pass, not could-not-run"
     expect(result.budget?.action).toBe("hard_block");
   });
 });
+
+describe("(d) advisory mode (requireFrozen: false) with no contract stays ok", () => {
+  it("returns status ok / exitCode 0 when no contract resolves and requireFrozen is false", () => {
+    // This pins intended behavior, not a gap. `requireFrozen: false` is
+    // advisory mode: consumer teams' documented onboarding runs exactly this
+    // (require-frozen: false plus enforce: false), so a repo can adopt
+    // intent-guard without a hard gate from day one. With no contract on
+    // disk, an ok result here is indistinguishable from a repo that has
+    // genuinely not adopted intent-guard yet -- both states are "no
+    // contract, nothing to enforce", and there is no signal inside
+    // checkGate that tells the two apart.
+    //
+    // Contrast with (b) above: under requireFrozen: true, contractFound ===
+    // false is safe to call could-not-run/blocked because the caller has
+    // already asked for a hard gate, so refusing a missing contract cannot
+    // be confused with ordinary advisory use. Under requireFrozen: false the
+    // caller has explicitly said a missing contract must NOT block, so no
+    // could-not-run check can be layered on top for a misrooted scan in
+    // this mode without breaking the advisory semantics it exists to
+    // provide. This is why intent-guard adds no production check here; this
+    // test exists so a future change to this behavior is a deliberate
+    // decision, not a silent regression.
+    const dir = bareProject();
+
+    const result = checkGate(dir, {
+      requireFrozen: false,
+      signals: { changedPaths: ["src/app/payment/charge.ts", "README.md"] },
+    });
+
+    expect(result.contractFound).toBe(false);
+    expect(result.status).toBe("ok");
+    expect(result.exitCode).toBe(0);
+  });
+});

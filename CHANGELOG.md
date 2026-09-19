@@ -7,6 +7,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Tests
+
+- Added a characterization test pinning that `checkGate` with `requireFrozen:
+  false` and no contract found returns status ok, exit code 0. This is
+  intended advisory behavior (a missing contract must not block when the
+  caller did not ask for a hard gate) and is indistinguishable from a
+  repository that has simply not adopted intent-guard yet, which is why no
+  could-not-run check for a misrooted scan can be added in this mode.
+
 ## [1.5.2] - 2026-09-18
 
 Patch bump on all four packages. It fixes one regression that 1.5.1 shipped:
