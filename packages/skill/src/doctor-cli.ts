@@ -4,7 +4,7 @@ import {
   type DoctorFinding,
   type DoctorFindingStatus,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard doctor [flags]
 
@@ -16,6 +16,18 @@ Flags:
   --json             Machine-readable output
   --help, -h         Show this help
   --version, -v      Print the version`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -33,6 +45,14 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
+    } else {
+      // Anything unrecognised is refused rather than dropped. A mistyped
+      // --project diagnosed the current directory and reported on the wrong
+      // project, which reads as a clean bill of health for the one asked about.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 

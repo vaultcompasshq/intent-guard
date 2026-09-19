@@ -5,7 +5,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard pivot --change <text> [flags]
 
@@ -21,6 +21,25 @@ Flags:
   --project <root>             Project root (default: .)
   --help, -h                   Show this help
   --version, -v                Print the version`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
+// The flags that take a value. Reaching the arm below with one of these means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set([
+  "--project",
+  "--change",
+  "--reason",
+  "--add-scope",
+  "--remove-scope",
+  "--add-out-of-scope",
+]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -44,6 +63,14 @@ function parseArgs(argv: string[]) {
     else if (arg === "--acknowledge") acknowledge = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that lost its value, before the unknown-flag arm below,
+    // because the arms above drop it here when the value is missing or empty.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
+    // Anything unrecognised is refused rather than dropped. The scope flags
+    // here are repeatable, so a mistyped --add-scope was the easiest one to
+    // lose in a long command line: the pivot was recorded, and the scope item
+    // it was supposed to carry simply was not.
+    else badUsage(`unknown option '${arg}'`);
   }
 
   return {

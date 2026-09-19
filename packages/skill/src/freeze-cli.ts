@@ -9,7 +9,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard freeze [flags]
 
@@ -23,6 +23,18 @@ Flags:
   --json                  Machine-readable output
   --help, -h              Show this help
   --version, -v           Print the version`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
+// The flags that take a value. Reaching the arm below with one of these means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project", "--approved-by"]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -39,6 +51,14 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that arrived without its value, before the arm below.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
+    // Anything unrecognised is refused rather than dropped. A mistyped
+    // --approved-by dropped the approver, and the run below then refuses
+    // anyway -- but with "approval requires --approved-by" rather than naming
+    // the flag the caller actually typed, which sends them looking in the
+    // wrong place.
+    else badUsage(`unknown option '${arg}'`);
   }
   return { projectRoot, approvedBy, yes, json, help, version };
 }

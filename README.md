@@ -317,22 +317,22 @@ which installs and runs all three.
 ```bash
 pnpm install
 pnpm build
-pnpm intent-guard --init --project .
-pnpm intent-guard --doctor --project .
-pnpm intent-guard --extract --project . --text "Add CSV export. Do not add new API endpoints. Verify the file downloads."
-pnpm intent-guard --import-spec --project . --from kiro --spec-dir .kiro/specs/export
-pnpm intent-guard --import-spec --project . --from superpowers   # docs/superpowers spec + plan
-pnpm intent-guard --freeze --project . --approved-by "<name>"
-pnpm intent-guard --check --project . --staged
-pnpm intent-guard --report --project . --staged
-pnpm intent-guard --rules audit --project .
+pnpm intent-guard -- init --project .
+pnpm intent-guard -- doctor --project .
+pnpm intent-guard -- extract --project . --text "Add CSV export. Do not add new API endpoints. Verify the file downloads."
+pnpm intent-guard -- import-spec --project . --from kiro --spec-dir .kiro/specs/export
+pnpm intent-guard -- import-spec --project . --from superpowers   # docs/superpowers spec + plan
+pnpm intent-guard -- freeze --project . --approved-by "<name>"
+pnpm intent-guard -- check --project . --staged
+pnpm intent-guard -- report --project . --staged
+pnpm intent-guard -- rules audit --project .
 ```
 
 ## Development
 
 ```bash
 pnpm install
-pnpm test      # 359 tests (builds first, then schema + core + skill + cli + examples/integrations)
+pnpm test      # 523 tests (builds first, then schema + core + skill + cli + examples/integrations)
 pnpm dogfood:cursor-hooks   # Cursor rule + hook install pass/fail fixture
 pnpm dogfood:claude-hooks   # Claude Code SessionStart/Stop lifecycle fixture
 pnpm build
@@ -353,17 +353,17 @@ warning.
 ### Session lifecycle (CLIs)
 
 ```bash
-pnpm intent-guard --extract --project . --text "the ask"   # 1. draft (unfrozen)
-pnpm intent-guard --import-spec --project . --from auto     # optional spec import
-pnpm intent-guard --freeze  --project . --approved-by me    # 2. approve
-pnpm intent-guard --doctor  --project .                     # 3. diagnose setup
-pnpm intent-guard --check   --project . --staged            # 4. gate (exit 1 = blocked)
-pnpm intent-guard --report  --project . --staged            # PR/CI handoff
-pnpm intent-guard --rules   audit --project .               # project-rule hygiene
-pnpm intent-guard --pivot   --project . --change "..." --acknowledge
-pnpm intent-guard --correct --project . --wrong "..." --right "..." --rule "..." --acknowledge
-pnpm intent-guard --brief   --project .                     # clean re-injectable context
-pnpm intent-guard --resume  --project .                     # brief + recent history
+pnpm intent-guard -- extract --project . --text "the ask"   # 1. draft (unfrozen)
+pnpm intent-guard -- import-spec --project . --from auto    # optional spec import
+pnpm intent-guard -- freeze  --project . --approved-by me   # 2. approve
+pnpm intent-guard -- doctor  --project .                    # 3. diagnose setup
+pnpm intent-guard -- check   --project . --staged           # 4. gate (exit 1 = blocked)
+pnpm intent-guard -- report  --project . --staged           # PR/CI handoff
+pnpm intent-guard -- rules   audit --project .              # project-rule hygiene
+pnpm intent-guard -- pivot   --project . --change "..." --acknowledge
+pnpm intent-guard -- correct --project . --wrong "..." --right "..." --rule "..." --acknowledge
+pnpm intent-guard -- brief   --project .                    # clean re-injectable context
+pnpm intent-guard -- resume  --project .                    # brief + recent history
 ```
 
 Full flags: [docs/cli-reference.md](./docs/cli-reference.md).

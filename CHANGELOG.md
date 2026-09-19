@@ -33,6 +33,90 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   secrets finding, failing closed and loudly. This one failed open and said
   nothing.
 
+- **`hook install` no longer installs a pre-commit hook with the secrets scan
+  silently missing.** This is the security-relevant one in the sweep, and it is
+  the reason the sweep happened rather than being filed as polish.
+  `--with-vault-guard` pairs the generated hook with a `vault-guard scan
+  --staged`. Mistyped, the flag was dropped without a word and the install
+  still SUCCEEDED, exit 0, printing `installed: true`. What landed was a hook
+  with no secrets scanning in it, while the user had every reason to believe
+  they had just installed secrets scanning, so the next commit carrying
+  credentials sails through a gate they think is armed. It cannot change a CI
+  verdict the way `check` and `drift` can, which is why it was out of scope for
+  the fix above, but a control that goes missing quietly is a downgrade
+  wherever it sits.
+
+- **The same refusal on the remaining flag-parsing commands: `brief`,
+  `correct`, `doctor`, `extract`, `freeze`, `index`, `init`, `pivot`, `resume`
+  and `rules audit`.** These are UX rather than security or gate correctness:
+  the worst case is a command that runs with one flag's effect missing and says
+  nothing, such as a mistyped `--json` printing markdown at a caller parsing
+  JSON, a mistyped `--write` on `index` printing the index and writing nothing
+  while exiting 0, or a mistyped `--project` on `init` scaffolding into the
+  current directory instead of the one named. The parser shape was identical to
+  the three above, so the fix is identical, and leaving ten of them behind
+  would have left the same class half-closed.
+
+  `import-spec` already refused an unknown argument; it just never said which
+  one, and now it does.
+
+  **`coach` is deliberately left as it was.** Everything after that command is
+  the prompt text being scored, so there is no flag position to guard past the
+  first token and a refusal there would reject the ordinary case of scoring a
+  sentence. The two commands that take a word before their flags, `hook
+  install` and `rules audit`, take that word off the front before the flag loop
+  runs, so the refusal only ever sees flag-position tokens and cannot swallow a
+  subcommand.
+
+- **A documented flag that arrived without its value now says so, instead of
+  being reported as a flag that does not exist.** Every value-taking arm in
+  these parsers is shaped `arg === "--reason" && argv[i + 1]`, so a flag spelled
+  correctly with nothing after it, or with an empty string after it, fell out of
+  its own arm and into the refusal above: `intent-guard pivot --change x
+  --reason ""` answered `unknown option '--reason'` about a flag printed a few
+  lines lower in its own usage text, and sent the reader hunting a spelling
+  mistake that was not there. All sixteen commands now answer `option
+  '--reason' requires a value`, still exit 1, and the sentence is identical on
+  every one of them.
+
+- **Three ways this sweep changes what a published CLI does.** Each replaces a
+  silent drop with exit 1, so anything scripted against 1.5.0 or earlier can
+  see it:
+
+  1. A known flag with a missing or empty value exits 1 where several of these
+     commands used to exit 0 with the flag dropped. `--project ""` fell through
+     to the default of `.` and ran against the current directory instead of the
+     one the caller named; `pivot --reason ""` recorded a pivot with no reason
+     on it.
+  2. The `--flag=value` form, which no parser here has ever supported, exits 1
+     instead of being dropped. This is the improvement of the three:
+     `intent-guard init --project=/elsewhere` used to scaffold `.intent-guard/`
+     into the current directory and report success.
+  3. `hook install` takes the word `install` in first position only.
+     `intent-guard hook --project . install` is now refused. No documentation
+     ever wrote it that way, and the word is taken off the front before the
+     flag loop runs, which is what keeps the loop from swallowing it.
+
+  Unchanged on purpose: `intent-guard check --message --help` still scores the
+  literal text `--help`, because that is a value the parser accepts rather than
+  a missing one, and `--base` and `--trust-base` keep their own refusal of a
+  value beginning with `--`.
+
+- **The GitHub Actions samples no longer hand the gate an empty `--paths`.**
+  Both samples build the path list from a `git diff` and passed the result
+  straight to `check --paths "$CHANGED"`. On a run whose diff is empty that is
+  `--paths ""`, which the gate now refuses, so the check would go red with a
+  message about a flag rather than about the change under review. Both samples
+  now skip the flag when the list is empty, the way
+  `integrations/hooks/conductor-stop-check.sh` already did.
+
+- **The two quickstart blocks in the README ran nothing.** Every invocation in
+  them was written `pnpm intent-guard --doctor --project .`, which answers
+  `Unknown intent-guard command: --doctor` and exits 1. The working form, the
+  one `docs/cli-reference.md` uses, is `pnpm intent-guard -- doctor
+  --project .`. Pre-existing rot rather than anything this sweep introduced,
+  but it is the front page.
+
 ## [1.5.0] - 2026-09-11
 
 Minor bump on all four packages. **The rule: a repository should not have to

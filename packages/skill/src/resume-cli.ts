@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { renderResume } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard resume [flags]
 
@@ -11,6 +11,18 @@ Flags:
   --json             Machine-readable output
   --help, -h         Show this help
   --version, -v      Print the version`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -24,6 +36,11 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that arrived without its value, before the arm below.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
+    // Anything unrecognised is refused rather than dropped: a mistyped --json
+    // printed markdown to a caller parsing JSON, and said nothing.
+    else badUsage(`unknown option '${arg}'`);
   }
 
   return { projectRoot, json, help, version };

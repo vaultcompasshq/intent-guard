@@ -5,7 +5,7 @@ import {
   loadAllConstraints,
   writeContract,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard import-spec [flags]
 
@@ -32,10 +32,27 @@ stripped. --plan without --spec is an error, and so is --spec or --plan
 combined with --from spec-kit, --from kiro, or --spec-dir.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
-function badUsage(): never {
+// The offending argument is named when there is one, because "here is the
+// usage" leaves the reader to diff their command against it by eye.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
   console.error(USAGE);
   process.exit(1);
 }
+
+// The flags that take a value. Reaching the arm below with one of these means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set([
+  "--project",
+  "--from",
+  "--spec",
+  "--plan",
+  "--spec-dir",
+  "--requirements",
+  "--design",
+  "--tasks",
+]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -83,8 +100,13 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
     } else {
-      badUsage();
+      // This command already refused an unknown argument; it just never said
+      // which one.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 

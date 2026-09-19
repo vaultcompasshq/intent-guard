@@ -4,7 +4,7 @@ import {
   renderConductorReportMarkdown,
 } from "@vaultcompass/intent-guard-core";
 import { collectChangedPaths } from "./changed-paths.js";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard report [flags]
 
@@ -43,6 +43,19 @@ function badUsage(reason?: string): never {
   console.error(USAGE);
   process.exit(1);
 }
+
+// The flags that take a value and are parsed by the `&& argv[i + 1]` arms
+// below, which drop a flag whose value is missing or empty into the trailing
+// arm. --base and --trust-base are deliberately absent: they check their own
+// value and answer for themselves, and listing them here would change what
+// they accept.
+const VALUE_FLAGS = new Set([
+  "--project",
+  "--paths",
+  "--signals",
+  "--message",
+  "--previous-contract",
+]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -95,6 +108,9 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
     } else {
       // Refused rather than dropped. See the longer note in check-cli.ts: a
       // silently ignored `--trust-bse` left this reading its control inputs

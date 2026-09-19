@@ -5,7 +5,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard correct --wrong <text> --right <text> --rule <text> [flags]
 
@@ -20,6 +20,18 @@ Flags:
   --promote          Promote the rule to a contract constraint
   --help, -h         Show this help
   --version, -v      Print the version`;
+
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
+  console.error(USAGE);
+  process.exit(1);
+}
+
+// The flags that take a value. Reaching the arm below with one of these means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project", "--wrong", "--right", "--rule"]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -41,6 +53,12 @@ function parseArgs(argv: string[]) {
     else if (arg === "--promote") promote = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that arrived without its value, before the arm below.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
+    // Anything unrecognised is refused rather than dropped. A mistyped
+    // --promote or --acknowledge wrote a correction that looks recorded and
+    // is missing the half the user asked for.
+    else badUsage(`unknown option '${arg}'`);
   }
 
   return { projectRoot, wrong, right, rule, acknowledge, promote, help, version };

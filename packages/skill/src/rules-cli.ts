@@ -3,7 +3,7 @@ import {
   auditRules,
   renderRulesAuditMarkdown,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard rules audit [flags]
 
@@ -16,10 +16,17 @@ Flags:
   --help, -h         Show this help
   --version, -v      Print the version`;
 
-function badUsage(): never {
+// A usage error is not a help request: it goes to stderr and exits non-zero.
+function badUsage(reason?: string): never {
+  if (reason) console.error(`error: ${reason}`);
   console.error(USAGE);
   process.exit(1);
 }
+
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
 
 function parseArgs(argv: string[]) {
   const [command, ...rest] = argv;
@@ -33,7 +40,12 @@ function parseArgs(argv: string[]) {
   // help request.
   if (command !== undefined && isHelpFlag(command)) printUsage(USAGE);
   if (command !== undefined && isVersionFlag(command)) printVersion();
-  if (command !== "audit") badUsage();
+  if (command !== "audit")
+    badUsage(
+      command === undefined
+        ? "missing subcommand: rules takes 'audit'"
+        : `unknown subcommand '${command}'`,
+    );
 
   let projectRoot = ".";
   let json = false;
@@ -50,6 +62,16 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
+    } else {
+      // Anything unrecognised is refused rather than dropped. THE POSITIONAL
+      // IS ALREADY GONE by the time this loop runs: `audit` was taken off the
+      // front above, so this arm only ever sees flag-position tokens and
+      // cannot swallow the subcommand. A mistyped --json printed markdown to a
+      // caller parsing JSON, and said nothing.
+      badUsage(`unknown option '${arg}'`);
     }
   }
 
