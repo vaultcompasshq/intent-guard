@@ -3,7 +3,7 @@ import {
   auditRules,
   renderRulesAuditMarkdown,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard rules audit [flags]
 
@@ -22,6 +22,11 @@ function badUsage(reason?: string): never {
   console.error(USAGE);
   process.exit(1);
 }
+
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
 
 function parseArgs(argv: string[]) {
   const [command, ...rest] = argv;
@@ -57,6 +62,9 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
     } else {
       // Anything unrecognised is refused rather than dropped. THE POSITIONAL
       // IS ALREADY GONE by the time this loop runs: `audit` was taken off the

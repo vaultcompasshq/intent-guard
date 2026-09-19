@@ -10,7 +10,7 @@ import {
   readContract,
 } from "@vaultcompass/intent-guard-core";
 import { collectChangedPaths } from "./changed-paths.js";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard check [flags]
 
@@ -50,6 +50,19 @@ function badUsage(reason?: string): never {
   console.error(USAGE);
   process.exit(1);
 }
+
+// The flags that take a value and are parsed by the `&& argv[i + 1]` arms
+// below, which drop a flag whose value is missing or empty into the trailing
+// arm. --base and --trust-base are deliberately absent: they check their own
+// value and answer for themselves, and listing them here would change what
+// they accept.
+const VALUE_FLAGS = new Set([
+  "--project",
+  "--paths",
+  "--signals",
+  "--message",
+  "--previous-contract",
+]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -103,6 +116,13 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value. It has to be answered
+      // before the arm below, which would otherwise report a flag printed in
+      // this command's own usage text as one that does not exist. `--paths ""`
+      // is the case that reaches CI: a workflow building the path list from a
+      // diff hands over an empty string whenever the diff is empty.
+      badUsage(missingValue(arg));
     } else {
       // ANYTHING UNRECOGNISED IS REFUSED, and this arm is the point of the
       // whole chain rather than tidiness at the end of it.

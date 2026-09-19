@@ -51,6 +51,22 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
+/**
+ * The reason text for a known flag that arrived without its value.
+ *
+ * Every value-taking arm in these parsers is shaped
+ * `arg === "--reason" && argv[i + 1]`, so a correctly spelled flag with
+ * nothing after it, or with an empty string after it, falls out of its own arm
+ * and reaches the trailing unknown-option arm. That told the user
+ * `unknown option '--reason'` about a flag printed in the usage text directly
+ * below, and sent them hunting a spelling mistake that was not there. Each
+ * parser names its own value-taking flags; the sentence lives here so the
+ * answer is the same on all sixteen commands.
+ */
+export function missingValue(arg: string): string {
+  return `option '${arg}' requires a value`;
+}
+
 /** True when this token, in flag position, is a help request. */
 export function isHelpFlag(arg: string): boolean {
   return arg === "--help" || arg === "-h";

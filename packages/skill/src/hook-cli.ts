@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { installPreCommitHook } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const REASONS: Record<string, string> = {
   not_a_git_repo: "No .git directory found. Run this inside a git repository.",
@@ -33,6 +33,11 @@ function badUsage(reason?: string): never {
   process.exit(1);
 }
 
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let withVaultGuard = false;
@@ -50,6 +55,8 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") human = false;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that arrived without its value, before the arm below.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
     else {
       // A DROPPED FLAG HERE REMOVES A SECURITY CONTROL, which is why this arm
       // matters more than the same arm on the other flags-only commands.

@@ -48,12 +48,21 @@ jobs:
       # `check` runs the full gate (drift + change-budget enforcement), matching
       # the pre-commit hook. `drift` is score-only and skips the budget.
       - name: Check intent + budget
+        shell: bash
         env:
           CHANGED: ${{ steps.changed.outputs.paths }}
+        # An empty diff leaves CHANGED empty, and `--paths ""` is a flag with
+        # no value: the gate refuses it and the check goes red for a reason
+        # that has nothing to do with the pull request. Run the gate without
+        # the flag instead, the way the Stop hook already does.
         run: |
-          pnpm dlx @vaultcompass/intent-guard@latest check \
-            --project . \
-            --paths "$CHANGED"
+          if [[ -n "$CHANGED" ]]; then
+            pnpm dlx @vaultcompass/intent-guard@latest check \
+              --project . \
+              --paths "$CHANGED"
+          else
+            pnpm dlx @vaultcompass/intent-guard@latest check --project .
+          fi
 
       - name: Check secrets
         run: npx --yes @vaultcompass/vault-guard@latest -- scan . --format text

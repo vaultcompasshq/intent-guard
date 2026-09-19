@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { initConductor } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard init [flags]
 
@@ -21,6 +21,11 @@ function badUsage(reason?: string): never {
   console.error(USAGE);
   process.exit(1);
 }
+
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -43,6 +48,12 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      // init WRITES, so an empty --project used to scaffold into the current
+      // directory by way of the default, which is exactly the outcome the
+      // caller who typed --project was trying to avoid.
+      badUsage(missingValue(arg));
     } else {
       // Anything unrecognised is refused rather than dropped. init WRITES, so
       // a mistyped --project scaffolded .intent-guard into the current

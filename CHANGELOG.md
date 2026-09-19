@@ -68,6 +68,55 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   runs, so the refusal only ever sees flag-position tokens and cannot swallow a
   subcommand.
 
+- **A documented flag that arrived without its value now says so, instead of
+  being reported as a flag that does not exist.** Every value-taking arm in
+  these parsers is shaped `arg === "--reason" && argv[i + 1]`, so a flag spelled
+  correctly with nothing after it, or with an empty string after it, fell out of
+  its own arm and into the refusal above: `intent-guard pivot --change x
+  --reason ""` answered `unknown option '--reason'` about a flag printed a few
+  lines lower in its own usage text, and sent the reader hunting a spelling
+  mistake that was not there. All sixteen commands now answer `option
+  '--reason' requires a value`, still exit 1, and the sentence is identical on
+  every one of them.
+
+- **Three ways this sweep changes what a published CLI does.** Each replaces a
+  silent drop with exit 1, so anything scripted against 1.5.0 or earlier can
+  see it:
+
+  1. A known flag with a missing or empty value exits 1 where several of these
+     commands used to exit 0 with the flag dropped. `--project ""` fell through
+     to the default of `.` and ran against the current directory instead of the
+     one the caller named; `pivot --reason ""` recorded a pivot with no reason
+     on it.
+  2. The `--flag=value` form, which no parser here has ever supported, exits 1
+     instead of being dropped. This is the improvement of the three:
+     `intent-guard init --project=/elsewhere` used to scaffold `.intent-guard/`
+     into the current directory and report success.
+  3. `hook install` takes the word `install` in first position only.
+     `intent-guard hook --project . install` is now refused. No documentation
+     ever wrote it that way, and the word is taken off the front before the
+     flag loop runs, which is what keeps the loop from swallowing it.
+
+  Unchanged on purpose: `intent-guard check --message --help` still scores the
+  literal text `--help`, because that is a value the parser accepts rather than
+  a missing one, and `--base` and `--trust-base` keep their own refusal of a
+  value beginning with `--`.
+
+- **The GitHub Actions samples no longer hand the gate an empty `--paths`.**
+  Both samples build the path list from a `git diff` and passed the result
+  straight to `check --paths "$CHANGED"`. On a run whose diff is empty that is
+  `--paths ""`, which the gate now refuses, so the check would go red with a
+  message about a flag rather than about the change under review. Both samples
+  now skip the flag when the list is empty, the way
+  `integrations/hooks/conductor-stop-check.sh` already did.
+
+- **The two quickstart blocks in the README ran nothing.** Every invocation in
+  them was written `pnpm intent-guard --doctor --project .`, which answers
+  `Unknown intent-guard command: --doctor` and exits 1. The working form, the
+  one `docs/cli-reference.md` uses, is `pnpm intent-guard -- doctor
+  --project .`. Pre-existing rot rather than anything this sweep introduced,
+  but it is the front page.
+
 ## [1.5.0] - 2026-09-11
 
 Minor bump on all four packages. **The rule: a repository should not have to

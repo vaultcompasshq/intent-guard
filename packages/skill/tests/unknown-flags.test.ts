@@ -117,6 +117,23 @@ describe("subcommand words still work", { timeout: 60_000 }, () => {
     expect(typo.code).not.toBe(0);
     expect(typo.stderr).toContain("--jsno");
   });
+
+  // rules is the only command with a REQUIRED subcommand, so it is the only
+  // one that can be called with nothing at all and still be wrong. Both
+  // messages exist; neither was asserted anywhere until now.
+  it("bare rules says which subcommand it wanted", async () => {
+    const res = await run("rules-cli.js", []);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("missing subcommand: rules takes 'audit'");
+  });
+
+  it("rules with a word that is not audit names the word", async () => {
+    const res = await run("rules-cli.js", ["bogus"]);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("unknown subcommand 'bogus'");
+  });
 });
 
 // coach is the one command in this family that is DELIBERATELY left alone.
@@ -176,6 +193,83 @@ describe("every flags-only CLI refuses an unknown option", { timeout: 60_000 }, 
   }
 });
 
+// A DOCUMENTED FLAG WHOSE VALUE IS MISSING IS NOT AN UNKNOWN FLAG.
+//
+// Every value-taking arm is shaped `arg === "--reason" && argv[i + 1]`, so a
+// flag typed correctly with no value after it, or with an empty string after
+// it, falls out of its own arm and lands in the unknown-option arm below. The
+// user then reads `unknown option '--reason'` about a flag that is in the
+// usage text three lines further down the same output, and goes looking for a
+// spelling mistake that is not there. The mistake is the value.
+describe("a known flag with a missing value says so", { timeout: 60_000 }, () => {
+  it("pivot --reason with an empty value names the value, not the flag", async () => {
+    const dir = tmpProject();
+    const res = await run("pivot-cli.js", ["--project", dir, "--change", "scope moved", "--reason", ""]);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("option '--reason' requires a value");
+    expect(res.stderr).not.toContain("unknown option");
+  });
+
+  it("pivot --reason as the last argument is the same mistake", async () => {
+    const dir = tmpProject();
+    const res = await run("pivot-cli.js", ["--project", dir, "--change", "scope moved", "--reason"]);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("option '--reason' requires a value");
+    expect(res.stderr).not.toContain("unknown option");
+  });
+
+  it("check --paths with an empty value is refused as a missing value", async () => {
+    // The one that reaches CI. The repo's own workflow sample builds --paths
+    // from a git diff, and an empty diff used to hand this an empty string.
+    const dir = tmpProject();
+    const res = await run("check-cli.js", ["--project", dir, "--paths", ""]);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("option '--paths' requires a value");
+    expect(res.stderr).not.toContain("unknown option");
+  });
+
+  it("init --project with an empty value does not scaffold anywhere", async () => {
+    const dir = tmpProject();
+    const res = await run("init-cli.js", ["--project", ""], dir);
+
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("option '--project' requires a value");
+    expect(existsSync(join(dir, ".intent-guard"))).toBe(false);
+  });
+
+  // The message is the same sentence everywhere, because a user who learns it
+  // on one command has learned it on all sixteen.
+  const EMPTY_PROJECT: Array<{ cli: string; prefix: string[] }> = [
+    { cli: "brief-cli.js", prefix: [] },
+    { cli: "check-cli.js", prefix: [] },
+    { cli: "correct-cli.js", prefix: [] },
+    { cli: "doctor-cli.js", prefix: [] },
+    { cli: "drift-cli.js", prefix: [] },
+    { cli: "extract-cli.js", prefix: [] },
+    { cli: "freeze-cli.js", prefix: [] },
+    { cli: "hook-cli.js", prefix: ["install"] },
+    { cli: "import-spec-cli.js", prefix: [] },
+    { cli: "index-cli.js", prefix: [] },
+    { cli: "init-cli.js", prefix: [] },
+    { cli: "pivot-cli.js", prefix: [] },
+    { cli: "report-cli.js", prefix: [] },
+    { cli: "resume-cli.js", prefix: [] },
+    { cli: "rules-cli.js", prefix: ["audit"] },
+  ];
+
+  for (const { cli, prefix } of EMPTY_PROJECT) {
+    it(`${cli} answers an empty --project with the same sentence`, async () => {
+      const res = await run(cli, [...prefix, "--project", ""]);
+
+      expect(res.code).toBe(1);
+      expect(res.stderr).toContain("option '--project' requires a value");
+    });
+  }
+});
+
 // The refusal must not catch a real flag. If this goes red the guard is too
 // broad, which breaks consumers rather than protecting them.
 describe("documented flags still work", { timeout: 60_000 }, () => {
@@ -191,6 +285,19 @@ describe("documented flags still work", { timeout: 60_000 }, () => {
 
     const doctor = await run("doctor-cli.js", ["--project", dir, "--json"]);
     expect(JSON.parse(doctor.stdout).findings.length).toBeGreaterThan(0);
+  });
+
+  it("check --message --help still scores the literal text", async () => {
+    // The documented oddity in docs/cli-reference.md: --help after --message
+    // is that message's value, not a help request. The missing-value arm must
+    // not reach it, because "--help" is a value the parser already accepts.
+    const dir = tmpProject();
+    const res = await run("check-cli.js", ["--project", dir, "--message", "--help"]);
+
+    expect(res.stdout).not.toMatch(/^Usage: /m);
+    expect(res.stderr).not.toMatch(/^Usage: /m);
+    expect(res.stderr).not.toContain("requires a value");
+    expect(res.stderr).not.toContain("unknown option");
   });
 
   it("extract --dry-run then freeze --approved-by still completes", async () => {

@@ -10,7 +10,7 @@ import {
   writeContract,
 } from "@vaultcompass/intent-guard-core";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard extract --text <user ask> [flags]
 
@@ -30,6 +30,11 @@ function badUsage(reason?: string): never {
   console.error(USAGE);
   process.exit(1);
 }
+
+// The flags that take a value. Reaching the arm below with one of these means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project", "--text"]);
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
@@ -56,6 +61,9 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
     } else {
       // Anything unrecognised is refused rather than dropped. The arm above
       // already refuses the one flag that was REMOVED; a flag that never

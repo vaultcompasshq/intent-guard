@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { buildBrief, readContract, renderBriefMarkdown } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard brief [flags]
 
@@ -19,6 +19,11 @@ function badUsage(reason?: string): never {
   process.exit(1);
 }
 
+// The one flag here that takes a value. Reaching the arm below with it means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project"]);
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let json = false;
@@ -30,6 +35,8 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that arrived without its value, before the arm below.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
     // Anything unrecognised is refused rather than dropped: a mistyped --json
     // otherwise printed markdown to a caller parsing JSON, and said nothing.
     else badUsage(`unknown option '${arg}'`);

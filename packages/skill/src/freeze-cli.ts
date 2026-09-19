@@ -9,7 +9,7 @@ import {
   writeContract,
   writeIndex,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard freeze [flags]
 
@@ -31,6 +31,11 @@ function badUsage(reason?: string): never {
   process.exit(1);
 }
 
+// The flags that take a value. Reaching the arm below with one of these means
+// the value was missing or empty, which is a different mistake from a flag
+// that does not exist and gets a different sentence.
+const VALUE_FLAGS = new Set(["--project", "--approved-by"]);
+
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let approvedBy = "";
@@ -46,6 +51,8 @@ function parseArgs(argv: string[]) {
     else if (arg === "--json") json = true;
     else if (isHelpFlag(arg)) help = true;
     else if (isVersionFlag(arg)) version = true;
+    // A known flag that arrived without its value, before the arm below.
+    else if (VALUE_FLAGS.has(arg)) badUsage(missingValue(arg));
     // Anything unrecognised is refused rather than dropped. A mistyped
     // --approved-by dropped the approver, and the run below then refuses
     // anyway -- but with "approval requires --approved-by" rather than naming

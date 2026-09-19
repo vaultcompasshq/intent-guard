@@ -10,7 +10,7 @@ import {
   scoreDrift,
 } from "@vaultcompass/intent-guard-core";
 import { assertValidIntentContract } from "@vaultcompass/intent-guard-schema";
-import { isHelpFlag, isVersionFlag, printUsage, printVersion } from "./usage.js";
+import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const USAGE = `Usage: intent-guard drift --contract <path> [flags]
 
@@ -43,6 +43,18 @@ function badUsage(reason?: string): never {
   console.error(USAGE);
   process.exit(1);
 }
+
+// The flags that take a value and are parsed by the `&& argv[i + 1]` arms
+// below, which drop a flag whose value is missing or empty into the trailing
+// arm. --trust-base is deliberately absent: it checks its own value and
+// answers for itself, and listing it here would change what it accepts.
+const VALUE_FLAGS = new Set([
+  "--contract",
+  "--project",
+  "--paths",
+  "--signals",
+  "--message",
+]);
 
 function parseArgs(argv: string[]) {
   let contractPath = "";
@@ -81,6 +93,9 @@ function parseArgs(argv: string[]) {
       help = true;
     } else if (isVersionFlag(arg)) {
       version = true;
+    } else if (VALUE_FLAGS.has(arg)) {
+      // A known flag that arrived without its value, before the arm below.
+      badUsage(missingValue(arg));
     } else {
       // Refused rather than dropped. See the longer note in check-cli.ts. It
       // bites hardest here, because this command's own thresholds come from
