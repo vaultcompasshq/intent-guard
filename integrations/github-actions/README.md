@@ -9,7 +9,7 @@ workflow:
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- uses: vaultcompasshq/intent-guard@v1.5.0
+- uses: vaultcompasshq/intent-guard@v1.5.1
 ```
 
 There is no `version` input in that example because the default is the version
