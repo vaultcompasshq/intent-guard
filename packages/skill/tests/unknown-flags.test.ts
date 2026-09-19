@@ -220,16 +220,18 @@ describe("a known flag with a missing value says so", { timeout: 60_000 }, () =>
     expect(res.stderr).not.toContain("unknown option");
   });
 
-  it("check --paths with an empty value is refused as a missing value", async () => {
-    // The one that reaches CI. The repo's own workflow sample builds --paths
-    // from a git diff, and an empty diff used to hand this an empty string.
+  it("check --paths as the last argument is refused as a missing value", async () => {
     const dir = tmpProject();
-    const res = await run("check-cli.js", ["--project", dir, "--paths", ""]);
+    const res = await run("check-cli.js", ["--project", dir, "--paths"]);
 
     expect(res.code).toBe(1);
     expect(res.stderr).toContain("option '--paths' requires a value");
     expect(res.stderr).not.toContain("unknown option");
   });
+
+  // NOT `--paths ""`. That one is a value and not an omission, and 1.5.1
+  // refusing it broke the pull-request runs that state an empty diff that way.
+  // The whole case lives in empty-list-flag.test.ts.
 
   it("init --project with an empty value does not scaffold anywhere", async () => {
     const dir = tmpProject();

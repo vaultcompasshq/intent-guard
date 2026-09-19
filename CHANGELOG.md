@@ -7,6 +7,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-18
+
+Patch bump on all four packages. It fixes one regression that 1.5.1 shipped:
+`check`, `report` and `drift` refused an explicitly empty `--paths` or
+`--signals`, which broke every caller that states an empty change set that way.
+
+### Fixed
+
+- **`--paths ""` and `--signals ""` are the empty list again, not a missing
+  value.** 1.5.1 made every CLI refuse a known value flag that arrived without
+  its value, which is right for a scalar, but the list-taking arms tested the
+  next argument for truthiness. An explicit empty string is falsy, so it fell
+  out of its own arm into the missing-value arm and the command answered
+  `error: option '--paths' requires a value` plus the whole usage screen, exit
+  1, no report. 1.5.0 dropped both tokens in silence, so the same command had
+  worked by accident.
+
+  The caller this broke is a pull-request runner. The umbrella that runs this
+  gate builds the path list from `git diff --name-only base...HEAD` and passes
+  `--paths ""` when that diff is empty, deliberately, so that the empty set is
+  STATED rather than left for the gate to fill in from whatever else it can
+  see. On 1.5.1 that run printed usage text and no JSON, the umbrella read it
+  as could-not-run, and the pull request went red over a flag rather than over
+  the change.
+
+  From 1.5.2 an empty string after a list flag is a value meaning zero entries.
+  Nothing after the flag, or another flag after it, is still the missing value
+  1.5.1 set out to catch, and still exits 1 with the same sentence.
+
+- **A list flag no longer swallows the flag that follows it.** The same
+  truthiness test accepted `--paths --json`, took `--json` as the path list,
+  and judged a path literally named `--json` while printing human output to a
+  caller waiting for JSON. A token beginning with a dash is now a missing
+  value, so that command is refused.
+
+  Unchanged on purpose: scalar value flags. An empty `--project`, `--message`,
+  `--previous-contract` or `--contract` is still a missing value, because there
+  is no such thing as an empty project root, and `check --message --help` still
+  scores the literal text `--help`.
+
 ## [1.5.1] - 2026-09-18
 
 Patch bump on all four packages. It carries the two flag-parsing fixes merged

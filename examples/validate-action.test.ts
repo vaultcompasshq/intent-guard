@@ -520,7 +520,7 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
     expect(readRecord(harness.npmRecord).argv).toEqual([
       "install",
       "-g",
-      "@vaultcompass/intent-guard@1.5.1",
+      "@vaultcompass/intent-guard@1.5.2",
     ]);
   });
 
