@@ -70,6 +70,15 @@ Skills may be contributed to [obra/superpowers](https://github.com/obra/superpow
 
 ---
 
+## Findings log
+
+[FINDINGS.md](./FINDINGS.md) is a durable, append-by-PR record of what
+intent-guard actually did when run against real changes, including runs
+that caught nothing. Open a PR to append a row after you run it against
+real code, your own or someone else's.
+
+---
+
 ## License
 
 By contributing, you agree your contributions are licensed under MIT.
