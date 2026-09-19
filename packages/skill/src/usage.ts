@@ -54,7 +54,7 @@ process.on("uncaughtException", (error) => {
 /**
  * The reason text for a known flag that arrived without its value.
  *
- * Every value-taking arm in these parsers is shaped
+ * Every SCALAR value-taking arm in these parsers is shaped
  * `arg === "--reason" && argv[i + 1]`, so a correctly spelled flag with
  * nothing after it, or with an empty string after it, falls out of its own arm
  * and reaches the trailing unknown-option arm. That told the user
@@ -62,9 +62,39 @@ process.on("uncaughtException", (error) => {
  * below, and sent them hunting a spelling mistake that was not there. Each
  * parser names its own value-taking flags; the sentence lives here so the
  * answer is the same on all sixteen commands.
+ *
+ * The list-shaped flags use listValueAt below instead, because for them an
+ * empty string is a value and not an omission.
  */
 export function missingValue(arg: string): string {
   return `option '${arg}' requires a value`;
+}
+
+/**
+ * The value of a LIST-shaped flag (`--paths`, `--signals`) at `argv[i]`, or
+ * undefined when that flag has no value of its own.
+ *
+ * An empty string is a VALUE here, and it means the empty list. That is the
+ * difference between a list and a scalar: there is no such thing as an empty
+ * project root, but "nothing changed" is a perfectly good path list, and it is
+ * the one a caller sends most often. A pull-request runner builds the list
+ * from a diff against the base ref and passes `--paths ""` when the diff comes
+ * back empty, so that the empty set is STATED rather than left for the gate to
+ * infer from whatever else it can see. 1.5.1 tested the next token for
+ * truthiness, so that call fell into the missing-value arm and was answered
+ * with the usage screen and exit 1 instead of a report.
+ *
+ * Missing is either of two things. Nothing after the flag at all, or another
+ * flag after it: `--paths --json` used to be accepted, and swallowed `--json`
+ * as the path list, so the gate judged a path literally named "--json" and
+ * printed human output to a caller waiting for JSON. A leading dash is
+ * therefore not a value, which costs nothing real because a changed path or a
+ * free-text signal does not begin with one.
+ */
+export function listValueAt(argv: string[], i: number): string | undefined {
+  const next = argv[i + 1];
+  if (next === undefined || next.startsWith("-")) return undefined;
+  return next;
 }
 
 /** True when this token, in flag position, is a help request. */

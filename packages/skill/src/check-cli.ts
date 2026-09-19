@@ -10,7 +10,14 @@ import {
   readContract,
 } from "@vaultcompass/intent-guard-core";
 import { collectChangedPaths } from "./changed-paths.js";
-import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
+import {
+  isHelpFlag,
+  isVersionFlag,
+  listValueAt,
+  missingValue,
+  printUsage,
+  printVersion,
+} from "./usage.js";
 
 const USAGE = `Usage: intent-guard check [flags]
 
@@ -51,11 +58,12 @@ function badUsage(reason?: string): never {
   process.exit(1);
 }
 
-// The flags that take a value and are parsed by the `&& argv[i + 1]` arms
-// below, which drop a flag whose value is missing or empty into the trailing
-// arm. --base and --trust-base are deliberately absent: they check their own
-// value and answer for themselves, and listing them here would change what
-// they accept.
+// The flags that take a value and drop into the trailing arm when it is
+// missing. The scalar ones are parsed by the `&& argv[i + 1]` arms below; the
+// list ones use listValueAt, which accepts an empty string and refuses a
+// following flag. --base and --trust-base are deliberately absent: they check
+// their own value and answer for themselves, and listing them here would
+// change what they accept.
 const VALUE_FLAGS = new Set([
   "--project",
   "--paths",
@@ -83,9 +91,9 @@ function parseArgs(argv: string[]) {
     const arg = argv[i];
     if (arg === "--project" && argv[i + 1]) {
       projectRoot = argv[++i];
-    } else if (arg === "--paths" && argv[i + 1]) {
+    } else if (arg === "--paths" && listValueAt(argv, i) !== undefined) {
       paths.push(...argv[++i].split(",").filter(Boolean));
-    } else if (arg === "--signals" && argv[i + 1]) {
+    } else if (arg === "--signals" && listValueAt(argv, i) !== undefined) {
       signals.push(...argv[++i].split(",").filter(Boolean));
     } else if (arg === "--message" && argv[i + 1]) {
       userMessage = argv[++i];
@@ -119,9 +127,15 @@ function parseArgs(argv: string[]) {
     } else if (VALUE_FLAGS.has(arg)) {
       // A known flag that arrived without its value. It has to be answered
       // before the arm below, which would otherwise report a flag printed in
-      // this command's own usage text as one that does not exist. `--paths ""`
-      // is the case that reaches CI: a workflow building the path list from a
-      // diff hands over an empty string whenever the diff is empty.
+      // this command's own usage text as one that does not exist.
+      //
+      // WITHOUT its value means nothing after it, or the next flag after it.
+      // It does not mean `--paths ""`. That is the case that reaches CI, and
+      // it is a VALUE: a workflow building the path list from a diff hands
+      // over an empty string whenever the diff is empty, and it is saying the
+      // change touched nothing rather than forgetting to say anything. It is
+      // accepted above as the empty set. 1.5.1 refused it here and broke every
+      // caller that states an empty diff that way.
       badUsage(missingValue(arg));
     } else {
       // ANYTHING UNRECOGNISED IS REFUSED, and this arm is the point of the

@@ -4,7 +4,14 @@ import {
   renderConductorReportMarkdown,
 } from "@vaultcompass/intent-guard-core";
 import { collectChangedPaths } from "./changed-paths.js";
-import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
+import {
+  isHelpFlag,
+  isVersionFlag,
+  listValueAt,
+  missingValue,
+  printUsage,
+  printVersion,
+} from "./usage.js";
 
 const USAGE = `Usage: intent-guard report [flags]
 
@@ -44,11 +51,12 @@ function badUsage(reason?: string): never {
   process.exit(1);
 }
 
-// The flags that take a value and are parsed by the `&& argv[i + 1]` arms
-// below, which drop a flag whose value is missing or empty into the trailing
-// arm. --base and --trust-base are deliberately absent: they check their own
-// value and answer for themselves, and listing them here would change what
-// they accept.
+// The flags that take a value and drop into the trailing arm when it is
+// missing. The scalar ones are parsed by the `&& argv[i + 1]` arms below; the
+// list ones use listValueAt, which accepts an empty string and refuses a
+// following flag. --base and --trust-base are deliberately absent: they check
+// their own value and answer for themselves, and listing them here would
+// change what they accept.
 const VALUE_FLAGS = new Set([
   "--project",
   "--paths",
@@ -76,9 +84,9 @@ function parseArgs(argv: string[]) {
     const arg = argv[i];
     if (arg === "--project" && argv[i + 1]) {
       projectRoot = argv[++i];
-    } else if (arg === "--paths" && argv[i + 1]) {
+    } else if (arg === "--paths" && listValueAt(argv, i) !== undefined) {
       paths.push(...argv[++i].split(",").filter(Boolean));
-    } else if (arg === "--signals" && argv[i + 1]) {
+    } else if (arg === "--signals" && listValueAt(argv, i) !== undefined) {
       signals.push(...argv[++i].split(",").filter(Boolean));
     } else if (arg === "--message" && argv[i + 1]) {
       userMessage = argv[++i];
@@ -110,6 +118,9 @@ function parseArgs(argv: string[]) {
       version = true;
     } else if (VALUE_FLAGS.has(arg)) {
       // A known flag that arrived without its value, before the arm below.
+      // `--paths ""` does not reach here: an empty list is a value, and it is
+      // the one a pull-request runner sends when the diff against the base is
+      // empty. See the longer note in check-cli.ts.
       badUsage(missingValue(arg));
     } else {
       // Refused rather than dropped. See the longer note in check-cli.ts: a
