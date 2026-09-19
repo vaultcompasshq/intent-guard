@@ -35,7 +35,7 @@ inputs:
       narrowest one that names a release. Run a candidate through the CLI
       directly.
     required: false
-    default: 1.5.1
+    default: 1.5.2
   project:
     description: |
       Path to the Intent Guard project root, relative to the workspace root.
