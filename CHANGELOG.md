@@ -7,6 +7,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-18
+
+Patch bump on all four packages. It carries the two flag-parsing fixes merged
+as #80 and #81: every CLI parser now refuses an argument it does not recognise
+instead of dropping it in silence, which closes a fail-open where a mistyped
+`--trust-base` left pull-request mode off and the gate reported a pass, and a
+`hook install --with-vault-guard` that installed a pre-commit hook with no
+secrets scan in it while exiting 0.
+
 ### Fixed
 
 - **A mistyped flag is refused instead of silently ignored, on `check`,
