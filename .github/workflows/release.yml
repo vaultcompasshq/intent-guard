@@ -17,6 +17,19 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    outputs:
+      # Exactly "true" or "false", written by the decision step below, and
+      # only after every condition in scripts/lib/release-kind.mjs held.
+      #
+      # Spelled POSITIVELY, and every condition that reads it is too: the
+      # publish-side steps below run on "== 'false'", the smoke-published
+      # job on "needs.release.outputs.action_only == 'false'" -- never
+      # "!= 'true'". The difference only shows up when the value is
+      # neither: an output that is empty or missing (a step renamed, an id
+      # typo, a future edit that fails to set it) makes "!= 'true'" TRUE,
+      # which would publish on a run that never decided anything. Both
+      # spellings are equally readable and only one of them fails closed.
+      action_only: ${{ steps.kind.outputs.action_only }}
 
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +76,57 @@ jobs:
           fi
           echo "Ancestry check passed: ${GITHUB_SHA} is on origin/main."
 
+      # Runs before install, build, test and publish, right after the
+      # ancestry check above: every mistake this catches is a human mistake
+      # made at tag time -- a mistyped tag, a version left unbumped, a
+      # forgotten CHANGELOG entry -- and none of it depends on anything
+      # install, build or test produce. scripts/classify-release-tag.mjs
+      # reads the four packages' package.json files via "node -p", talks to
+      # the npm registry on the action-only path only, and uses node
+      # builtins only (no dependency of this repository is installed yet,
+      # and that script must keep it that way).
+      #
+      # Decides whether this tag is a PACKAGE release (the tag reads "v" +
+      # the version every package carries) or an ACTION-ONLY release (the
+      # tag moves past the scanner version and the packages stay where they
+      # are: action.yml, README, CHANGELOG and docs moved, no package did).
+      # Any other tag is refused outright. Ported from dep-guard by way of
+      # vault-guard -- scripts/lib/release-kind.mjs holds the rules and the
+      # reasoning for each; scripts/tests/release-kind.test.mjs holds the
+      # cases, registry lookup and all, which is why this is a script
+      # rather than more lines of bash here.
+      #
+      # This workflow only ever triggers on a "v*" tag push (see the "on:"
+      # block above), so "${GITHUB_REF_NAME}" is always the tag and --tag is
+      # never omitted here, unlike the sibling repositories' equivalent
+      # step, which also has to cover a workflow_dispatch run with no tag.
+      #
+      # The script writes action_only and scanner_version to $GITHUB_OUTPUT
+      # itself, so nothing here parses its stdout.
+      - name: Decide the release kind, and refuse a tag that is neither
+        id: kind
+        run: |
+          set -euo pipefail
+          SCHEMA_NAME="$(node -p "require('./packages/schema/package.json').name")"
+          SCHEMA_VERSION="$(node -p "require('./packages/schema/package.json').version")"
+          CORE_NAME="$(node -p "require('./packages/core/package.json').name")"
+          CORE_VERSION="$(node -p "require('./packages/core/package.json').version")"
+          SKILL_NAME="$(node -p "require('./packages/skill/package.json').name")"
+          SKILL_VERSION="$(node -p "require('./packages/skill/package.json').version")"
+          CLI_NAME="$(node -p "require('./packages/cli/package.json').name")"
+          CLI_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+
+          node scripts/classify-release-tag.mjs \
+            --tag "${GITHUB_REF_NAME}" \
+            --package "${SCHEMA_NAME}=${SCHEMA_VERSION}" \
+            --package "${CORE_NAME}=${CORE_VERSION}" \
+            --package "${SKILL_NAME}=${SKILL_VERSION}" \
+            --package "${CLI_NAME}=${CLI_VERSION}" \
+            --action-yml action.yml \
+            --changelog CHANGELOG.md
+
+          echo "Release kind decided: ref_name=${GITHUB_REF_NAME}"
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -91,7 +155,13 @@ jobs:
       #
       # The skip is per exact version, so it never hides a real publish failure
       # of a version that is genuinely new.
+      #
+      # Skipped entirely on an action-only release: the decision step above
+      # already proved every one of these packages is on the registry at
+      # this exact version, so there is nothing new here to publish, and
+      # running the loop would just walk into the skip branch four times.
       - name: Publish to npm
+        if: steps.kind.outputs.action_only == 'false'
         run: |
           set -euo pipefail
           for pkg in packages/schema packages/core packages/skill packages/cli; do
@@ -106,7 +176,14 @@ jobs:
             (cd "$pkg" && pnpm publish --access public --tag latest)
           done
 
+      # Two Release steps, one per release kind, rather than one step with a
+      # computed body. The body is the only difference between them, and it
+      # is the part that must not be wrong: "Published ... to npm" appears
+      # under exactly one condition, the same condition that let the
+      # publish step run at all, so an action-only release cannot announce
+      # a publish that did not happen.
       - name: Create GitHub Release
+        if: steps.kind.outputs.action_only == 'false'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -114,9 +191,31 @@ jobs:
             Published @vaultcompass/intent-guard packages to npm.
             See CHANGELOG.md on main.
 
+      # The action-only body. It has to answer the question a reader of
+      # this Release page actually has -- "the tag moved, so what am I
+      # getting?" -- which is a scanner version that did not move with it.
+      - name: Create GitHub Release (action-only)
+        if: steps.kind.outputs.action_only == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            Action-only release. This tag moves the composite action; the scanner it installs stays at `${{ steps.kind.outputs.scanner_version }}`, which was already on npm before this tag.
+
+            Nothing was published to npm by this release.
+
+            See CHANGELOG.md for what changed.
+
   smoke-published:
     name: Smoke test published CLI
     needs: release
+    # Nothing was published on an action-only release, so there is nothing
+    # here to smoke test: every command below installs
+    # @vaultcompass/intent-guard at the version named by the tag, and on an
+    # action-only tag that version does not exist on the registry and never
+    # will. The job would wait out its polling loop and then fail a release
+    # that did exactly what it was supposed to.
+    if: needs.release.outputs.action_only == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
