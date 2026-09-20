@@ -9,6 +9,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Security
 
+- **The Action's version shape check now refuses leading-zero strings
+  (01.5.3, 1.05.3, 1.5.03).** Those are invalid semver, so npm reads them
+  as a dist-tag rather than a version. The shape check and the pull-request
+  re-match both use the same no-leading-zero pattern the sibling actions
+  already ship.
+
 - **Hardened the GitHub Action's install step, matching the standard the
   three sibling actions (conductor, dep-guard, vault-guard) already enforce.**
   The install step now runs `npm install -g --ignore-scripts`, so a package

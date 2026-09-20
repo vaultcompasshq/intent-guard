@@ -909,12 +909,25 @@ describe("action.yml validates its inputs before a shell sees them", () => {
   });
 
   it("accepts an exact version and refuses everything else", () => {
-    // EXACT VERSIONS ONLY. The two families this closes are different: a
+    // EXACT VERSIONS ONLY. The three families this closes are different: a
     // dist-tag hands the choice of program to the registry on the morning of
-    // the run, while a value beginning with a dot or ending in .tgz is read by
-    // npm as a PATH, which would let the tree being judged supply its own gate.
+    // the run, a value beginning with a dot or ending in .tgz is read by npm
+    // as a PATH, and a leading-zero string is invalid semver so npm reads it
+    // as a dist-tag too.
     expect(runValidate({ version: "1.5.2" }).status).toBe(0);
-    for (const rejected of [".", "..", "payload.tgz", "latest", "next", "beta", "-1.5.0", "1.x"]) {
+    for (const rejected of [
+      ".",
+      "..",
+      "payload.tgz",
+      "latest",
+      "next",
+      "beta",
+      "-1.5.0",
+      "1.x",
+      "01.5.3",
+      "1.05.3",
+      "1.5.03",
+    ]) {
       const refused = runValidate({ version: rejected });
       expect([rejected, refused.status]).toEqual([rejected, 1]);
       expect(refused.stdout).toMatch(/::error::.*`version`/);
