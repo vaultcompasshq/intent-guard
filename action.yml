@@ -17,16 +17,19 @@ inputs:
   version:
     description: |
       The exact version of `@vaultcompass/intent-guard` to install, such as
-      `1.5.0`. Validated against `^[0-9]+\.[0-9]+\.[0-9]+$`, and the default is
+      `1.5.0`. Validated against
+      `^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`, and the default is
       the version this action shipped with.
 
-      Nothing else is accepted, and the two families refused are refused for
+      Nothing else is accepted, and the three families refused are refused for
       different reasons. A dist-tag such as `latest` means the program judging a
       pull request is whichever one the registry served that morning rather than
       one decided in the workflow file. A value beginning with a dot, or ending
       in `.tgz`, is not a version at all: npm reads it as a PATH, which on a run
       that starts in a checkout would let the tree being judged hand over its
-      own gate.
+      own gate. A leading-zero form such as `01.5.3`, `1.05.3` or `1.5.03` is
+      invalid semver, so npm does not read it as a version and falls back to
+      treating the spec as a dist-tag.
 
       A PRERELEASE CANNOT BE PINNED HERE. `1.6.0-rc.1` does not match, so a
       release candidate cannot be gated through this action before it ships.
@@ -192,10 +195,11 @@ runs:
         # against a directory rather than the registry. A charset that let those
         # through would be one committed file away from the tree under judgment
         # choosing its own gate.
-        # Parenthesised (rather than the equivalent `^[0-9]+\.[0-9]+\.[0-9]+$`)
-        # so the same pattern also captures the three numbers for the
-        # pull-request floor below. The set of values accepted is unchanged.
-        if [[ ! "${IG_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        # Parenthesised so the same pattern also captures the three numbers
+        # for the pull-request floor below. No leading zeros in any of the
+        # three numbers: `01.5.3` and `1.5.03` are not semver, so npm falls
+        # back to treating the spec as a dist-tag.
+        if [[ ! "${IG_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
           printf '::error::intent-guard: the `version` input must be an exact version like 1.5.0, and was %q\n' "${IG_VERSION}"
           printf '::error::A dist-tag such as latest, a range, or anything else is refused. A value beginning with a dot or ending in .tgz is read by npm as a path rather than a version.\n'
           exit 1
@@ -264,7 +268,7 @@ runs:
           # against zeroes and let everything through. The pattern is the
           # same one deliberately, so the two cannot drift into disagreeing
           # about what a version is.
-          if [[ ! "${IG_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          if [[ ! "${IG_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             printf '::error::intent-guard: internal: %q passed the version shape check and then did not parse. Refusing rather than guessing.\n' "${IG_VERSION}"
             exit 1
           fi
