@@ -192,10 +192,116 @@ runs:
         # against a directory rather than the registry. A charset that let those
         # through would be one committed file away from the tree under judgment
         # choosing its own gate.
-        if [[ ! "${IG_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Parenthesised (rather than the equivalent `^[0-9]+\.[0-9]+\.[0-9]+$`)
+        # so the same pattern also captures the three numbers for the
+        # pull-request floor below. The set of values accepted is unchanged.
+        if [[ ! "${IG_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
           printf '::error::intent-guard: the `version` input must be an exact version like 1.5.0, and was %q\n' "${IG_VERSION}"
           printf '::error::A dist-tag such as latest, a range, or anything else is refused. A value beginning with a dot or ending in .tgz is read by npm as a path rather than a version.\n'
           exit 1
+        fi
+
+        # A FLOOR ON ONE EVENT ONLY: on a pull request, `version` may not name
+        # a gate OLDER than the one this action tag ships with.
+        #
+        # THE HOLE. On a same-repo `pull_request` event GitHub runs the
+        # workflow file from the HEAD, so the `version:` input is written by
+        # the pull request being judged. The shape check above proves the
+        # input names a version and says nothing about WHICH one: every
+        # published version clears it, and ten are published, 1.0.10 through
+        # 1.5.2, so nine of them sit below the tag this action ships and are
+        # already refused by it, but only by coincidence -- nothing before
+        # this block made that a rule.
+        #
+        # The day a 1.6.0 gate ships with new checks, a pull request could pin
+        # back to 1.5.2, which is well-formed and today's default, and be
+        # judged by the older rule set it chose for itself.
+        #
+        # This is the same class of hole as `trust-base: off`, refused by name
+        # a few checks above for exactly this reason. The difference is what a
+        # reviewer sees: deleting a security step reads as deleting a security
+        # step, while `version: 1.5.2` reads as ordinary version management.
+        #
+        # FORWARD STAYS ALLOWED, ON AN ASSUMPTION THIS RULE DOES NOT ENFORCE.
+        # The rule assumes a newer gate is at least as strict as the one this
+        # tag ships. Nothing here checks that, and forward pins are not
+        # bounded: any higher version is accepted, including one that does not
+        # exist yet and one whose rules turn out to be weaker. The `version`
+        # input exists so a consumer can pin one. Only the backward direction,
+        # on the one event where the workflow file is written by the side
+        # under judgment, is refused.
+        #
+        # COMPARED AGAINST A HARDCODED CONSTANT, never against anything
+        # derived from an input. `inputs.version` looks identical whether the
+        # consumer wrote 1.5.2 or the default supplied it, so the step cannot
+        # tell a pin from a default and the constant is the only source of
+        # truth. It is safe to trust because action.yml comes from the ref the
+        # consumer's workflow names, not from the pull request's tree.
+        #
+        # THAT HOLDS WHEN THE CONSUMER NAMES THIS ACTION BY OWNER AND REF, as
+        # `vaultcompasshq/intent-guard@TAG`. A LOCAL-PATH reference instead,
+        # the `./some/dir` form, reads action.yml out of the pull request's
+        # OWN tree, so the constant below is author-controlled and this rule
+        # protects nothing there. Self-testing workflows inside this
+        # repository are the usual reason to reference it that way.
+        IG_TAG_MAJOR=1
+        IG_TAG_MINOR=5
+        IG_TAG_PATCH=2
+        IG_TAG="${IG_TAG_MAJOR}.${IG_TAG_MINOR}.${IG_TAG_PATCH}"
+
+        # GITHUB_BASE_REF being non-empty IS the pull-request test, and it is
+        # the same one the run step uses to decide whether to pass
+        # --trust-base under `auto`. A second detector for the same event is a
+        # second thing to keep in step. Not re-declared in this step's `env:`
+        # mapping: Actions sets it empty rather than unset off a pull request,
+        # and it already reaches this script as ambient runner context, the
+        # same way the empty-base-and-paths refusal above reads it.
+        if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+          # Matched again rather than read out of `BASH_REMATCH` from the
+          # shape check above. That array does survive the `!` there, but a
+          # reader repairing the shape check has no way to know this block is
+          # downstream of it, and a silently emptied capture would compare
+          # against zeroes and let everything through. The pattern is the
+          # same one deliberately, so the two cannot drift into disagreeing
+          # about what a version is.
+          if [[ ! "${IG_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            printf '::error::intent-guard: internal: %q passed the version shape check and then did not parse. Refusing rather than guessing.\n' "${IG_VERSION}"
+            exit 1
+          fi
+          IG_MAJOR="${BASH_REMATCH[1]}"
+          IG_MINOR="${BASH_REMATCH[2]}"
+          IG_PATCH="${BASH_REMATCH[3]}"
+
+          # WRITTEN AS "ACCEPT ONLY IF PROVABLY NEW ENOUGH", NOT "REFUSE IF
+          # OLD". `[` returns 2 on a malformed comparison, and an `if` reads 2
+          # as false, so a refuse-if shape turns an arithmetic error into
+          # permission -- on the one check whose whole job is to refuse. Here
+          # an error leaves the flag at 0 and the step refuses, so the failure
+          # direction is closed by construction rather than by getting every
+          # expression right. It is the same shape the npm floor in the
+          # install step uses, and for the same reason.
+          #
+          # Component by component, never as text: `1.10.0` sorts BELOW
+          # `1.6.0` as a string and above it as a version, and a
+          # lexicographic check would refuse the forward pin this rule
+          # deliberately leaves open.
+          IG_PR_VERSION_OK=0
+          if [ "${IG_MAJOR}" -gt "${IG_TAG_MAJOR}" ] 2>/dev/null; then
+            IG_PR_VERSION_OK=1
+          elif [ "${IG_MAJOR}" -eq "${IG_TAG_MAJOR}" ] 2>/dev/null; then
+            if [ "${IG_MINOR}" -gt "${IG_TAG_MINOR}" ] 2>/dev/null; then
+              IG_PR_VERSION_OK=1
+            elif [ "${IG_MINOR}" -eq "${IG_TAG_MINOR}" ] 2>/dev/null && [ "${IG_PATCH}" -ge "${IG_TAG_PATCH}" ] 2>/dev/null; then
+              IG_PR_VERSION_OK=1
+            fi
+          fi
+
+          if [ "${IG_PR_VERSION_OK}" -ne 1 ]; then
+            printf '::error::intent-guard: on a pull request the `version` input may not ask for a gate older than the one this action tag ships. It asks for %s, and this tag ships %s.\n' "${IG_VERSION}" "${IG_TAG}"
+            printf '::error::On a same-repo pull_request event GitHub runs the workflow file from the pull request head, so on this event the workflow file belongs to the pull request. An older gate here would let a change choose the rules it is judged by.\n'
+            printf '::error::REMOVE the `version` input and this cannot happen: the default is the gate this action tag ships. Pinning FORWARD is still accepted on a pull request: this rule assumes a newer gate is at least as strict, and it does not bound how far forward you pin.\n'
+            exit 1
+          fi
         fi
 
         case "${IG_REQUIRE_FROZEN}" in
@@ -369,7 +475,120 @@ runs:
       run: |
         set -eu
         mkdir -p "${npm_config_prefix}"
-        npm install -g "@vaultcompass/intent-guard@${IG_VERSION}"
+
+        # THE VERIFICATION BELOW NEEDS npm 10.5.2 OR NEWER, AND SAYS SOMETHING
+        # ALARMING AND FALSE ON AN OLDER ONE.
+        #
+        # `npm audit signatures` is not version-stable. Below 10.5.2 it fails
+        # on a CLEAN, untampered install of these very packages, because the
+        # client's bundled keys and TUF root are stale rather than because
+        # anything is wrong. On 10.5.0 it reports "Someone might have
+        # tampered with these packages since they were published on the
+        # registry!", naming ours. On 10.2.4 it is EEXPIREDSIGNATUREKEY.
+        #
+        # Measured in the sibling repositories against a real install with a
+        # cold cache and a fresh HOME, so no newer client could have primed
+        # the TUF root or the key set: 8.19.4, 9.9.4, 10.2.4, 10.5.0 and
+        # 10.5.1 fail; 10.5.2 and every later version pass.
+        #
+        # THE SETUP-NODE STEP ABOVE IS NOT SUFFICIENT. `node-version: '22'`
+        # is a major-only spec and NODE 22.0.0 SHIPS npm 10.5.1, inside the
+        # failing band. `setup-node` satisfies a major from the runner's tool
+        # cache when it can, so a self-hosted or custom-image runner holding
+        # 22.0.0 gets a client this verification cannot use.
+        #
+        # Pulled out as the first version-shaped token rather than validated
+        # and then split. A shape check with `grep -Eq` matches PER LINE
+        # while the arithmetic reads the WHOLE string, so a client printing
+        # an upgrade notice above its version would pass the check and then
+        # fail the comparison, leaving the floor skipped. `|| true` because
+        # grep exits 1 on no match; output with no version in it yields the
+        # empty string and is refused below.
+        NPM_VERSION="$(npm --version 2>/dev/null | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
+        if [ -z "${NPM_VERSION}" ]; then
+          printf '::error::intent-guard: could not read an npm version to check. Refusing rather than assuming the client can verify signatures.\n'
+          exit 1
+        fi
+        NPM_MAJOR="${NPM_VERSION%%.*}"
+        NPM_REST="${NPM_VERSION#*.}"
+        NPM_MINOR="${NPM_REST%%.*}"
+        NPM_PATCH="${NPM_REST#*.}"
+
+        # WRITTEN AS "ACCEPT ONLY IF PROVABLY OK", NOT "REFUSE IF BAD".
+        #
+        # `[` returns 2 on a malformed comparison, and an `if` reads 2 as
+        # false. A refuse-if-bad shape therefore turns any arithmetic error
+        # into permission to proceed, which is precisely how the first
+        # versions of this guard in the sibling repositories failed open.
+        # Here an error leaves NPM_OK at 0 and the step refuses, so the
+        # direction of failure is closed by construction rather than by
+        # getting an expression right.
+        NPM_OK=0
+        if [ "${NPM_MAJOR}" -gt 10 ] 2>/dev/null; then
+          NPM_OK=1
+        elif [ "${NPM_MAJOR}" -eq 10 ] 2>/dev/null; then
+          if [ "${NPM_MINOR}" -gt 5 ] 2>/dev/null; then
+            NPM_OK=1
+          elif [ "${NPM_MINOR}" -eq 5 ] 2>/dev/null && [ "${NPM_PATCH}" -ge 2 ] 2>/dev/null; then
+            NPM_OK=1
+          fi
+        fi
+
+        if [ "${NPM_OK}" -ne 1 ]; then
+          printf '::error::intent-guard: npm %s cannot verify package signatures. This action needs npm 10.5.2 or newer; below that npm reports valid packages as tampered with, because its own bundled keys are stale.\n' "${NPM_VERSION}"
+          printf '::error::Pin a Node release carrying a newer npm. Node 20.13.0 and later, and 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1 and is not. Or pin vaultcompasshq/intent-guard@v1.5.2, which does not verify.\n'
+          exit 1
+        fi
+
+        # `--ignore-scripts`, because this step runs on a runner holding the
+        # job's token and the thing being installed is a CONTROL INPUT: it
+        # decides whether a pull request may merge. Without the flag, every
+        # package in the resolved tree gets arbitrary code execution here on
+        # every run, which is a strange amount of trust to extend from the
+        # tool whose job is deciding whether this repository can be trusted.
+        npm install -g --ignore-scripts "@vaultcompass/intent-guard@${IG_VERSION}"
+
+        # A ROOT MANIFEST, WITHOUT WHICH THE NEXT COMMAND SKIPS THE ONE
+        # PACKAGE IT EXISTS TO CHECK.
+        #
+        # `npm audit signatures` audits the tree's EDGES OUT: it loads the
+        # local prefix and walks what the root declares as dependencies. A
+        # global install leaves `<prefix>/lib` holding a `node_modules` and
+        # NO manifest, so the root declares nothing and the package just
+        # installed is on the far end of no edge. Its transitive
+        # dependencies are, so they get audited and the gate itself does
+        # not. Measured in the sibling repositories, where the gap is always
+        # exactly the package the check exists for: vault-guard shipped this
+        # bug once and recorded the short count as evidence the check
+        # worked; this file has the manifest from the start.
+        printf '{"name":"intent-guard-action-verify","private":true,"dependencies":{"@vaultcompass/intent-guard":"%s"}}\n' \
+          "${IG_VERSION}" > "${npm_config_prefix}/lib/package.json"
+
+        # WHAT THIS COMMAND PROVES, narrowly, because the tempting summary is
+        # false. It asks the registry for each name and version in the tree
+        # and checks the registry signature served back.
+        #
+        # It does NOT read the installed files: the manifest is refetched
+        # rather than anything on disk being hashed, so a tampered install is
+        # invisible to it. It does NOT defeat a compromised registry, which
+        # signs what it serves. And a MISSING attestation is not a failure,
+        # only a missing or invalid signature is, so it does not require
+        # provenance despite this package publishing it.
+        #
+        # What remains is worth having: every name and version in the tree,
+        # the gate included, has to be one npmjs currently serves with a
+        # valid registry signature.
+        #
+        # Fails closed under `set -eu`, deliberately. KNOWN CONSEQUENCE: a
+        # consumer whose runner points npm at a mirror or proxy that does not
+        # serve `/-/npm/v1/keys` installs fine and then fails here with
+        # EMISSINGSIGNATUREKEY, and a sigstore or TUF outage does the same to
+        # everyone at once. Documented rather than left to be discovered from
+        # a red required check.
+        #
+        # In a subshell so nothing after this line inherits the verification
+        # directory as its cwd. A failing subshell still trips `set -e`.
+        ( cd "${npm_config_prefix}/lib" && npm audit signatures )
 
     - name: Run intent-guard
       id: run

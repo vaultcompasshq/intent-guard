@@ -7,6 +7,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **Hardened the GitHub Action's install step, matching the standard the
+  three sibling actions (conductor, dep-guard, vault-guard) already enforce.**
+  The install step now runs `npm install -g --ignore-scripts`, so a package
+  in the resolved tree can no longer run arbitrary code on the runner that
+  holds the job's token. It writes a synthetic root manifest at
+  `$npm_config_prefix/lib/package.json` naming the installed package and
+  version, without which `npm audit signatures` walks the tree's edges out,
+  finds no edge to the gate itself, and silently skips checking it. It then
+  runs `npm audit signatures` from inside that manifest directory, and
+  refuses to proceed on an npm client older than 10.5.2, which reports a
+  clean install of these packages as tampered with because its own bundled
+  signing keys are stale.
+- **Added a pull-request backward-pin rule to the `version` input.** On a
+  `pull_request` event, GitHub runs the workflow file from the pull request's
+  own head, so nothing previously stopped a pull request from pinning
+  `version` to a gate older than the one the action tag ships, and being
+  judged by whatever rules that older gate happened to enforce. The validate
+  step now refuses a `version` below the tag's own gate (`IG_TAG`, currently
+  1.5.2) on a pull request only, naming both versions and the remedy.
+  Pinning forward is still accepted, on the rule's unenforced assumption that
+  a newer gate is at least as strict.
+
 ### Tests
 
 - Added a characterization test pinning that `checkGate` with `requireFrozen:
