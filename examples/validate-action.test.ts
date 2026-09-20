@@ -63,7 +63,12 @@ interface ActionFile {
 // CI sets it, and the default is the real file.
 const ACTION_FILE = process.env.IG_ACTION_FILE ?? join(ROOT, "action.yml");
 
-const action = parseYaml(readFileSync(ACTION_FILE, "utf8")) as ActionFile;
+// The raw text, kept alongside the parsed form: the pull-request pin test
+// below reads the IG_TAG_* constants out of the actual script source, rather
+// than a copy written down in this file that could go on agreeing with
+// itself after action.yml moved.
+const actionYmlText = readFileSync(ACTION_FILE, "utf8");
+const action = parseYaml(actionYmlText) as ActionFile;
 const steps = action.runs?.steps ?? [];
 
 /** Each step by id. Not "the step that mentions intent-guard": every one does. */
@@ -229,6 +234,39 @@ function writeRecorder(path: string, record: string, marker: string): void {
   chmodSync(path, 0o755);
 }
 
+/**
+ * A recorder standing in for npm specifically, once the install step starts
+ * asking it `--version` before deciding whether to run at all.
+ *
+ * A generic `writeRecorder` marker is not a version string, so an install
+ * step that greps `npm --version` for a version number would read nothing
+ * back and refuse every run, including the ones this suite already relies on
+ * passing. This stub answers `--version` with a controllable string and, on
+ * `install`, creates `<prefix>/lib` the way a real global install does,
+ * because the step writes a signature-verification manifest there and reads
+ * it from inside that directory. Every call is still recorded the same NUL
+ * delimited way, so `readInvocations` sees it like any other.
+ */
+function writeNpmRecorder(path: string, record: string, npmVersion: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(
+    path,
+    [
+      "#!/bin/sh",
+      `printf 'cwd\\0%s\\0' "$(pwd -P)" >> ${JSON.stringify(record)}`,
+      `for arg in "$@"; do printf 'arg\\0%s\\0' "$arg" >> ${JSON.stringify(record)}; done`,
+      'case "$1" in',
+      `  --version) printf '%b\\n' ${JSON.stringify(npmVersion)} ;;`,
+      '  install) mkdir -p "${npm_config_prefix}/lib" ;;',
+      "esac",
+      'exit "${IG_TEST_STATUS:-0}"',
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  chmodSync(path, 0o755);
+}
+
 interface Recorded {
   ran: boolean;
   argv: string[];
@@ -246,6 +284,38 @@ function readRecord(file: string): Recorded {
     if (fields[i] === "cwd") cwd.push(fields[i + 1]);
   }
   return { ran: cwd.length > 0, argv, cwd };
+}
+
+interface Invocation {
+  cwd: string;
+  argv: string[];
+}
+
+/**
+ * The same record file as `readRecord`, but split one entry per call to the
+ * recorder rather than flattened across every call. The install step now
+ * invokes the npm stub three times in one run (a version check, the install
+ * itself, and the signature audit), and a flattened argv list cannot tell
+ * those apart. Each invocation starts with exactly one `cwd` field, which is
+ * the boundary this splits on.
+ */
+function readInvocations(file: string): Invocation[] {
+  const raw = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const fields = raw.split("\0");
+  fields.pop();
+  const invocations: Invocation[] = [];
+  let current: Invocation | null = null;
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    const key = fields[i];
+    const value = fields[i + 1];
+    if (key === "cwd") {
+      current = { cwd: value, argv: [] };
+      invocations.push(current);
+    } else if (key === "arg" && current) {
+      current.argv.push(value);
+    }
+  }
+  return invocations;
 }
 
 const GATE_MARKER = "intent-guard recorder stdout";
@@ -270,8 +340,12 @@ interface Harness {
  * `.npmrc` and a `node_modules/@vaultcompass/intent-guard` committed by the
  * head, both sitting in the workspace where an action that ran from the
  * checkout would find them.
+ *
+ * `npmVersion` defaults to a client the signature verification actually
+ * passes on (10.9.2), so every test that is not specifically about the npm
+ * floor gets a harness that clears it without asking.
  */
-function makeHarness(overrides: Record<string, string> = {}): Harness {
+function makeHarness(overrides: Record<string, string> = {}, npmVersion = "10.9.2"): Harness {
   const dir = tempDir();
   const workspace = join(dir, "workspace");
   const runnerTemp = join(dir, "runner-temp");
@@ -292,7 +366,7 @@ function makeHarness(overrides: Record<string, string> = {}): Harness {
   const plantedRecord = join(dir, "planted-record.bin");
   const gateRecord = join(dir, "gate-record.bin");
 
-  writeRecorder(join(pathDir, "npm"), npmRecord, "npm recorder stdout");
+  writeNpmRecorder(join(pathDir, "npm"), npmRecord, npmVersion);
   writeRecorder(join(pathDir, "npx"), npxRecord, "npx recorder stdout");
 
   // The head's own copy, in the place a prior install step would have put it,
@@ -427,7 +501,13 @@ function runValidate(
 // Which variables a script reads, as opposed to which ones it was handed.
 // ---------------------------------------------------------------------------
 
-/** Provided by the runner itself rather than by a step's `env:` mapping. */
+/**
+ * Provided by the runner itself rather than by a step's `env:` mapping, or by
+ * bash itself rather than by anything a step assigns. BASH_REMATCH is the
+ * latter: `[[ =~ ]]` sets it as a side effect, so it is read without ever
+ * appearing on the left of a `=`, which is the only shape the `assigned`
+ * pass below can recognise.
+ */
 const AMBIENT = new Set([
   "GITHUB_WORKSPACE",
   "GITHUB_OUTPUT",
@@ -439,6 +519,7 @@ const AMBIENT = new Set([
   "PATH",
   "HOME",
   "IFS",
+  "BASH_REMATCH",
 ]);
 
 function referencedVariables(script: string): string[] {
@@ -514,12 +595,15 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
     const harness = makeHarness();
     const result = runInstall(harness);
     expect(result.status).toBe(0);
+    const install = readInvocations(harness.npmRecord).find((call) => call.argv[0] === "install");
+    expect(install).toBeDefined();
     // Exactly this, in this order. An extra specifier, a `--prefix` on the
     // command line, or a spec built from anything but the validated input
     // would all show up here.
-    expect(readRecord(harness.npmRecord).argv).toEqual([
+    expect(install?.argv).toEqual([
       "install",
       "-g",
+      "--ignore-scripts",
       "@vaultcompass/intent-guard@1.5.2",
     ]);
   });
@@ -535,9 +619,110 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
   it("starts npm outside the checkout, so a committed .npmrc is never its cwd", () => {
     const harness = makeHarness();
     runInstall(harness);
-    const recorded = readRecord(harness.npmRecord);
-    expect(recorded.cwd).toEqual([realpathSync(harness.runnerTemp)]);
-    expect(recorded.cwd[0]).not.toContain(realpathSync(harness.workspace));
+    const invocations = readInvocations(harness.npmRecord);
+    expect(invocations.length).toBeGreaterThan(0);
+    // Every call to npm runs from somewhere under the runner temp -- the
+    // version check and the install itself run from the runner temp exactly,
+    // and the signature audit runs one level deeper, from inside the
+    // manifest directory the install step wrote -- and never from the
+    // workspace, which is where a committed .npmrc lives.
+    for (const call of invocations) {
+      expect(call.cwd.startsWith(realpathSync(harness.runnerTemp))).toBe(true);
+      expect(call.cwd).not.toContain(realpathSync(harness.workspace));
+    }
+  });
+
+  it("never lets an installed package run its own install scripts", () => {
+    // This step runs on a runner holding the job's token, and what it
+    // installs is a CONTROL INPUT: it decides whether a pull request may
+    // merge. Without --ignore-scripts every package in the resolved tree
+    // gets arbitrary code execution here on every run.
+    const harness = makeHarness();
+    runInstall(harness);
+    const install = readInvocations(harness.npmRecord).find((call) => call.argv[0] === "install");
+    expect(install?.argv).toContain("--ignore-scripts");
+  });
+
+  it("declares the gate as a dependency, or the signature audit silently skips it", () => {
+    // `npm audit signatures` audits the tree's EDGES OUT: it loads the local
+    // prefix and walks what the root declares as dependencies. A global
+    // install leaves `<prefix>/lib` holding a `node_modules` and NO
+    // manifest, so the root declares nothing and the package just installed
+    // is on the far end of no edge. This manifest is what gives it an edge.
+    const harness = makeHarness();
+    runInstall(harness);
+    const prefix = envForStep("install", harness.context).npm_config_prefix;
+    const manifestPath = join(prefix, "lib", "package.json");
+    expect(existsSync(manifestPath)).toBe(true);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    expect(manifest.dependencies["@vaultcompass/intent-guard"]).toBe(
+      harness.context.inputs.version,
+    );
+  });
+
+  it("checks the registry still serves the name and version it installed", () => {
+    // Deliberately not "verifies what it installed": the command refetches
+    // manifests from the registry and hashes nothing on disk, so a tampered
+    // install passes it. It still has to run.
+    const harness = makeHarness();
+    runInstall(harness);
+    const audit = readInvocations(harness.npmRecord).find(
+      (call) => call.argv[0] === "audit" && call.argv[1] === "signatures",
+    );
+    expect(audit).toBeDefined();
+    // From inside the manifest directory, not the runner temp itself, or the
+    // audit walks a prefix with no manifest and silently skips the gate.
+    expect(audit?.cwd).toBe(
+      realpathSync(join(envForStep("install", harness.context).npm_config_prefix, "lib")),
+    );
+  });
+
+  it("refuses an npm too old to verify, rather than calling a clean install tampered with", () => {
+    // `npm audit signatures` is not version-stable: below 10.5.2 it fails on
+    // a clean install of these very packages, because the client's own
+    // bundled keys are stale rather than because anything is wrong.
+    for (const old of ["8.19.4", "9.9.4", "10.2.4", "10.5.0", "10.5.1"]) {
+      const harness = makeHarness({}, old);
+      const result = runInstall(harness);
+      expect([old, result.status]).not.toEqual([old, 0]);
+      const install = readInvocations(harness.npmRecord).find(
+        (call) => call.argv[0] === "install",
+      );
+      expect([old, install]).toEqual([old, undefined]);
+    }
+  });
+
+  it("accepts the first npm that actually verifies, and newer", () => {
+    for (const ok of ["10.5.2", "10.6.0", "10.9.2", "11.0.0", "12.0.0"]) {
+      const harness = makeHarness({}, ok);
+      expect([ok, runInstall(harness).status]).toEqual([ok, 0]);
+    }
+  });
+
+  it("still reads the version when npm prints a notice above it", () => {
+    // A per-line shape check would pass on a client printing an upgrade
+    // banner above its version and then hand the arithmetic the WHOLE
+    // string, which errors and is read as false by a refuse-if-bad shape.
+    const stale = makeHarness({}, "npm notice a new version is available\\n10.5.0");
+    const staleResult = runInstall(stale);
+    expect(staleResult.status).not.toBe(0);
+    expect(
+      readInvocations(stale.npmRecord).find((call) => call.argv[0] === "install"),
+    ).toBeUndefined();
+
+    const fine = makeHarness({}, "npm notice a new version is available\\n10.9.2");
+    expect(runInstall(fine).status).toBe(0);
+  });
+
+  it("refuses rather than assumes when it cannot read a version at all", () => {
+    for (const unreadable of ["", "not a version"]) {
+      const harness = makeHarness({}, unreadable);
+      const result = runInstall(harness);
+      expect([unreadable, result.status]).not.toEqual([unreadable, 0]);
+      expect(
+        readInvocations(harness.npmRecord).find((call) => call.argv[0] === "install"),
+      ).toBeUndefined();
+    }
   });
 
   it("installs under a prefix in the runner temp, not into the checkout", () => {
@@ -728,7 +913,7 @@ describe("action.yml validates its inputs before a shell sees them", () => {
     // dist-tag hands the choice of program to the registry on the morning of
     // the run, while a value beginning with a dot or ending in .tgz is read by
     // npm as a PATH, which would let the tree being judged supply its own gate.
-    expect(runValidate({ version: "1.5.0" }).status).toBe(0);
+    expect(runValidate({ version: "1.5.2" }).status).toBe(0);
     for (const rejected of [".", "..", "payload.tgz", "latest", "next", "beta", "-1.5.0", "1.x"]) {
       const refused = runValidate({ version: rejected });
       expect([rejected, refused.status]).toEqual([rejected, 1]);
@@ -820,6 +1005,168 @@ describe("action.yml validates its inputs before a shell sees them", () => {
   it("accepts a push run that named paths", () => {
     const accepted = runValidate({ paths: "src/app.ts,docs/readme.md" }, PUSH_EVENT);
     expect(accepted.status).toBe(0);
+  });
+});
+
+describe("action.yml validates its inputs, pinning the gate backward on a pull request", () => {
+  // The three numbers IG_TAG is built from, read out of action.yml rather
+  // than written down here: a copy in this file would go on agreeing with
+  // itself after the action moved.
+  function tagPart(part: "MAJOR" | "MINOR" | "PATCH"): string {
+    const found = new RegExp(`IG_TAG_${part}=([0-9]+)`).exec(actionYmlText);
+    expect([part, found === null]).toEqual([part, false]);
+    return (found as RegExpExecArray)[1];
+  }
+
+  // The same validate script, with the tag constant advanced by one minor
+  // version: the action as it will be the day a 1.6.0 gate ships and this tag
+  // starts shipping it. NOT here because the rule is invisible on the shipped
+  // file -- it is visible, every published version below 1.5.2 is refused
+  // there already -- but because this exercises the comparison at a boundary
+  // the published set cannot reach today, where the minor leg of the
+  // comparison does the work rather than the major leg.
+  function scriptWithFutureTag(): string {
+    const future = validateScript.replace(
+      /IG_TAG_MINOR=([0-9]+)/,
+      (_all, digits) => `IG_TAG_MINOR=${Number(digits) + 1}`,
+    );
+    expect(future).not.toBe(validateScript);
+    return future;
+  }
+
+  function runValidateScript(
+    script: string,
+    overrides: Record<string, string>,
+    event: Record<string, string>,
+  ): StepResult {
+    const harness = makeHarness(overrides);
+    return execScript(script, {
+      cwd: cwdForStep("validate", harness.context),
+      env: { ...ambientFor(harness, event), ...envForStep("validate", harness.context) },
+    });
+  }
+
+  it("refuses a below-tag pin on a pull request, on the shipped file", () => {
+    // 1.5.1 is a real published version, well-formed, and it clears the shape
+    // check. It sits below the tag this action ships (1.5.2) and is refused
+    // here rather than several steps later at the gate itself.
+    const refused = runValidate({ version: "1.5.1" }, PULL_REQUEST_EVENT);
+    expect(refused.status).toBe(1);
+    // Both numbers, for the same reason the npm floor names both.
+    expect(refused.stdout).toContain("1.5.1");
+    expect(refused.stdout).toContain("1.5.2");
+    expect(refused.stdout).toMatch(/pull request/);
+    expect(refused.stdout).toContain("REMOVE the `version` input");
+
+    // The same input off the pull-request event is accepted, which is what
+    // makes the refusal above a property of the EVENT and not of the value.
+    // `paths` is supplied because a push run with neither `base` nor `paths`
+    // is refused for an unrelated reason: the gate would otherwise have
+    // nothing to judge.
+    expect(
+      runValidate({ version: "1.5.1", paths: "src/app.ts" }, PUSH_EVENT).status,
+    ).toBe(0);
+  });
+
+  it("refuses a pull request that asks for a gate older than the tag ships", () => {
+    // THE HOLE THIS CLOSES. On a same-repo pull_request event GitHub runs the
+    // workflow file from the HEAD, so `version:` is written by the pull
+    // request being judged. The shape check alone proves the input names a
+    // version and says nothing about WHICH one, so once a newer gate exists a
+    // pull request could pin back to an older one and be judged by the rule
+    // set it chose for itself.
+    const future = scriptWithFutureTag();
+    const run = runValidateScript(future, { version: "1.5.2" }, PULL_REQUEST_EVENT);
+    expect(run.status).toBe(1);
+    expect(run.stdout).toContain("1.5.2");
+    expect(run.stdout).toContain("1.6.2");
+    expect(run.stdout).toMatch(/pull request/);
+    expect(run.stdout).toContain("REMOVE the `version` input");
+  });
+
+  it("leaves push events alone, where GITHUB_BASE_REF is not set", () => {
+    // The event test is GITHUB_BASE_REF being non-empty, the same one the run
+    // step uses to decide whether to pass --trust-base under auto. Off that
+    // event, a push run is as author-controlled as a pull request already is,
+    // which is scope, not safety.
+    const future = scriptWithFutureTag();
+    expect(
+      runValidateScript(future, { version: "1.5.2", paths: "src/app.ts" }, PUSH_EVENT).status,
+    ).toBe(0);
+    expect(
+      runValidateScript(future, { version: "1.5.9", paths: "src/app.ts" }, PUSH_EVENT).status,
+    ).toBe(0);
+  });
+
+  it("allows pinning forward on a pull request, and orders numerically", () => {
+    // 1.10.0 is the case a lexicographic comparison gets wrong: it sorts
+    // below 1.6.2 as text and above it as a version.
+    const future = scriptWithFutureTag();
+    for (const ok of ["1.6.2", "1.6.3", "1.7.0", "1.10.0", "2.0.0", "10.0.0"]) {
+      expect([
+        ok,
+        runValidateScript(future, { version: ok }, PULL_REQUEST_EVENT).status,
+      ]).toEqual([ok, 0]);
+    }
+  });
+
+  it("accepts the gate this tag actually ships, on every event", () => {
+    // Against the REAL file, not the future one: the shipped default and the
+    // shipped tag have to pass on a pull-request run, or every consumer's
+    // pull request goes red the day this lands.
+    const shipped = `${tagPart("MAJOR")}.${tagPart("MINOR")}.${tagPart("PATCH")}`;
+    expect(runValidate({ version: shipped }, PULL_REQUEST_EVENT).status).toBe(0);
+    expect(runValidate({}, PULL_REQUEST_EVENT).status).toBe(0);
+    for (const ok of ["1.5.2", "1.5.3", "1.10.0", "2.0.0"]) {
+      expect([ok, runValidate({ version: ok }, PULL_REQUEST_EVENT).status]).toEqual([ok, 0]);
+    }
+  });
+
+  it("lets the shape check answer first for a version that is not a version", () => {
+    // "latest" is not a version at all, and the useful answer says so: that
+    // pin does not merely choose weaker rules, it is the dist-tag family this
+    // input refuses outright. Reversing the order would answer a malformed
+    // pin with a lecture about pull requests, and would also hand the
+    // comparison a value it cannot parse.
+    const run = runValidate({ version: "latest" }, PULL_REQUEST_EVENT);
+    expect(run.status).toBe(1);
+    expect(run.stdout).toMatch(/must be an exact version/);
+    expect(run.stdout).not.toMatch(/pull request/);
+  });
+
+  it("keeps the tag constant, the input default and the published package one number", () => {
+    // THE DRIFT GUARD. Three numbers in three places have to say the same
+    // thing: the version this repository publishes as @vaultcompass/intent-guard,
+    // the `version` input's default, and the constant the pull-request rule
+    // compares against. Let them drift and the rule silently measures against
+    // a gate nobody ships.
+    const tag = `${tagPart("MAJOR")}.${tagPart("MINOR")}.${tagPart("PATCH")}`;
+    const cliVersion = JSON.parse(
+      readFileSync(join(ROOT, "packages/cli/package.json"), "utf8"),
+    ).version;
+    expect(tag).toBe(cliVersion);
+    expect(String(action.inputs?.version?.default ?? "")).toBe(tag);
+  });
+
+  it("writes the pull-request check accept-only-if, after the version shape check", () => {
+    // Stated as text because behaviour cannot see a check that is not there,
+    // and because the FAILURE DIRECTION is the point. `[` returns 2 on a
+    // malformed comparison and an `if` reads 2 as false, so a refuse-if shape
+    // turns an arithmetic error into permission. The flag must therefore
+    // start at 0 and only be raised by a comparison that succeeded.
+    const code = validateScript
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("#"))
+      .join("\n");
+    const shapeAt = code.indexOf("must be an exact version");
+    const initAt = code.indexOf("IG_PR_VERSION_OK=0");
+    const refuseAt = code.indexOf('"${IG_PR_VERSION_OK}" -ne 1');
+    expect([shapeAt, initAt, refuseAt].every((i) => i !== -1)).toBe(true);
+    expect(initAt).toBeGreaterThan(shapeAt);
+    expect(refuseAt).toBeGreaterThan(initAt);
+    const gateAt = code.indexOf('-n "${GITHUB_BASE_REF:-}"', shapeAt);
+    expect(gateAt).toBeGreaterThan(shapeAt);
+    expect(gateAt).toBeLessThan(initAt);
   });
 });
 
