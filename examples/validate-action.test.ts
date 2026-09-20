@@ -123,7 +123,7 @@ interface Context {
  * that value silently blank, which is the failure this whole file exists to
  * avoid.
  */
-function evaluateExpression(template: string, context: Context): string {
+function evaluateExpression(template: string, context: Context, baseRef = ""): string {
   return template.replace(/\$\{\{\s*([^}]+?)\s*\}\}/g, (_match, raw: string) => {
     const expression = raw.trim();
     if (expression.startsWith("inputs.")) {
@@ -135,6 +135,12 @@ function evaluateExpression(template: string, context: Context): string {
     }
     if (expression === "runner.temp") return context.runnerTemp;
     if (expression === "github.workspace") return context.workspace;
+    // github.base_ref mirrors the GITHUB_BASE_REF env var GitHub sets on the
+    // runner: the branch a pull_request event targets, empty on every other
+    // event. Threaded in by the caller from the event under test, rather
+    // than read off `context`, because the same harness is reused across
+    // both a pull_request and a push run of the same step.
+    if (expression === "github.base_ref") return baseRef;
     const output = /^steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_]+)$/.exec(expression);
     if (output) return context.stepOutputs[output[1]]?.[output[2]] ?? "";
     throw new Error(`the harness cannot evaluate the expression ${expression}`);
@@ -142,10 +148,10 @@ function evaluateExpression(template: string, context: Context): string {
 }
 
 /** The step's declared env, with the runner's expansion applied. */
-function envForStep(id: string, context: Context): Record<string, string> {
+function envForStep(id: string, context: Context, baseRef = ""): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, template] of Object.entries(step(id).env ?? {})) {
-    env[key] = evaluateExpression(String(template), context);
+    env[key] = evaluateExpression(String(template), context, baseRef);
   }
   return env;
 }
@@ -459,7 +465,11 @@ function runGate(
 ): GateRun {
   const result = execScript(script, {
     cwd: cwdForStep("run", harness.context),
-    env: { ...ambientFor(harness, event), ...extra, ...envForStep("run", harness.context) },
+    env: {
+      ...ambientFor(harness, event),
+      ...extra,
+      ...envForStep("run", harness.context, event.GITHUB_BASE_REF ?? ""),
+    },
   });
   return {
     ...result,
@@ -493,7 +503,10 @@ function runValidate(
   const harness = makeHarness(overrides);
   return execScript(validateScript, {
     cwd: cwdForStep("validate", harness.context),
-    env: { ...ambientFor(harness, event), ...envForStep("validate", harness.context) },
+    env: {
+      ...ambientFor(harness, event),
+      ...envForStep("validate", harness.context, event.GITHUB_BASE_REF ?? ""),
+    },
   });
 }
 
@@ -511,7 +524,11 @@ function runValidate(
 const AMBIENT = new Set([
   "GITHUB_WORKSPACE",
   "GITHUB_OUTPUT",
-  "GITHUB_BASE_REF",
+  // GITHUB_BASE_REF is deliberately NOT here: the validate and run steps
+  // both declare it from `github.base_ref` in their own `env:` mapping (see
+  // action.yml), so a script that reads it is expected to show up in the
+  // "declares exactly the variables it reads" check below like any other
+  // variable, not be waved through as ambient.
   "GITHUB_ENV",
   "GITHUB_PATH",
   "GITHUB_EVENT_NAME",
@@ -1055,7 +1072,10 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const harness = makeHarness(overrides);
     return execScript(script, {
       cwd: cwdForStep("validate", harness.context),
-      env: { ...ambientFor(harness, event), ...envForStep("validate", harness.context) },
+      env: {
+        ...ambientFor(harness, event),
+        ...envForStep("validate", harness.context, event.GITHUB_BASE_REF ?? ""),
+      },
     });
   }
 

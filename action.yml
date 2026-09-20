@@ -179,6 +179,12 @@ runs:
         IG_TRUST_BASE: ${{ inputs.trust-base }}
         IG_REQUIRE_FROZEN: ${{ inputs.require-frozen }}
         IG_JSON_OUTPUT: ${{ inputs.json-output }}
+        # The pull-request test, taken from the EVENT PAYLOAD rather than from
+        # whatever environment the job happens to hand this step. Same
+        # spelling as the run step below, which reads the same value for the
+        # same event. See the comment on that gate for why it is declared
+        # rather than left ambient.
+        GITHUB_BASE_REF: ${{ github.base_ref }}
       run: |
         set -euo pipefail
 
@@ -254,12 +260,13 @@ runs:
         IG_TAG="${IG_TAG_MAJOR}.${IG_TAG_MINOR}.${IG_TAG_PATCH}"
 
         # GITHUB_BASE_REF being non-empty IS the pull-request test, and it is
-        # the same one the run step uses to decide whether to pass
-        # --trust-base under `auto`. A second detector for the same event is a
-        # second thing to keep in step. Not re-declared in this step's `env:`
-        # mapping: Actions sets it empty rather than unset off a pull request,
-        # and it already reaches this script as ambient runner context, the
-        # same way the empty-base-and-paths refusal above reads it.
+        # the same one the run step uses to decide the --base and --trust-base
+        # fallback. A second detector for the same event is a second thing to
+        # keep in step. Declared above from `github.base_ref` rather than left
+        # ambient: the platform sets it empty rather than unset off a pull
+        # request, but a declared `env:` entry is a value this step's own
+        # contract names, not one it happens to inherit from whatever context
+        # the job runs in.
         if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
           # Matched again rather than read out of `BASH_REMATCH` from the
           # shape check above. That array does survive the `!` there, but a
@@ -614,6 +621,11 @@ runs:
         IG_TRUST_BASE: ${{ inputs.trust-base }}
         IG_REQUIRE_FROZEN: ${{ inputs.require-frozen }}
         IG_JSON_OUTPUT: ${{ inputs.json-output }}
+        # The pull-request test, taken from the EVENT PAYLOAD rather than from
+        # whatever environment the job happens to hand this step. Same
+        # spelling as the validate step above, which reads the same value for
+        # the same event.
+        GITHUB_BASE_REF: ${{ github.base_ref }}
       run: |
         # NOT `set -euo pipefail`. GitHub invokes a composite bash step as
         # `bash --noprofile --norc -eo pipefail {0}`, so errexit is ALREADY ON
