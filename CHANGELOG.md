@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-09-20
+
 ### Security
 
 - **The Action's version shape check now refuses leading-zero strings
