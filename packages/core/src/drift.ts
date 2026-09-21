@@ -213,12 +213,14 @@ export function scoreDrift(
   for (const item of contract.out_of_scope) {
     const discriminating = discriminatingTokens(item, scope);
     const slashHits = slashJoinedPathHits(item, input.changedPaths ?? []);
-    const matched =
-      slashHits.length > 0
-        ? slashHits
-        : discriminating.size === 0
-          ? []
-          : outOfScopeTouch(discriminating, target, pathSegs);
+    const tokenHits =
+      discriminating.size === 0
+        ? []
+        : outOfScopeTouch(discriminating, target, pathSegs);
+    // A slash hit is strong on its own, but the fingerprint stays on the
+    // token overlap whenever that overlap is non-empty. The fragment is
+    // matched only when the overlap is empty.
+    const matched = tokenHits.length > 0 ? tokenHits : slashHits;
     if (matched.length === 0) continue;
     const strength =
       slashHits.length > 0

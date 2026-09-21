@@ -176,6 +176,25 @@ describe("scoreDrift coverage threshold", () => {
     expect(result.categories.scope_creep).toBe(40);
     const finding = result.finding_details.find((f) => f.category === "scope_creep");
     expect(finding?.strength).toBe("strong");
+    expect(finding?.matched).toEqual(["cli"]);
+    expect(finding?.fingerprint).toBe(
+      findingFingerprint({
+        contractId: "ic-20260921-match01",
+        ruleId: `scope_creep:${item}`,
+        matched: ["cli"],
+      }),
+    );
+  });
+
+  it("leaves scope creep at 0 when an out-of-scope match is only partial", () => {
+    const result = scoreDrift(
+      contract({ out_of_scope: ["customer portal notes"] }),
+      { changedPaths: ["docs/notes.md"] },
+    );
+    const finding = result.finding_details.find((f) => f.category === "scope_creep");
+    expect(finding?.strength).toBe("partial");
+    // scope_creep is scopeHits * 40. A partial match must not increment scopeHits.
+    expect(result.categories.scope_creep).toBe(0);
   });
 
   it("keeps the fingerprint of a strong finding independent of the strength field", () => {

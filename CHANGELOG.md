@@ -21,7 +21,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   its own when a changed path contains those segments consecutively and
   whole. The same fragment on a constraint counts as one evidence token
   and then goes through the coverage gate. Bare "X or Y" prohibitions
-  extract as two items, the same way comma lists already do. Fingerprints
+  extract as two items, replacing the unsplit sentence, only when the
+  sentence is a prohibition and the remainder after the verb is exactly
+  "A or B" with each side one to three words and no punctuation. Fingerprints
   of existing strong findings are unchanged. An item that shares only a
   stopword, constraint-noise token, or a small fraction of its tokens with
   the changed paths no longer increments the score.

@@ -150,7 +150,7 @@ function thresholds(ctx: Ctx, raw: unknown): DriftThresholds {
     "strong_coverage",
     "partial_coverage",
   ]);
-  return {
+  const parsed: DriftThresholds = {
     info: optionalScore(ctx, block.info, "drift.thresholds.info") ?? DRIFT_THRESHOLDS.info,
     warn: optionalScore(ctx, block.warn, "drift.thresholds.warn") ?? DRIFT_THRESHOLDS.warn,
     soft_block:
@@ -166,6 +166,15 @@ function thresholds(ctx: Ctx, raw: unknown): DriftThresholds {
       "drift.thresholds.partial_coverage",
     ),
   };
+  const strongCoverage = parsed.strong_coverage ?? 0.5;
+  const partialCoverage = parsed.partial_coverage ?? 0.3;
+  if (partialCoverage > strongCoverage) {
+    fail(
+      ctx,
+      `drift.thresholds.partial_coverage (${partialCoverage}) must not be greater than drift.thresholds.strong_coverage (${strongCoverage}).`,
+    );
+  }
+  return parsed;
 }
 
 /**

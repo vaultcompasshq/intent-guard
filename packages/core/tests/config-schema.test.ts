@@ -110,6 +110,24 @@ describe("config schema and floors", () => {
     expect(config.integrations.downstream_pipeline.issue_tracker_team_id).toBeNull();
   });
 
+  it("rejects partial_coverage above strong_coverage and names both values", () => {
+    const body =
+      "drift:\n  thresholds:\n    strong_coverage: 0.3\n    partial_coverage: 0.9\n";
+    expect(() => parseConfigText(body, "config.yaml")).toThrow(ConfigError);
+    expect(() => parseConfigText(body, "config.yaml")).toThrow(
+      /partial_coverage \(0\.9\).*strong_coverage \(0\.3\)/,
+    );
+  });
+
+  it("accepts equal partial_coverage and strong_coverage", () => {
+    const config = parseConfigText(
+      "drift:\n  thresholds:\n    strong_coverage: 0.4\n    partial_coverage: 0.4\n",
+      "config.yaml",
+    );
+    expect(config.drift.thresholds.strong_coverage).toBe(0.4);
+    expect(config.drift.thresholds.partial_coverage).toBe(0.4);
+  });
+
   it("accepts a partial config and fills the rest from defaults", () => {
     const config = parseConfigText("drift:\n  thresholds:\n    warn: 40\n", "config.yaml");
     expect(config.drift.thresholds.warn).toBe(40);

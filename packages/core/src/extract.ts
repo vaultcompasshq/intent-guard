@@ -271,8 +271,44 @@ function parseActionClauses(text: string): ParsedClause {
 const NEW_CLAUSE_PROHIBITION_RE =
   /^(?:and|or)\s+(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no)\s+(.+)$/i;
 
-function expandProhibitionLists(text: string): string[] {
+function sentenceContaining(text: string, index: number): string {
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (!isSentenceTerminatorAt(text, i)) continue;
+    if (index <= i) return text.slice(start, i + 1);
+    start = i + 1;
+  }
+  return text.slice(start);
+}
+
+function isProhibitionSentence(sentence: string): boolean {
+  const trimmed = sentence.trim();
+  if (isAcceptanceCriterionClause(trimmed)) return false;
+  return isLeadingProhibitionClause(trimmed) || isProhibitionClause(trimmed);
+}
+
+/**
+ * A bare "A or B" after the prohibition verb. Each side is 1 to 3 words,
+ * with no punctuation, parentheses, or "either". "without" is a modifier,
+ * not a bare object, so "without review or approval" is not this shape.
+ * Returns null when the split must not happen, including when either side
+ * would be dropped by the length filter.
+ */
+function bareOrSides(rest: string): [string, string] | null {
+  const trimmed = rest.trim();
+  if (/\b(either|without)\b/i.test(trimmed)) return null;
+  if (!/^[A-Za-z0-9]+(?:\s+[A-Za-z0-9]+){0,2}\s+or\s+[A-Za-z0-9]+(?:\s+[A-Za-z0-9]+){0,2}$/i.test(trimmed)) {
+    return null;
+  }
+  const [left, right] = trimmed.split(/\s+or\s+/i);
+  if (!left || !right) return null;
+  if (normalizeItem(left).length < 5 || normalizeItem(right).length < 5) return null;
+  return [left, right];
+}
+
+function expandProhibitionLists(text: string): { items: string[]; replaced: Set<string> } {
   const items: string[] = [];
+  const replaced = new Set<string>();
   const pattern =
     /\b(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no)\s+([a-z]+)\s+([^.!?]{3,200})/gi;
 
@@ -281,10 +317,22 @@ function expandProhibitionLists(text: string): string[] {
     const verb = match[2];
     const rest = match[3];
     const hasCommaList = rest.includes(",");
-    const hasBareOr = /\s+or\s+/i.test(rest);
-    if (!hasCommaList && !hasBareOr) continue;
+    const sentence = sentenceContaining(text, match.index ?? 0);
+    const orSides =
+      !hasCommaList && isProhibitionSentence(sentence) ? bareOrSides(rest) : null;
+    if (!hasCommaList && !orSides) continue;
 
-    const parts = hasCommaList ? rest.split(",") : rest.split(/\s+or\s+/i);
+    if (orSides) {
+      for (const side of orSides) {
+        items.push(`${prefix} ${verb} ${normalizeItem(side)}`);
+      }
+      replaced.add(normalizeItem(`${prefix} ${verb} ${rest}`).toLowerCase());
+      replaced.add(normalizeItem(match[0]).toLowerCase());
+      replaced.add(normalizeItem(sentence).toLowerCase());
+      continue;
+    }
+
+    const parts = rest.split(",");
     for (const part of parts) {
       const trimmedPart = part.trim();
       const newClause = trimmedPart.match(NEW_CLAUSE_PROHIBITION_RE);
@@ -300,7 +348,7 @@ function expandProhibitionLists(text: string): string[] {
     }
   }
 
-  return items;
+  return { items, replaced };
 }
 
 // A clause carrying its own "Done when …" / "Verify …" / "Acceptance:"
@@ -359,7 +407,7 @@ function isValidOutOfScopeItem(item: string): boolean {
   );
 }
 
-function extractOutOfScope(text: string): string[] {
+function extractOutOfScope(text: string): { items: string[]; replaced: Set<string> } {
   const tail = String.raw`[\w\s/.\-]{3,200}`;
   const patterns = [
     new RegExp(String.raw`\bdo\s+not\s+([a-z]${tail})`, "gi"),
@@ -376,8 +424,8 @@ function extractOutOfScope(text: string): string[] {
       "gi",
     ),
   ];
-  const items: string[] = [];
-  items.push(...expandProhibitionLists(text));
+  const { items: listed, replaced } = expandProhibitionLists(text);
+  const items: string[] = [...listed];
   // Match within one sentence at a time so a prohibition clause can't run
   // past its own sentence boundary into the next one (e.g. an acceptance
   // criteria "Done when..." clause), and so the capture isn't capped at a
@@ -388,6 +436,7 @@ function extractOutOfScope(text: string): string[] {
     for (const pattern of patterns) {
       for (const match of sentence.matchAll(pattern)) {
         const item = match[0].trim().replace(/\s+/g, " ");
+        if (replaced.has(normalizeItem(item).toLowerCase())) continue;
         if (item.length >= 5 && item.length <= 200 && isValidOutOfScopeItem(item)) {
           items.push(item);
         }
@@ -395,14 +444,17 @@ function extractOutOfScope(text: string): string[] {
     }
   }
   const unique = uniqueItems(items, 12);
-  return unique
-    .filter((item, index) => {
-      const key = item.toLowerCase();
-      return !unique
-        .slice(0, index)
-        .some((previous) => previous.toLowerCase().includes(key));
-    })
-    .slice(0, 8);
+  return {
+    items: unique
+      .filter((item, index) => {
+        const key = item.toLowerCase();
+        return !unique
+          .slice(0, index)
+          .some((previous) => previous.toLowerCase().includes(key));
+      })
+      .slice(0, 8),
+    replaced,
+  };
 }
 
 function extractAcceptanceCriteria(
@@ -460,8 +512,12 @@ export function draftContract(input: DraftContractInput): IntentContract {
     hasAcceptanceCriteria: /\b(verify|test|should|must|done)\b/i.test(userText),
   });
 
+  const extracted = extractOutOfScope(userText);
+  const embedded = extractEmbeddedProhibitions(userText).filter(
+    (item) => !extracted.replaced.has(item.toLowerCase()),
+  );
   const outOfScope = uniqueItems(
-    [...extractOutOfScope(userText), ...extractEmbeddedProhibitions(userText)],
+    [...extracted.items, ...embedded],
     12,
   ).filter((item, index, unique) => {
     const key = item.toLowerCase();
