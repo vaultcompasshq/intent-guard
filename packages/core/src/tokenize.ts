@@ -157,11 +157,13 @@ export interface MatchThresholds {
 }
 
 /**
- * Coverage-and-distinctiveness gate. Replaces any-shared-token matching.
- * `matched` is already the overlap; this decides whether that overlap is
- * enough to count. Stopwords are never evidence. For constraints, pass
+ * Coverage gate. Replaces any-shared-token matching. `matched` is already
+ * the overlap; this decides whether that overlap is enough to count.
+ * Stopwords are never evidence. For constraints, pass
  * CONSTRAINT_NOISE_TOKENS as extra never-evidence (the 1.0.5 false-positive
- * guard). Category tokens count as ordinary evidence.
+ * guard). Category tokens count as ordinary evidence. Strong is coverage
+ * at or above strong_coverage with at least one non-noise evidence token.
+ * Partial is coverage at or above partial_coverage.
  */
 export function matchStrength(
   discriminating: Set<string>,
@@ -174,19 +176,11 @@ export function matchStrength(
   const evidence = matched.filter(
     (token) => !STOPWORDS.has(token) && !extraNeverEvidence?.has(token),
   );
-  const distinctive = evidence;
-  if (distinctive.length === 0) return "none";
+  if (evidence.length === 0) return "none";
   if (discriminating.size === 0) return "none";
   const coverage = evidence.length / discriminating.size;
-  if (
-    coverage >= strongCoverage &&
-    distinctive.length >= Math.min(2, discriminating.size)
-  ) {
-    return "strong";
-  }
-  if (distinctive.length >= 1 && coverage >= partialCoverage) {
-    return "partial";
-  }
+  if (coverage >= strongCoverage) return "strong";
+  if (coverage >= partialCoverage) return "partial";
   return "none";
 }
 

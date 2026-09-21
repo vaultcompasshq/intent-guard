@@ -33,10 +33,10 @@ describe("matchStrength", () => {
     ).toBe("none");
   });
 
-    it("returns partial when the only evidence is a category token", () => {
+  it("returns strong when a two-token item matches one evidence token at coverage 0.5", () => {
     expect(
       matchStrength(new Set(["documentation", "cleanup"]), ["documentation"], THRESHOLDS),
-    ).toBe("partial");
+    ).toBe("strong");
   });
 
   it("returns strong for a 1-token item fully matched", () => {
@@ -82,17 +82,61 @@ describe("scoreDrift coverage threshold", () => {
     expect(finding?.matched).toContain("billing");
   });
 
-  it("records a category-only README match as partial and advisory", () => {
+  it("records a category-only README match as strong", () => {
     const result = scoreDrift(
       contract({
         out_of_scope: ["documentation cleanup"],
       }),
       { changedPaths: ["README.md"] },
     );
-    expect(result.categories.scope_creep).toBe(0);
+    expect(result.categories.scope_creep).toBe(40);
     const finding = result.finding_details.find((f) => f.category === "scope_creep");
-    expect(finding?.strength).toBe("partial");
-    expect(finding?.message).toMatch(/^possible /);
+    expect(finding?.strength).toBe("strong");
+    expect(finding?.message).not.toMatch(/^possible /);
+  });
+
+  it("is strong when Never commit .env files is touched by apps/web/.env.local", () => {
+    const result = scoreDrift(
+      contract({
+        out_of_scope: [],
+        constraints: [
+          {
+            source: "CLAUDE.md",
+            rule: "Never commit .env files",
+            priority: "critical",
+          },
+        ],
+      }),
+      { changedPaths: ["apps/web/.env.local"] },
+    );
+    expect(result.categories.constraint_violation).toBe(90);
+    expect(result.action).toMatch(/block/);
+    const finding = result.finding_details.find((f) => f.category === "constraint_violation");
+    expect(finding?.strength).toBe("strong");
+  });
+
+  it("does not treat a constraint slash fragment as strong on its own", () => {
+    const result = scoreDrift(
+      contract({
+        out_of_scope: [],
+        constraints: [
+          {
+            source: "CLAUDE.md",
+            rule:
+              "Current implementation changes belong in packages/core, packages/cli, packages/server, or packages/schema",
+            priority: "critical",
+          },
+        ],
+      }),
+      { changedPaths: ["packages/core/x.ts"] },
+    );
+    expect(result.categories.constraint_violation).toBe(0);
+    const findings = result.finding_details.filter(
+      (f) => f.category === "constraint_violation",
+    );
+    for (const finding of findings) {
+      expect(finding.strength).not.toBe("strong");
+    }
   });
 
   it("does not go strong for a design-system-tokens constraint against tokens.ts", () => {

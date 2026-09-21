@@ -252,22 +252,22 @@ export function scoreDrift(
   for (const c of contract.constraints) {
     const discriminating = discriminatingTokens(c.rule, scope);
     const slashHits = slashJoinedPathHits(c.rule, input.changedPaths ?? []);
-    const matched =
-      slashHits.length > 0
-        ? slashHits
-        : discriminating.size === 0
-          ? []
-          : intersectingTokens(discriminating, target);
+    const tokenHits =
+      discriminating.size === 0 ? [] : intersectingTokens(discriminating, target);
+    // A slash fragment on a constraint is one evidence token, then the
+    // coverage gate decides. Only an out-of-scope item's slash hit is
+    // strong on its own.
+    const matched = [...tokenHits];
+    for (const hit of slashHits) {
+      if (!matched.includes(hit)) matched.push(hit);
+    }
     if (matched.length === 0) continue;
-    const strength =
-      slashHits.length > 0
-        ? "strong"
-        : matchStrength(
-            discriminating,
-            matched,
-            thresholds,
-            CONSTRAINT_NOISE_TOKENS,
-          );
+    const strength = matchStrength(
+      discriminating,
+      matched,
+      thresholds,
+      CONSTRAINT_NOISE_TOKENS,
+    );
     if (strength === "none") continue;
     if (strength === "strong") {
       const severity = PRIORITY_SEVERITY[c.priority] ?? PRIORITY_SEVERITY.low;
