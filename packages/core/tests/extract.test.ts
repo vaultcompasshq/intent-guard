@@ -121,6 +121,21 @@ describe("draftContract", () => {
     expect(drift.action === "soft_block" || drift.action === "hard_block").toBe(true);
   });
 
+  it("splits bare X or Y prohibitions into separate out-of-scope items", () => {
+    const contract = draftContract({
+      userText:
+        "Add README usage documentation. Do not change source code or package metadata. Done when README has one usage example.",
+    });
+
+    expect(contract.out_of_scope).toEqual([
+      "Do not change source code",
+      "Do not change package metadata",
+    ]);
+
+    const drift = scoreDrift(contract, { changedPaths: ["package.json"] });
+    expect(drift.action).toBe("soft_block");
+  });
+
   it("splits comma-separated prohibition lists into separate out-of-scope items", () => {
     const contract = draftContract({
       userText:
@@ -303,6 +318,40 @@ describe("draftContract", () => {
     });
     expect(contract.out_of_scope.some((s) => /removeitem or$/i.test(s))).toBe(false);
     expect(contract.out_of_scope.some((s) => /removeitem ordering$/i.test(s))).toBe(true);
+  });
+
+  it("splits a bare prohibition or only for an exact A or B", () => {
+    const cases: Array<{ sentence: string; outOfScope: string[] }> = [
+      {
+        sentence:
+          "Done when no user can enable or disable notifications without the flag.",
+        outOfScope: [
+          "no user can enable or disable notifications without the flag",
+        ],
+      },
+      {
+        sentence: "Do not merge without review or approval.",
+        outOfScope: ["Do not merge without review or approval"],
+      },
+      {
+        sentence: "Do not touch billing (Stripe or Braintree) code.",
+        outOfScope: [
+          "Do not touch billing",
+          "Do not touch billing (Stripe or Braintree) code",
+        ],
+      },
+      {
+        sentence: "Do not change source code or package metadata.",
+        outOfScope: ["Do not change source code", "Do not change package metadata"],
+      },
+      {
+        sentence: "Do not change source code or ui.",
+        outOfScope: ["Do not change source code or ui"],
+      },
+    ];
+    for (const { sentence, outOfScope } of cases) {
+      expect(draftContract({ userText: sentence }).out_of_scope).toEqual(outOfScope);
+    }
   });
 
   it("does not fabricate a garbled prohibition from a compound do-not clause", () => {

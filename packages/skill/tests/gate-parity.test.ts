@@ -102,13 +102,13 @@ const DRIFT_71 = {
   action: "soft_block",
   categories: {
     scope_creep: 40,
-    constraint_violation: 90,
+    constraint_violation: 0,
     ac_divergence: 0,
     undocumented_pivot: 0,
   },
   findings: [
     'Out-of-scope touched: "Changes to the payment module" (matched: payment)',
-    'critical constraint at risk: "Do not touch the payment module" (matched: payment)',
+    'possible critical constraint at risk: "Do not touch the payment module" (matched: payment)',
   ],
   finding_details: [
     {
@@ -117,14 +117,16 @@ const DRIFT_71 = {
       rule_id: "scope_creep:Changes to the payment module",
       message: 'Out-of-scope touched: "Changes to the payment module" (matched: payment)',
       matched: ["payment"],
+      strength: "strong",
     },
     {
       fingerprint: "e7802d529e492fd649f7fbbbbeb2b7513cfefbaa2b614219a494137d485e7f4a",
       category: "constraint_violation",
       rule_id: "constraint_violation:Do not touch the payment module",
       message:
-        'critical constraint at risk: "Do not touch the payment module" (matched: payment)',
+        'possible critical constraint at risk: "Do not touch the payment module" (matched: payment)',
       matched: ["payment"],
+      strength: "partial",
     },
   ],
 };

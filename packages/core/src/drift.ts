@@ -6,11 +6,13 @@ import {
   type DriftThresholds,
 } from "./config-types.js";
 import {
+  CONSTRAINT_NOISE_TOKENS,
   discriminatingTokens,
-  hasSignificantConstraintMatch,
   intersectingTokens,
+  matchStrength,
   outOfScopeTouch,
   pathSegmentTokens,
+  slashJoinedPathHits,
   tokenize,
 } from "./tokenize.js";
 
@@ -59,6 +61,12 @@ export interface DriftFinding {
   message: string;
   /** Tokens or paths the finding matched on. Order does not affect the fingerprint. */
   matched: string[];
+  /**
+   * Coverage-gate outcome. Derived from `matched`; not part of the fingerprint.
+   * Only `strong` increments scopeHits / constraintViolation. `partial` is
+   * advisory. `none` never becomes a finding.
+   */
+  strength?: "strong" | "partial";
 }
 
 export interface DriftScore {
@@ -95,6 +103,8 @@ const DEFAULT_THRESHOLDS: DriftThresholds = {
   warn: 51,
   soft_block: 71,
   hard_block: 86,
+  strong_coverage: 0.5,
+  partial_coverage: 0.3,
 };
 
 const PRIORITY_SEVERITY: Record<string, number> = {
@@ -134,7 +144,7 @@ function pathSemanticTokens(path: string): string[] {
 }
 
 /** Union of tokens describing what the work touched (paths + signals). */
-function targetTokens(input: DriftSignals): { all: Set<string>; pathSegs: Set<string> } {
+export function targetTokens(input: DriftSignals): { all: Set<string>; pathSegs: Set<string> } {
   const all = new Set<string>();
   const pathSegs = new Set<string>();
   for (const path of input.changedPaths ?? []) {
@@ -171,6 +181,7 @@ export function scoreDrift(
     ruleId: string,
     message: string,
     matched: string[],
+    strength?: "strong" | "partial",
   ): void => {
     details.push({
       fingerprint: findingFingerprint({
@@ -182,10 +193,11 @@ export function scoreDrift(
       rule_id: ruleId,
       message,
       matched,
+      ...(strength ? { strength } : {}),
     });
   };
 
-  const thresholds = options.thresholds ?? DEFAULT_THRESHOLDS;
+  const thresholds = { ...DEFAULT_THRESHOLDS, ...options.thresholds };
   const hardBlockCritical = options.hard_block_on_critical_constraints ?? true;
 
   const { all: target, pathSegs } = targetTokens(input);
@@ -200,16 +212,23 @@ export function scoreDrift(
 
   for (const item of contract.out_of_scope) {
     const discriminating = discriminatingTokens(item, scope);
-    if (discriminating.size === 0) continue;
-    const matched = outOfScopeTouch(discriminating, target, pathSegs);
-    if (matched.length > 0) {
+    const slashHits = slashJoinedPathHits(item, input.changedPaths ?? []);
+    const tokenHits =
+      discriminating.size === 0
+        ? []
+        : outOfScopeTouch(discriminating, target, pathSegs);
+    // A slash hit is strong on its own, but the fingerprint stays on the
+    // token overlap whenever that overlap is non-empty. The fragment is
+    // matched only when the overlap is empty.
+    const matched = tokenHits.length > 0 ? tokenHits : slashHits;
+    if (matched.length === 0) continue;
+    const strength =
+      slashHits.length > 0
+        ? "strong"
+        : matchStrength(discriminating, matched, thresholds);
+    if (strength === "none") continue;
+    if (strength === "strong") {
       scopeHits += 1;
-      addFinding(
-        "scope_creep",
-        `scope_creep:${item}`,
-        `Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})`,
-        matched,
-      );
       // Overlap with an acceptance criterion amplifies divergence.
       if (
         acTokenSets.some((ac) => intersectingTokens(discriminating, ac).length > 0)
@@ -217,6 +236,15 @@ export function scoreDrift(
         touchedAcWhileOutOfScope += 1;
       }
     }
+    addFinding(
+      "scope_creep",
+      `scope_creep:${item}`,
+      strength === "partial"
+        ? `possible Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})`
+        : `Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})`,
+      matched,
+      strength,
+    );
   }
   const scopeCreep = Math.min(100, scopeHits * 40);
 
@@ -225,21 +253,40 @@ export function scoreDrift(
   let criticalViolated = false;
   for (const c of contract.constraints) {
     const discriminating = discriminatingTokens(c.rule, scope);
-    if (discriminating.size === 0) continue;
-    const matched = intersectingTokens(discriminating, target);
+    const slashHits = slashJoinedPathHits(c.rule, input.changedPaths ?? []);
+    const tokenHits =
+      discriminating.size === 0 ? [] : intersectingTokens(discriminating, target);
+    // A slash fragment on a constraint is one evidence token, then the
+    // coverage gate decides. Only an out-of-scope item's slash hit is
+    // strong on its own.
+    const matched = [...tokenHits];
+    for (const hit of slashHits) {
+      if (!matched.includes(hit)) matched.push(hit);
+    }
     if (matched.length === 0) continue;
-    if (!hasSignificantConstraintMatch(matched)) continue;
-    const severity = PRIORITY_SEVERITY[c.priority] ?? PRIORITY_SEVERITY.low;
-    if (severity > constraintViolation) constraintViolation = severity;
-    if (c.priority === "critical") criticalViolated = true;
+    const strength = matchStrength(
+      discriminating,
+      matched,
+      thresholds,
+      CONSTRAINT_NOISE_TOKENS,
+    );
+    if (strength === "none") continue;
+    if (strength === "strong") {
+      const severity = PRIORITY_SEVERITY[c.priority] ?? PRIORITY_SEVERITY.low;
+      if (severity > constraintViolation) constraintViolation = severity;
+      if (c.priority === "critical") criticalViolated = true;
+    }
     // The priority is in the message but not in the rule id: raising a
     // constraint from high to critical is the same finding about the same
     // rule, and a stored id should survive that edit.
     addFinding(
       "constraint_violation",
       `constraint_violation:${c.rule}`,
-      `${c.priority} constraint at risk: "${c.rule}" (matched: ${matched.join(", ")})`,
+      strength === "partial"
+        ? `possible ${c.priority} constraint at risk: "${c.rule}" (matched: ${matched.join(", ")})`
+        : `${c.priority} constraint at risk: "${c.rule}" (matched: ${matched.join(", ")})`,
       matched,
+      strength,
     );
   }
 

@@ -132,9 +132,114 @@ export function pathSegmentTokens(path: string): Set<string> {
   return segments;
 }
 
-/** Constraint drift needs at least one non-noise token overlap. */
-export function hasSignificantConstraintMatch(matched: string[]): boolean {
-  return matched.some((t) => !CONSTRAINT_NOISE_TOKENS.has(t));
+/**
+ * Tokens the path-category classifier in drift.ts pushes onto a changed path.
+ * They count as ordinary evidence: they only exist when a matching path
+ * shape actually changed.
+ */
+export const CATEGORY_TOKENS = new Set([
+  "source",
+  "readme",
+  "documentation",
+  "metadata",
+  "dependency",
+  "manifest",
+  "api",
+  "endpoint",
+  "test",
+]);
+
+export type MatchStrength = "strong" | "partial" | "none";
+
+export interface MatchThresholds {
+  strong_coverage?: number;
+  partial_coverage?: number;
+}
+
+/**
+ * Coverage gate. Replaces any-shared-token matching. `matched` is already
+ * the overlap; this decides whether that overlap is enough to count.
+ * Stopwords are never evidence. For constraints, pass
+ * CONSTRAINT_NOISE_TOKENS as extra never-evidence (the 1.0.5 false-positive
+ * guard). Category tokens count as ordinary evidence. Strong is coverage
+ * at or above strong_coverage with at least one non-noise evidence token.
+ * Partial is coverage at or above partial_coverage.
+ */
+export function matchStrength(
+  discriminating: Set<string>,
+  matched: string[],
+  thresholds: MatchThresholds = {},
+  extraNeverEvidence?: ReadonlySet<string>,
+): MatchStrength {
+  const strongCoverage = thresholds.strong_coverage ?? 0.5;
+  const partialCoverage = thresholds.partial_coverage ?? 0.3;
+  const evidence = matched.filter(
+    (token) => !STOPWORDS.has(token) && !extraNeverEvidence?.has(token),
+  );
+  if (evidence.length === 0) return "none";
+  if (discriminating.size === 0) return "none";
+  const coverage = evidence.length / discriminating.size;
+  if (coverage >= strongCoverage) return "strong";
+  if (coverage >= partialCoverage) return "partial";
+  return "none";
+}
+
+const SLASH_FRAGMENT_RE = /[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]*)+/g;
+
+/** Slash-joined path fragments in `text`, as lowercase whole segments. */
+export function slashJoinedFragments(text: string): string[][] {
+  const fragments: string[][] = [];
+  for (const match of text.matchAll(SLASH_FRAGMENT_RE)) {
+    const segments = match[0]
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => segment.toLowerCase());
+    if (segments.length === 0) continue;
+    fragments.push(segments);
+  }
+  return fragments;
+}
+
+/** True when `path` contains `segments` as consecutive whole path parts. */
+export function pathHasConsecutiveSegments(
+  path: string,
+  segments: string[],
+): boolean {
+  if (segments.length === 0) return false;
+  const parts = path
+    .toLowerCase()
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean);
+  if (parts.length < segments.length) return false;
+  for (let i = 0; i <= parts.length - segments.length; i++) {
+    if (segments.every((segment, offset) => parts[i + offset] === segment)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Slash-joined fragments in `text` that appear as consecutive whole
+ * segments on a changed path. Order matters; no substring matches.
+ */
+export function slashJoinedPathHits(
+  text: string,
+  changedPaths: string[],
+): string[] {
+  const hits: string[] = [];
+  const seen = new Set<string>();
+  for (const segments of slashJoinedFragments(text)) {
+    if (!changedPaths.some((path) => pathHasConsecutiveSegments(path, segments))) {
+      continue;
+    }
+    const key = segments.join("/");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hits.push(key);
+  }
+  return hits;
 }
 
 /**

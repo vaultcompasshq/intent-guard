@@ -95,6 +95,7 @@ export { DRIFT_WEIGHTS, DRIFT_THRESHOLDS, driftAction } from "./rubric.js";
 export {
   crossSessionDrift,
   scoreDrift,
+  targetTokens,
   type CrossSessionDriftScore,
   type DriftCategory,
   type DriftFinding,
@@ -112,6 +113,10 @@ export {
   tokensMatch,
   intersectingTokens,
   discriminatingTokens,
+  matchStrength,
+  CATEGORY_TOKENS,
+  type MatchStrength,
+  type MatchThresholds,
 } from "./tokenize.js";
 export {
   checkGate,
