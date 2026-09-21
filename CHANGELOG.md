@@ -9,6 +9,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- A constraint loaded from prose (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or cursor rules) is capped at advisory when it matches. A strong match is still reported, with the matched term in the message, and it does not raise `constraint_violation`, `criticalViolated`, or the exit code. The same rule written as a frozen-contract field keeps its priority severity.
+- `intent-guard check --previous-contract` now scores both contracts with the loaded drift thresholds, including `strong_coverage` and `partial_coverage`.
 - **Drift matching is now coverage-based, not any-shared-token.** Matches
   are three-state: strong (counts toward scope-creep / constraint scores),
   partial (recorded as possible, score 0), or none. Partial findings never

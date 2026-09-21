@@ -4,6 +4,7 @@ import {
   checkGate,
   crossSessionDrift,
   formatDriftMessage,
+  loadConfig,
   loadTrustedControls,
   readArchivedContract,
   readArchivedContractAtRef,
@@ -201,22 +202,34 @@ const crossSession =
         // Both sides from the same ref as the gate used. Comparing a base
         // archive against a head contract would score the drift of the
         // proposal rather than of the change under judgment.
-        const previous = args.trustBase
+        const trustBase = args.trustBase;
+        const trusted = trustBase
+          ? loadTrustedControls(args.projectRoot, trustBase)
+          : null;
+        const previous = trustBase
           ? readArchivedContractAtRef(
               args.projectRoot,
-              args.trustBase,
+              trustBase,
               args.previousContract,
             )
           : readArchivedContract(args.projectRoot, args.previousContract);
-        const current = args.trustBase
-          ? loadTrustedControls(args.projectRoot, args.trustBase).contract
-          : readContract(args.projectRoot);
+        const current = trusted ? trusted.contract : readContract(args.projectRoot);
         if (!previous || !current) return null;
-        return crossSessionDrift(previous, current, {
-          changedPaths,
-          signals: args.signals,
-          userMessage: args.userMessage || undefined,
-        });
+        const config = trusted === null ? loadConfig(args.projectRoot) : trusted.config;
+        return crossSessionDrift(
+          previous,
+          current,
+          {
+            changedPaths,
+            signals: args.signals,
+            userMessage: args.userMessage || undefined,
+          },
+          {
+            thresholds: config.drift.thresholds,
+            hard_block_on_critical_constraints:
+              config.drift.hard_block_on_critical_constraints,
+          },
+        );
       })()
     : null;
 

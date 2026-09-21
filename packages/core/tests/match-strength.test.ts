@@ -101,7 +101,7 @@ describe("scoreDrift coverage threshold", () => {
         out_of_scope: [],
         constraints: [
           {
-            source: "CLAUDE.md",
+            source: "user-stated",
             rule: "Never commit .env files",
             priority: "critical",
           },
@@ -235,13 +235,13 @@ describe("scoreDrift coverage threshold", () => {
     }
   });
 
-  it("sets constraintViolation only on a strong constraint match", () => {
+  it("sets constraintViolation only on a strong frozen-contract constraint", () => {
     const result = scoreDrift(
       contract({
         out_of_scope: [],
         constraints: [
           {
-            source: "CLAUDE.md",
+            source: "user-stated",
             rule: "Never billing",
             priority: "critical",
           },
@@ -253,6 +253,37 @@ describe("scoreDrift coverage threshold", () => {
     const finding = result.finding_details.find((f) => f.category === "constraint_violation");
     expect(finding?.strength).toBe("strong");
     expect(finding?.message).not.toMatch(/^possible /);
+    expect(result.action).toBe("soft_block");
+  });
+
+  it("caps a prose critical rule that is strong on a path at advisory", () => {
+    const path = "src/billing/x.ts";
+    const rule = "Never billing";
+    for (const source of ["CLAUDE.md", "AGENTS.md", "GEMINI.md", "cursor-rules"] as const) {
+      const result = scoreDrift(
+        contract({
+          out_of_scope: [],
+          constraints: [{ source, rule, priority: "critical" }],
+        }),
+        { changedPaths: [path] },
+      );
+      expect(result.categories.constraint_violation).toBe(0);
+      expect(result.action).toBe("proceed");
+      const finding = result.finding_details.find((f) => f.category === "constraint_violation");
+      expect(finding?.strength).toBe("strong");
+      expect(finding?.message).toMatch(/advisory/);
+      expect(finding?.message).toContain("billing");
+    }
+
+    const frozen = scoreDrift(
+      contract({
+        out_of_scope: [],
+        constraints: [{ source: "user-stated", rule, priority: "critical" }],
+      }),
+      { changedPaths: [path] },
+    );
+    expect(frozen.categories.constraint_violation).toBe(90);
+    expect(frozen.action).toBe("soft_block");
   });
 
   it("derives target tokens only from the input changed paths and signals", () => {

@@ -39,7 +39,8 @@ describe("scoreDrift", () => {
     });
     expect(result.overall).toBeGreaterThan(70);
     expect(["soft_block", "hard_block"]).toContain(result.action);
-    expect(result.categories.constraint_violation).toBeGreaterThan(0);
+    expect(result.categories.constraint_violation).toBe(0);
+    expect(result.findings.some((finding) => finding.startsWith("advisory "))).toBe(true);
   });
 
   it("blocks obvious API drift from paths alone", () => {
