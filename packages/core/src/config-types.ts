@@ -5,6 +5,10 @@ export interface DriftThresholds {
   warn: number;
   soft_block: number;
   hard_block: number;
+  /** Fraction of discriminating tokens that must overlap for a strong match. */
+  strong_coverage?: number;
+  /** Fraction of discriminating tokens that must overlap for a partial match. */
+  partial_coverage?: number;
 }
 
 export interface ConductorConfig {

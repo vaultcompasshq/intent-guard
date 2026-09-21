@@ -48,6 +48,24 @@ than printing usage.
 `intent-guard drift --ci` runs the lower-level drift scorer and exits `1` when the
 JSON result has `block: true`; otherwise it preserves the normal command output.
 
+Out-of-scope and constraint matches are three-state. After tokenization (which
+already drops stopwords), the overlap is scored as `strong`, `partial`, or
+`none`. Category tokens from the path classifier (`source`, `readme`,
+`documentation`, `metadata`, `dependency`, `manifest`, `api`, `endpoint`,
+`test`) count as ordinary evidence: they only exist when a matching path
+shape actually changed. A stopword alone can never trigger. Constraints also
+strip `CONSTRAINT_NOISE_TOKENS` (the 1.0.5 false-positive guard) before
+scoring. Slash-joined fragments in an item (`packages/cli`, `docs/`) match a
+changed path by consecutive whole segments and are strong on their own.
+`strong` requires coverage of at least `strong_coverage` (default 0.5) of the
+item's discriminating tokens and at least `min(2, discriminating.size)`
+distinctive tokens, so a 1-token item like "billing" that is fully matched is
+still strong. `partial` requires at least one distinctive token and coverage
+of at least `partial_coverage` (default 0.3). Only `strong` findings increment
+the scope-creep or constraint score; `partial` findings are recorded with a
+`possible` prefix and score 0. Both thresholds live on `drift.thresholds` in
+`.intent-guard/config.yaml`.
+
 ## intent-guard coach `<prompt text>` / intent-guard-coach `<prompt text>`
 
 Scores a prompt for scope/clarity issues. JSON: `score`, `issues`,

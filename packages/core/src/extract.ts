@@ -280,9 +280,12 @@ function expandProhibitionLists(text: string): string[] {
     const prefix = match[1].replace(/\s+/g, " ");
     const verb = match[2];
     const rest = match[3];
-    if (!rest.includes(",")) continue;
+    const hasCommaList = rest.includes(",");
+    const hasBareOr = /\s+or\s+/i.test(rest);
+    if (!hasCommaList && !hasBareOr) continue;
 
-    for (const part of rest.split(",")) {
+    const parts = hasCommaList ? rest.split(",") : rest.split(/\s+or\s+/i);
+    for (const part of parts) {
       const trimmedPart = part.trim();
       const newClause = trimmedPart.match(NEW_CLAUSE_PROHIBITION_RE);
       if (newClause) {

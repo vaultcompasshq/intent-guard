@@ -7,6 +7,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Drift matching is now coverage-based, not any-shared-token.** Matches
+  are three-state: strong (counts toward scope-creep / constraint scores),
+  partial (recorded as possible, score 0), or none. Partial findings never
+  change the exit code. Thresholds `strong_coverage` (default 0.5) and
+  `partial_coverage` (default 0.3) live on `drift.thresholds`. Strong also
+  needs at least `min(2, itemSize)` distinctive tokens. Path-category tokens
+  count as ordinary evidence. Constraint matches still strip
+  `CONSTRAINT_NOISE_TOKENS`. A slash-joined fragment in an item
+  (`packages/cli`, `docs/`) is strong on its own when a changed path contains
+  those segments consecutively and whole. Bare "X or Y" prohibitions extract
+  as two items, the same way comma lists already do. Fingerprints of existing
+  strong findings are unchanged. An item that shares only a stopword,
+  constraint-noise token, or a small fraction of its tokens with the changed
+  paths no longer increments the score.
+
 ## [1.5.3] - 2026-09-20
 
 ### Security

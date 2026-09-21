@@ -1,13 +1,13 @@
 /**
  * Outside pull-request mode, nothing changed.
  *
- * The expected values below were captured by running these exact fixtures
- * against the build from the commit before `--trust-base` existed, and they
- * are pasted here verbatim, fingerprints included. That is the point: a
- * fingerprint is a promise to a consumer storing findings, and reasons are
- * matched by prefix downstream, so this file fails if pull-request mode
- * changed a single character of what a pre-commit hook or a plain CLI run
- * sees. It is a regression fence, not a description of desired behaviour.
+ * The expected values below were recaptured against coverage-threshold
+ * matching (strong / partial / none). Fingerprints are the same hashes as
+ * the pre-trust-base capture: a fingerprint is a promise to a consumer
+ * storing findings. Reasons are matched by prefix downstream, so this file
+ * fails if pull-request mode changed a single character of what a
+ * pre-commit hook or a plain CLI run sees. It is a regression fence, not a
+ * description of desired behaviour.
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
@@ -97,34 +97,37 @@ function repo(contract: string | null, changedOnBranch: string[]): string {
   return dir;
 }
 
-const DRIFT_71 = {
-  overall: 71,
-  action: "soft_block",
+const DRIFT_ADVISORY = {
+  overall: 0,
+  action: "proceed",
   categories: {
-    scope_creep: 40,
-    constraint_violation: 90,
+    scope_creep: 0,
+    constraint_violation: 0,
     ac_divergence: 0,
     undocumented_pivot: 0,
   },
   findings: [
-    'Out-of-scope touched: "Changes to the payment module" (matched: payment)',
-    'critical constraint at risk: "Do not touch the payment module" (matched: payment)',
+    'possible Out-of-scope touched: "Changes to the payment module" (matched: payment)',
+    'possible critical constraint at risk: "Do not touch the payment module" (matched: payment)',
   ],
   finding_details: [
     {
       fingerprint: "8b626394b1a5ca648f51a8a8565e22cf67644b6d1d857fd117c1be5e7070fe6b",
       category: "scope_creep",
       rule_id: "scope_creep:Changes to the payment module",
-      message: 'Out-of-scope touched: "Changes to the payment module" (matched: payment)',
+      message:
+        'possible Out-of-scope touched: "Changes to the payment module" (matched: payment)',
       matched: ["payment"],
+      strength: "partial",
     },
     {
       fingerprint: "e7802d529e492fd649f7fbbbbeb2b7513cfefbaa2b614219a494137d485e7f4a",
       category: "constraint_violation",
       rule_id: "constraint_violation:Do not touch the payment module",
       message:
-        'critical constraint at risk: "Do not touch the payment module" (matched: payment)',
+        'possible critical constraint at risk: "Do not touch the payment module" (matched: payment)',
       matched: ["payment"],
+      strength: "partial",
     },
   ],
 };
@@ -157,7 +160,6 @@ const CLEAN_DRIFT = {
 };
 
 const BLOCKED_REASONS = [
-  "Drift soft_block (score 71/100). Resolve drift or log an acknowledged pivot before continuing.",
   "Budget hard_block: Touched protected path(s): src/payment/charge.ts",
 ];
 
@@ -172,7 +174,7 @@ describe("no-flag gate output is byte-identical to the release before --trust-ba
       reasons: BLOCKED_REASONS,
       contractFound: true,
       contractFrozen: true,
-      drift: DRIFT_71,
+      drift: DRIFT_ADVISORY,
       budget: PROTECTED_BUDGET,
       crossSessionDrift: null,
     });
@@ -242,7 +244,7 @@ describe("no-flag gate output is byte-identical to the release before --trust-ba
       reasons: BLOCKED_REASONS,
       contractFound: true,
       contractFrozen: true,
-      drift: DRIFT_71,
+      drift: DRIFT_ADVISORY,
       budget: PROTECTED_BUDGET,
       crossSessionDrift: null,
     });

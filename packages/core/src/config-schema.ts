@@ -130,12 +130,25 @@ function optionalScore(ctx: Ctx, value: unknown, path: string): number | undefin
   return value;
 }
 
+function optionalCoverage(ctx: Ctx, value: unknown, path: string): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    fail(ctx, `${path} must be a number from 0 to 1, got ${describe(value)}.`);
+  }
+  if (value < 0 || value > 1) {
+    fail(ctx, `${path} must be a number from 0 to 1, got ${value}.`);
+  }
+  return value;
+}
+
 function thresholds(ctx: Ctx, raw: unknown): DriftThresholds {
   const block = object(ctx, raw, "drift.thresholds", [
     "info",
     "warn",
     "soft_block",
     "hard_block",
+    "strong_coverage",
+    "partial_coverage",
   ]);
   return {
     info: optionalScore(ctx, block.info, "drift.thresholds.info") ?? DRIFT_THRESHOLDS.info,
@@ -146,6 +159,12 @@ function thresholds(ctx: Ctx, raw: unknown): DriftThresholds {
     hard_block:
       optionalScore(ctx, block.hard_block, "drift.thresholds.hard_block") ??
       DRIFT_THRESHOLDS.hard_block,
+    strong_coverage: optionalCoverage(ctx, block.strong_coverage, "drift.thresholds.strong_coverage"),
+    partial_coverage: optionalCoverage(
+      ctx,
+      block.partial_coverage,
+      "drift.thresholds.partial_coverage",
+    ),
   };
 }
 

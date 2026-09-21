@@ -136,6 +136,11 @@ const WIDENED_CONTRACT = FORGED_CONTRACT.replace(
  * floor, so its weighted score of 12 is entirely at the mercy of where the
  * bands sit. That is the config lever that is real, and it is the one these
  * tests use.
+ *
+ * The rule is a one-word item so coverage matching still counts it strong
+ * (one shared token never blocks unless the item is that one word). A
+ * multi-word "payment module" phrase against src/payment/charge.ts is only
+ * partial and would score 0, which would make the band attack invisible.
  */
 const MEDIUM_CONSTRAINT_CONTRACT = `contract_id: ic-20260905-bbbbbb
 version: 1.0.0
@@ -145,7 +150,7 @@ in_scope:
 out_of_scope: []
 constraints:
   - source: user-stated
-    rule: Do not touch the payment module
+    rule: Never payment
     priority: medium
 acceptance_criteria:
   - id: ac-1

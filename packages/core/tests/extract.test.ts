@@ -121,6 +121,23 @@ describe("draftContract", () => {
     expect(drift.action === "soft_block" || drift.action === "hard_block").toBe(true);
   });
 
+  it("splits bare X or Y prohibitions into separate out-of-scope items", () => {
+    const contract = draftContract({
+      userText:
+        "Add README usage documentation. Do not change source code or package metadata. Done when README has one usage example.",
+    });
+
+    expect(contract.out_of_scope).toEqual(
+      expect.arrayContaining([
+        "Do not change source code",
+        "Do not change package metadata",
+      ]),
+    );
+
+    const drift = scoreDrift(contract, { changedPaths: ["package.json"] });
+    expect(drift.action).toBe("soft_block");
+  });
+
   it("splits comma-separated prohibition lists into separate out-of-scope items", () => {
     const contract = draftContract({
       userText:
