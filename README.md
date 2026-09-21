@@ -248,7 +248,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0        # required: the base branch has to be present
-      - uses: vaultcompasshq/intent-guard@v1.5.2
+      - uses: vaultcompasshq/intent-guard@v1.5.3
 ```
 
 No `version` input, because the default is the version the action shipped with,
