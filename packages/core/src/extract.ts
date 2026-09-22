@@ -21,7 +21,7 @@ export function generateContractId(date = new Date()): string {
 }
 
 // A '.', '!' or '?' terminates a sentence only when followed by whitespace or
-// end of input — except a '.' that closes a simple filename extension (e.g.
+// end of input -- except a '.' that closes a simple filename extension (e.g.
 // ".ts.", ".yaml.") before the next sentence. Compound extensions (".test.ts.",
 // ".spec.tsx.", ".d.ts.") still end the sentence at the final dot.
 const SIMPLE_FILE_EXTENSION_SUFFIX = /\.\w{1,8}$/;
@@ -265,7 +265,7 @@ function parseActionClauses(text: string): ParsedClause {
 
 // A comma-separated fragment that itself starts a new "and/or do not …"
 // clause is an independent prohibition, not a bare object of the outer
-// verb — gluing the outer prefix onto it fabricates text that never
+// verb -- gluing the outer prefix onto it fabricates text that never
 // appeared in the input (e.g. "do not modify do not add new agent
 // capabilities").
 const NEW_CLAUSE_PROHIBITION_RE =
@@ -372,7 +372,7 @@ function extractInScope(text: string): string[] {
   // A multi-clause "X and Y" imperative sentence only needs its *second*
   // clause to contain a recognized action verb to trigger the split (see
   // textClauses). Once split, trust every resulting clause instead of
-  // re-filtering each one through the same curated verb list — otherwise a
+  // re-filtering each one through the same curated verb list -- otherwise a
   // legitimate first clause phrased with an uncommon verb (e.g. "blend")
   // is silently dropped even though the split already proved this is a
   // genuine multi-part imperative sentence.
@@ -430,7 +430,7 @@ function extractOutOfScope(text: string): { items: string[]; replaced: Set<strin
   // past its own sentence boundary into the next one (e.g. an acceptance
   // criteria "Done when..." clause), and so the capture isn't capped at a
   // fixed small character budget that truncates real-world clauses
-  // mid-word — each sentence is already correctly bounded by
+  // mid-word -- each sentence is already correctly bounded by
   // splitSentences, including filename-extension periods.
   for (const sentence of splitSentences(text)) {
     for (const pattern of patterns) {

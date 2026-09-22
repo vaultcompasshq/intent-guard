@@ -1,7 +1,7 @@
-# Intent Contract — Example (synthetic)
+# Intent Contract -- Example (synthetic)
 
 **contract_id:** ic-20260617-a3f9k2  
-**Project:** Example — CSV export feature (not a real Vault & Compass spec)
+**Project:** Example -- CSV export feature (not a real Vault & Compass spec)
 
 ```yaml
 contract_id: ic-20260617-a3f9k2
@@ -23,14 +23,14 @@ out_of_scope:
 
 constraints:
   - source: CLAUDE.md
-    rule: "No new API endpoints without explicit approval — client-side only"
+    rule: "No new API endpoints without explicit approval -- client-side only"
     priority: critical
     file_path: CLAUDE.md
   - source: AGENTS.md
-    rule: "Minimize scope — simplest correct diff"
+    rule: "Minimize scope -- simplest correct diff"
     priority: high
   - source: user-stated
-    rule: "Launch in 3 days — no refactors outside export feature"
+    rule: "Launch in 3 days -- no refactors outside export feature"
     priority: critical
 
 acceptance_criteria:

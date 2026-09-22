@@ -1,5 +1,5 @@
 ---
-description: Public OSS hygiene — no portfolio codenames in tracked files
+description: Public OSS hygiene -- no portfolio codenames in tracked files
 alwaysApply: true
 ---
 
@@ -14,7 +14,7 @@ products, private application repos, or links to private downstream work.
 - Private `github.com/vaultcompasshq/<app>` links (except this repo)
 - Dogfood notes tied to a specific private repo
 - Domain-specific test fixtures that fingerprint a private app
-- Session handoffs, audits, plans — use gitignored `.local/` or `TODO.local.md`
+- Session handoffs, audits, plans -- use gitignored `.local/` or `TODO.local.md`
 
 ## Write instead
 
@@ -27,7 +27,7 @@ Generic placeholders (`private downstream app repo`, synthetic paths). Describe 
 pnpm validate:portfolio-names
 ```
 
-CI uses a **hash blocklist only** — no plaintext codenames in the repo. To add a
+CI uses a **hash blocklist only** -- no plaintext codenames in the repo. To add a
 hash, see the comment at the top of `scripts/validate-no-portfolio-names.mjs`.
 
 Policy: [docs/release/public-content-policy.md](../../docs/release/public-content-policy.md)

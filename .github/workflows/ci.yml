@@ -33,6 +33,9 @@ jobs:
       - name: Portfolio name guard
         run: pnpm validate:portfolio-names
 
+      - name: Lint (public repository hygiene guard)
+        run: pnpm lint
+
       - name: Test
         run: pnpm test
 

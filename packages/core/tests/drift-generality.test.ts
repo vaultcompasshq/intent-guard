@@ -71,7 +71,7 @@ describe("drift scorer generality (novel vocabulary)", () => {
   it("does not flag in-scope tokens shared with an out-of-scope phrase", () => {
     // "preference" appears in both in-scope (local storage) and out-of-scope
     // (server-side sync). Touching the local preference must not trip on the
-    // shared word — only the discriminating "server"/"sync" tokens should.
+    // shared word -- only the discriminating "server"/"sync" tokens should.
     const result = scoreDrift(darkModeContract, {
       changedPaths: ["src/settings/preference-store.ts"],
     });

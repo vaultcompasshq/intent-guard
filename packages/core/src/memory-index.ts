@@ -18,7 +18,7 @@ function summarizeContract(contract: IntentContract): string {
     ? `, approved by ${contract.approval.approved_by}`
     : "";
   const state = contract.approval ? "frozen" : "draft";
-  return `[intent-contract.yaml](./intent-contract.yaml) — ${contract.original_ask} (${contract.contract_id}, ${state} ${contract.frozen_at}${approved})`;
+  return `[intent-contract.yaml](./intent-contract.yaml) -- ${contract.original_ask} (${contract.contract_id}, ${state} ${contract.frozen_at}${approved})`;
 }
 
 export function renderIndex(projectRoot: string): string {
@@ -31,7 +31,7 @@ export function renderIndex(projectRoot: string): string {
     lines.push(bullet(summarizeContract(active)));
   } else {
     lines.push(
-      "- No frozen contract yet — run intent-guard-extract, review, then intent-guard-freeze",
+      "- No frozen contract yet -- run intent-guard-extract, review, then intent-guard-freeze",
     );
   }
 
@@ -41,7 +41,7 @@ export function renderIndex(projectRoot: string): string {
       const approved = c.approved_by ? `, approved by ${c.approved_by}` : "";
       lines.push(
         bullet(
-          `[${c.contract_id}](./contracts/${c.contract_id}.yaml) — ${c.original_ask} (frozen ${c.frozen_at}${approved})`,
+          `[${c.contract_id}](./contracts/${c.contract_id}.yaml) -- ${c.original_ask} (frozen ${c.frozen_at}${approved})`,
         ),
       );
     }
@@ -54,7 +54,7 @@ export function renderIndex(projectRoot: string): string {
     const seen = new Set<string>();
     for (const c of active.constraints) {
       const source = c.file_path ?? c.source;
-      const item = `${source} — ${c.priority}`;
+      const item = `${source} -- ${c.priority}`;
       if (!seen.has(item)) {
         lines.push(bullet(item));
         seen.add(item);
@@ -70,7 +70,7 @@ export function renderIndex(projectRoot: string): string {
     for (const pivot of pivots) {
       lines.push(
         bullet(
-          `${pivot.timestamp} — ${pivot.change} (${pivot.acknowledged_by})`,
+          `${pivot.timestamp} -- ${pivot.change} (${pivot.acknowledged_by})`,
         ),
       );
     }
@@ -112,7 +112,7 @@ export function renderResume(projectRoot: string): string | null {
     for (const contract of archived) {
       lines.push(
         bullet(
-          `${contract.contract_id} — ${contract.original_ask} (frozen ${contract.frozen_at})`,
+          `${contract.contract_id} -- ${contract.original_ask} (frozen ${contract.frozen_at})`,
         ),
       );
     }

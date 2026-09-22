@@ -80,7 +80,7 @@ Scores a prompt for scope/clarity issues. JSON: `score`, `issues`,
 
 ## intent-guard extract / intent-guard-extract
 
-Draft an Intent Contract from an ask. **Writes an UNFROZEN draft** — approval is
+Draft an Intent Contract from an ask. **Writes an UNFROZEN draft** -- approval is
 separate (`intent-guard-freeze`).
 
 | Flag | Meaning |
@@ -172,7 +172,7 @@ quietly vanished would leave the gate open.
 
 ## intent-guard freeze / intent-guard-freeze
 
-Approve a draft. A deliberate, attributable step — an agent must not self-approve.
+Approve a draft. A deliberate, attributable step -- an agent must not self-approve.
 
 | Flag | Meaning |
 |------|---------|
@@ -686,7 +686,7 @@ JSON: `written_path`, `index_path`, `pivot`, `pending`.
 ## intent-guard brief / intent-guard-brief
 
 Emit the minimal correct-methodology context (intent, scope, AC, critical/high
-constraints, **acknowledged** corrections — no failed code). Re-inject after a
+constraints, **acknowledged** corrections -- no failed code). Re-inject after a
 context reset instead of replaying the transcript.
 
 | Flag | Meaning |

@@ -3,7 +3,7 @@ name: capture-correction
 description: >-
   Capture a user correction as a durable rule on the Intent Contract, and emit a
   clean Session Brief to re-establish context. Use when the user corrects a
-  mistake the agent made — especially a repeat mistake — so the lesson survives
+  mistake the agent made -- especially a repeat mistake -- so the lesson survives
   context compaction instead of staying buried in the transcript.
 ---
 
@@ -13,7 +13,7 @@ description: >-
 
 ## When to run
 
-- The user corrects an approach the agent took ("no, don't do X — do Y").
+- The user corrects an approach the agent took ("no, don't do X -- do Y").
 - The agent is about to repeat a mistake already corrected this session.
 - A new session or post-compaction resume: load the brief instead of replaying
   the messy history.
@@ -38,7 +38,7 @@ intent-guard-correct --project /path/to/project \
 - Without `--acknowledge` the entry is `pending` (agent-proposed). Only the user
   confirms.
 - `--promote` (requires `--acknowledge`) mirrors the lesson into `constraints[]`
-  as a `user-correction` rule — re-violating it then scores as drift via the
+  as a `user-correction` rule -- re-violating it then scores as drift via the
   existing scorer. Off by default.
 
 ## Emit the Session Brief
@@ -49,7 +49,7 @@ intent-guard-brief --project /path/to/project --json    # machine-readable
 ```
 
 The brief is the minimal correct-methodology context: intent, scope, acceptance
-criteria, critical/high constraints, and **acknowledged** corrections — and no
+criteria, critical/high constraints, and **acknowledged** corrections -- and no
 failed code. Re-inject this after a context reset instead of the transcript.
 
 ## Boundary

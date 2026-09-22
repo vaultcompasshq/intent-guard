@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Claude Code integration dogfood — lifecycle hook path.
+ * Claude Code integration dogfood -- lifecycle hook path.
  *
  * Claude lifecycle configs are advisory until hooks fire. This script proves
  * the shared shell adapters used by settings.sample.json:
@@ -44,7 +44,7 @@ const settingsSrc = join(
 const hooksSrc = join(root, "integrations/hooks");
 
 function fail(msg) {
-  console.error(`dogfood-claude-hooks: FAIL — ${msg}`);
+  console.error(`dogfood-claude-hooks: FAIL -- ${msg}`);
   process.exit(1);
 }
 
@@ -53,7 +53,7 @@ function ok(msg) {
 }
 
 if (!existsSync(cli) || !existsSync(checkCli) || !existsSync(resumeCli)) {
-  fail("build missing — run `pnpm build` first");
+  fail("build missing -- run `pnpm build` first");
 }
 
 if (!existsSync(settingsSrc) || !existsSync(hooksSrc)) {

@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 - A constraint whose `source` is a prose rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or cursor rules) is advisory-only: a strong match is still reported, with the matched term in the message, but it never raises `constraint_violation`, `criticalViolated`, or the exit code. This holds even after `intent-guard freeze` writes the constraint into the frozen contract, because freezing does not change its `source`. The only route to a blocking constraint is `intent-guard correct --promote`, which records `source: user-correction`.
 - `intent-guard check --previous-contract` now scores both contracts with the loaded drift thresholds, including `strong_coverage` and `partial_coverage`.
+- The action hardening drift check pins the npm 10.5.2 floor comparisons, the version-shape regex and its occurrence count, `npm install` with `--ignore-scripts`, and the `npm audit signatures` subshell. Each pin was proven by deleting the real line while comment copies survived. `IG_TAG_*` is now `IG_TAG_SCANNER_*`. `pnpm lint` runs the family hygiene guard (hash blocklist, machine paths, em dash and en dash) and CI runs it. README states the npm floor, the Node 20.13.0 remediation, and that action tag v1.5.3 installs package 1.5.2.
 - **Drift matching is now coverage-based, not any-shared-token.** Matches
   are three-state: strong (counts toward scope-creep / constraint scores),
   partial (recorded as possible, score 0), or none. Partial findings never
@@ -57,7 +58,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   own head, so nothing previously stopped a pull request from pinning
   `version` to a gate older than the one the action tag ships, and being
   judged by whatever rules that older gate happened to enforce. The validate
-  step now refuses a `version` below the tag's own gate (`IG_TAG`, currently
+  step now refuses a `version` below the tag's own gate (`IG_TAG_SCANNER`, currently
   1.5.2) on a pull request only, naming both versions and the remedy.
   Pinning forward is still accepted, on the rule's unenforced assumption that
   a newer gate is at least as strict.
@@ -128,14 +129,14 @@ secrets scan in it while exiting 0.
   turned a typo into a **quieter run** rather than an error: `--trust-bse
   origin/main` left pull-request mode off, so the gate read its control inputs
   from the head instead of the base ref, scored against whatever thresholds the
-  head carried, and reported a pass — while the workflow that asked for
+  head carried, and reported a pass -- while the workflow that asked for
   pull-request mode looked like it had got it.
 
   The cost is measurable on one of this repo's own fixtures: the same `drift`
   run answers `hard_block` with `--trust-base` and `proceed` without it. A typo
   silently bought the second answer.
 
-  A bare word is refused for the same reason — `intent-guard check src/foo.ts`
+  A bare word is refused for the same reason -- `intent-guard check src/foo.ts`
   looked like it checked that path and checked nothing, because paths arrive
   through `--paths`. `--base` and `--trust-base` already refused a *missing*
   value, so the parser had a refusal path and simply never reached it for an
@@ -751,7 +752,7 @@ working once its hooks and imports point at the new names.
 
 ### Added
 
-- **`pnpm dogfood:claude-hooks`** — repeatable Claude Code lifecycle fixture
+- **`pnpm dogfood:claude-hooks`** -- repeatable Claude Code lifecycle fixture
   (settings sample + SessionStart brief + Stop-check block/pass + shared Git
   gate). Validation note:
   [docs/validation/claude-hook-dogfood-2026-07-21.md](./docs/validation/claude-hook-dogfood-2026-07-21.md).
@@ -771,7 +772,7 @@ working once its hooks and imports point at the new names.
 
 ### Added
 
-- **`pnpm dogfood:cursor-hooks`** — repeatable Cursor integration fixture
+- **`pnpm dogfood:cursor-hooks`** -- repeatable Cursor integration fixture
   (project rule + `hook install` + out-of-scope block / in-scope commit).
   Validation note: [docs/validation/cursor-hook-dogfood-2026-07-21.md](./docs/validation/cursor-hook-dogfood-2026-07-21.md).
 
@@ -1036,11 +1037,11 @@ breaking changes require a major version bump.
   agent cannot self-approve. `isContractFrozen` now requires the approval
   record (not just `frozen_by: user`), closing the "hard gate" loophole.
 
-- **Phase 3a — Correction Log + Session Brief.** `correction_log` on the Intent
+- **Phase 3a -- Correction Log + Session Brief.** `correction_log` on the Intent
   Contract (schema + types) captures agent mistakes the user corrected as
   durable rules. `conductor-correct` records them (pending by default;
   `--acknowledge` to confirm, `--promote` to mirror into `constraints[]` as a
-  `user-correction` rule the drift scorer enforces — off by default).
+  `user-correction` rule the drift scorer enforces -- off by default).
   `conductor-brief` emits the minimal correct-methodology context (intent,
   scope, AC, constraints, acknowledged corrections, no failed code) to
   re-inject after a context reset. New `capture-correction` skill. Conservative
@@ -1051,12 +1052,12 @@ breaking changes require a major version bump.
   tables, links, and code fences (real AGENTS.md: 12 bogus rules → 4 real ones).
   Resolves validation finding #1.
 
-- `conductor-check` CLI + `checkGate()` — a real enforcement gate that exits
+- `conductor-check` CLI + `checkGate()` -- a real enforcement gate that exits
   non-zero when no frozen contract exists or staged changes drift past a
   blocking threshold (vs. advisory SKILL.md). Sample git pre-commit hook in
   `integrations/git-hooks/pre-commit.sample`.
-- `packages/core/src/tokenize.ts` — generic, domain-agnostic token matching.
-- `packages/skill/tests/cli.test.ts` — integration tests for all five CLIs
+- `packages/core/src/tokenize.ts` -- generic, domain-agnostic token matching.
+- `packages/skill/tests/cli.test.ts` -- integration tests for all five CLIs
   (previously zero coverage on the skill package).
 - Drift generality tests (`packages/core/tests/drift-generality.test.ts`) on a
   novel contract the scorer was never tuned against.
@@ -1098,12 +1099,12 @@ breaking changes require a major version bump.
 
 ### Added
 
-- `@vaultcompass/conductor-skill` — Superpowers skills (`intent-contract`, `prompt-coach`, `drift-guard`)
+- `@vaultcompass/conductor-skill` -- Superpowers skills (`intent-contract`, `prompt-coach`, `drift-guard`)
 - Helper CLIs: `conductor-coach`, `conductor-extract`, `conductor-drift`, `conductor-init`
 - Root scripts: `pnpm conductor:coach`, `conductor:extract`, `conductor:drift`, `conductor:init`, `conductor:install-skills`
 - Core runtime: `extract.ts`, `constraints.ts` (incl. `.cursor/rules`), `config.ts`, `init.ts`, `drift-log.ts`
-- `.conductor/` directory spec — `docs/schemas/directory-layout.md`
-- Phase 2 validation retrospective — `docs/validation/phase2-retrospective.md`
+- `.conductor/` directory spec -- `docs/schemas/directory-layout.md`
+- Phase 2 validation retrospective -- `docs/validation/phase2-retrospective.md`
 - Example contract `examples/intent-contracts/conductor-phase2.yaml`
 - `integrations/superpowers/install-skills.sh`
 
@@ -1119,8 +1120,8 @@ breaking changes require a major version bump.
 
 ### Added
 
-- `@vaultcompass/conductor-schema` package — Intent Contract JSON Schema v1.0.0 with Ajv validation
-- `@vaultcompass/conductor-core` package — prompt coach and drift scoring engines
+- `@vaultcompass/conductor-schema` package -- Intent Contract JSON Schema v1.0.0 with Ajv validation
+- `@vaultcompass/conductor-core` package -- prompt coach and drift scoring engines
 - 5 example intent contracts in `examples/intent-contracts/`
 - sample desktop app retrospective exit gate (drift score 83)
 - Phase 1 implementation plan (`docs/superpowers/plans/2026-06-17-conductor-phase1.md`)
@@ -1132,4 +1133,4 @@ breaking changes require a major version bump.
 
 ## [0.0.0] - 2026-06-17
 
-- Repository initialized — design phase only
+- Repository initialized -- design phase only

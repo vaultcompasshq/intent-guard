@@ -40,17 +40,17 @@ pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-drift \
 
 JSON output:
 
-- `overall` — 0–100 drift score
-- `action` — `proceed` | `info` | `warn` | `soft_block` | `hard_block`
-- `findings` — human-readable drift signals
-- `message` — formatted message for the user
-- `block` — true when agent should pause for confirmation
+- `overall` -- 0-100 drift score
+- `action` -- `proceed` | `info` | `warn` | `soft_block` | `hard_block`
+- `findings` -- human-readable drift signals
+- `message` -- formatted message for the user
+- `block` -- true when agent should pause for confirmation
 
 `--log` appends to `.intent-guard/drift-log.jsonl`.
 
 ### Signals are open-vocabulary
 
-`--signals` takes free-text phrases describing what the change *did* — e.g.
+`--signals` takes free-text phrases describing what the change *did* -- e.g.
 `"added a new api route"`, `"stubbed the notification handler"`,
 `"sends telemetry to analytics"`. They are tokenized and matched against the
 contract's `out_of_scope` and `constraints`; there is no fixed enum. Describe
@@ -61,11 +61,11 @@ the change in plain words. The scorer subtracts tokens that also appear in
 
 | Score | Action |
 |-------|--------|
-| 0–25 | Proceed silently |
-| 26–50 | Info: drift trending |
-| 51–70 | Warn: show diff vs contract |
-| 71–85 | Soft block: confirm to continue |
-| 86–100 | Hard block on critical constraints |
+| 0-25 | Proceed silently |
+| 26-50 | Info: drift trending |
+| 51-70 | Warn: show diff vs contract |
+| 71-85 | Soft block: confirm to continue |
+| 86-100 | Hard block on critical constraints |
 
 Configurable via `.intent-guard/config.yaml`; see `examples/intent-guard.config.example.yaml`.
 
@@ -94,7 +94,7 @@ Do not mutate frozen fields without a `pivot_log` entry.
 
 ## Hard enforcement (outside the agent)
 
-A SKILL.md is advisory — an agent can ignore it. For a gate that *cannot* be
+A SKILL.md is advisory -- an agent can ignore it. For a gate that *cannot* be
 ignored, use `intent-guard-check`, which exits non-zero when no frozen contract
 exists or staged changes drift past a blocking threshold:
 
@@ -108,6 +108,6 @@ Install it as a git pre-commit hook with `intent-guard hook install` (add
 ## Implementation
 
 Generic token-matching scorer: `packages/core/src/drift.ts` +
-`packages/core/src/tokenize.ts`. No project-specific rules and no LLM required —
+`packages/core/src/tokenize.ts`. No project-specific rules and no LLM required -- 
 matching is driven entirely by the contract's own `in_scope`, `out_of_scope`,
 and `constraints` text.

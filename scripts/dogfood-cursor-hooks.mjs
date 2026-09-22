@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Cursor integration dogfood — mechanical gate path.
+ * Cursor integration dogfood -- mechanical gate path.
  *
  * Cursor project rules are advisory. Enforcement is the Git pre-commit hook
  * installed via `intent-guard hook install`, which is what this script proves:
@@ -37,7 +37,7 @@ const checkCli = join(root, "packages/skill/dist/check-cli.js");
 const ruleSrc = join(root, "integrations/cursor/conductor.mdc");
 
 function fail(msg) {
-  console.error(`dogfood-cursor-hooks: FAIL — ${msg}`);
+  console.error(`dogfood-cursor-hooks: FAIL -- ${msg}`);
   process.exit(1);
 }
 
@@ -46,7 +46,7 @@ function ok(msg) {
 }
 
 if (!existsSync(cli) || !existsSync(checkCli)) {
-  fail("build missing — run `pnpm build` first");
+  fail("build missing -- run `pnpm build` first");
 }
 
 const work = mkdtempSync(join(tmpdir(), "intent-guard-cursor-dogfood-"));
@@ -94,7 +94,7 @@ try {
   run("git", ["init", "-q"]);
   run("git", ["config", "user.name", "Cursor Dogfood"]);
   run("git", ["config", "user.email", "dogfood@example.invalid"]);
-  // Intentionally leave global core.hooksPath alone — hook install should
+  // Intentionally leave global core.hooksPath alone -- hook install should
   // localize to .git/hooks when a machine-wide hooksPath is configured.
 
   writeFileSync(join(work, "README.md"), "# Cursor dogfood fixture\n");
@@ -114,7 +114,7 @@ try {
   if (r.status !== 0) fail(`init: ${r.stderr || r.stdout}`);
   ok("intent-guard init");
 
-  // README-only ask — same pattern as packed-install dogfood; source edits drift.
+  // README-only ask -- same pattern as packed-install dogfood; source edits drift.
   const ask =
     "Add README install example only. Do not change source or package.json.";
   r = intentGuard(["extract", "--project", ".", "--text", ask]);

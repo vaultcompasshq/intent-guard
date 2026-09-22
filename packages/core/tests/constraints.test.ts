@@ -37,7 +37,7 @@ describe("extractConstraintsFromMarkdown precision", () => {
       "Repo: https://github.com/vaultcompasshq/conductor",
       "## Phase 2 scope",
       "- Goal: Superpowers skills wired to packages/core",
-      "- `packages/core/extract.ts` — draft contract from text",
+      "- `packages/core/extract.ts` -- draft contract from text",
       "| 1 | README.md | what it is |",
     ].join("\n");
     const rules = extractConstraintsFromMarkdown(md, "AGENTS.md");

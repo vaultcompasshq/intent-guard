@@ -33,8 +33,8 @@ maintainer notes rather than reconstructing them from git history.
 | Hardening - generic scorer, gate, approval | - | Complete (PRs #1, #3, #5) |
 | 3 - Memory-index persistence | 7-10 | Core complete (`history`, generated index, resume, pivot, cross-session drift) |
 | 3b - decay/dedup, LLM normalization | - | Deferred |
-| 4 - Unified CLI + public release | 11-14 | **Complete** — `1.0.0` on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.0.0)) |
-| 1.1.0 - Change Budget | - | Done — on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.1.0)) |
+| 4 - Unified CLI + public release | 11-14 | **Complete** -- `1.0.0` on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.0.0)) |
+| 1.1.0 - Change Budget | - | Done -- on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.1.0)) |
 
 ---
 

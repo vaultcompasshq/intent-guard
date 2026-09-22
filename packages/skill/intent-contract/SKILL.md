@@ -3,7 +3,7 @@ name: intent-contract
 description: >-
   Draft and freeze an Intent Contract before brainstorming or implementation.
   Use when the user describes a feature, fix, or task and no frozen contract
-  exists in .intent-guard/intent-contract.yaml. Hard gate — do not run
+  exists in .intent-guard/intent-contract.yaml. Hard gate -- do not run
   test-driven-development or implementation skills until frozen_by user.
 ---
 
@@ -84,7 +84,7 @@ This writes an **unfrozen draft**. The gate still blocks until it is approved.
 
 ### 7. Freeze (explicit user approval)
 
-Freezing is a separate, deliberate step — the agent must **not** self-approve.
+Freezing is a separate, deliberate step -- the agent must **not** self-approve.
 
 ```bash
 pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-freeze \

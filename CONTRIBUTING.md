@@ -1,6 +1,6 @@
 # Contributing to Conductor
 
-**Status:** Design phase — implementation contributions open after spec approval.
+**Status:** Design phase -- implementation contributions open after spec approval.
 
 ---
 
@@ -54,13 +54,13 @@ and describe the *pattern*, not the source repo.
 Local-only notes: `TODO.local.md`, `.local/`.
 
 Before opening a PR, search the diff for private product names and internal paths.
-CI runs `pnpm validate:portfolio-names` (hash blocklist — no plaintext codenames in
+CI runs `pnpm validate:portfolio-names` (hash blocklist -- no plaintext codenames in
 the repo). To add a hash, see the comment at the top of
 `scripts/validate-no-portfolio-names.mjs`.
 
 **Git history:** Older commits may still mention product names. Cleaning **current**
 files is required; rewriting **history** needs `git filter-repo` and a force-pushed
-`main` (coordinate with maintainers — usually not worth it once HEAD is clean).
+`main` (coordinate with maintainers -- usually not worth it once HEAD is clean).
 
 ---
 

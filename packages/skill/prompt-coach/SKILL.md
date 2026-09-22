@@ -4,7 +4,7 @@ description: >-
   Coach vague or scope-exploding user prompts before execution. Use when the
   user message scores low on prompt quality, uses minimizers (just/quickly),
   stacks product comparisons, or lacks testable acceptance criteria. Never
-  blocks — only suggests rewrites.
+  blocks -- only suggests rewrites.
 ---
 
 # Prompt Coach
@@ -29,20 +29,20 @@ pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-coach "USER MES
 
 JSON output:
 
-- `score` — 0–100 (show coaching when &lt; 60)
-- `issues` — pattern IDs from coach library
-- `coaching` — formatted message with suggested rewrite
-- `needs_coaching` — boolean shortcut
+- `score` -- 0-100 (show coaching when &lt; 60)
+- `issues` -- pattern IDs from coach library
+- `coaching` -- formatted message with suggested rewrite
+- `needs_coaching` -- boolean shortcut
 
 ## Response template
 
 When coaching is needed, show:
 
-1. **Prompt variance warning** — list detected patterns and why they cause drift
-2. **Suggested rewrite** — narrower, testable version
+1. **Prompt variance warning** -- list detected patterns and why they cause drift
+2. **Suggested rewrite** -- narrower, testable version
 3. One follow-up question if acceptance criteria are still missing
 
-Example follow-up: "What should 'done' look like — one testable outcome?"
+Example follow-up: "What should 'done' look like -- one testable outcome?"
 
 ## Patterns (reference)
 

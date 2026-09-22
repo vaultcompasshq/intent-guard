@@ -255,13 +255,23 @@ jobs:
       - uses: vaultcompasshq/intent-guard@v1.5.3
 ```
 
-No `version` input, because the default is the version the action shipped with,
-so the tag you pin the action to is the version that judges the pull request.
+No `version` input, because the default is the scanner this action tag shipped
+with. The action tag and the installed package are separate numbers.
+`vaultcompasshq/intent-guard@v1.5.3` installs `@vaultcompass/intent-guard@1.5.2`:
+1.5.3 moved the action and left the packages at 1.5.2. Read the tag as which
+workflow step you pinned, not as which package version gets installed.
 
 `fetch-depth: 0` is not optional on a pull request. Both `--base` and
 `--trust-base` resolve a branch the default shallow checkout does not fetch, and
 without it intent-guard exits 2 and the job fails rather than falling back to
 judging the head against itself.
+
+The install step refuses npm older than **10.5.2**. Below that floor
+`npm audit signatures` reports a clean install of these packages as tampered,
+because the client's own bundled keys are stale. A major-only Node 22 is not
+enough: **Node 22.0.0 ships npm 10.5.1**. Node **20.13.0** and later, and
+22.1.0 and later, carry a usable npm. The step checks the client it actually
+found and names that version when it refuses.
 
 The action installs `@vaultcompass/intent-guard` from the registry into a prefix
 under the runner temp and calls that copy by absolute path. It never runs the
@@ -297,8 +307,8 @@ verdict nobody produced.
 
 `exit-code` has a fourth value: **empty**, when the run step never reached its
 output lines, which is what a rejected input or a failed install looks like from
-outside. The job still fails — the report step reads an empty code as
-could-not-run and exits 2 — but a workflow that branches on this output should
+outside. The job still fails -- the report step reads an empty code as
+could-not-run and exits 2 -- but a workflow that branches on this output should
 treat empty as could-not-run too, rather than as a pass it did not get.
 
 Off a `pull_request` event there is no ref to decide `base` from, so set `base`
@@ -445,7 +455,9 @@ read `.intent-guard/intent-contract.yaml`. The pre-1.3.0 path was
 
 ## Origin
 
-Intent Guard grew out of repeated intent-drift failures in AI-assisted development workflows: vague prompts expanded scope, long sessions lost the original request, and reviews caught implementation quality more reliably than direction. See [docs/brainstorming/01-context-and-problem.md](./docs/brainstorming/01-context-and-problem.md).
+Intent Guard grew out of repeated intent-drift failures in AI-assisted development workflows: vague prompts expanded scope, long sessions lost the original request, and reviews caught implementation quality more reliably than direction.
+
+Adopter feedback is a row in [FINDINGS.md](FINDINGS.md). How to change this repository is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

@@ -5,12 +5,12 @@ export function formatDriftMessage(score: DriftScore): string {
 
   const header =
     score.action === "hard_block"
-      ? "**Drift guard — hard block**"
+      ? "**Drift guard -- hard block**"
       : score.action === "soft_block"
-        ? "**Drift guard — confirm to continue**"
+        ? "**Drift guard -- confirm to continue**"
         : score.action === "warn"
-          ? "**Drift guard — warning**"
-          : "**Drift guard — trending**";
+          ? "**Drift guard -- warning**"
+          : "**Drift guard -- trending**";
 
   const lines = [
     header,
