@@ -63,7 +63,10 @@ least `strong_coverage` (default 0.5) with at least one non-noise evidence
 token. `partial` is coverage of at least `partial_coverage` (default 0.3).
 Only `strong` findings increment the scope-creep or constraint score;
 `partial` findings are recorded with a `possible` prefix and score 0. Both
-thresholds live on `drift.thresholds` in `.intent-guard/config.yaml`.
+thresholds live on `drift.thresholds` in `.intent-guard/config.yaml`. A
+`strong` constraint match is capped at advisory instead, with no score
+increment, when the constraint's `source` is a prose rules file (`CLAUDE.md`,
+`AGENTS.md`, `GEMINI.md`, cursor rules). See `intent-guard check` below.
 
 A long prose rule cannot be matched lexically by a path: a 1-in-8 overlap
 is none by design. Secrets and `.env` files are vault-guard's job, not a
@@ -186,6 +189,13 @@ Behavior: on a TTY, shows a summary and asks to confirm. Non-interactively,
 
 Exits non-zero when no **approved** contract exists or staged changes drift past
 a blocking threshold. Used by the pre-commit hook / CI.
+
+A constraint whose `source` is a prose rules file (`CLAUDE.md`, `AGENTS.md`,
+`GEMINI.md`, cursor rules) is advisory: a strong match is still reported, but
+it never contributes to a blocking threshold, including after `intent-guard
+freeze` writes it into the contract, because freezing does not change its
+`source`. Only `source: user-stated` and a constraint added by `intent-guard
+correct --promote` (which records `source: user-correction`) can block.
 
 | Flag | Meaning |
 |------|---------|

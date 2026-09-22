@@ -9,6 +9,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- A constraint whose `source` is a prose rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or cursor rules) is advisory-only: a strong match is still reported, with the matched term in the message, but it never raises `constraint_violation`, `criticalViolated`, or the exit code. This holds even after `intent-guard freeze` writes the constraint into the frozen contract, because freezing does not change its `source`. The only route to a blocking constraint is `intent-guard correct --promote`, which records `source: user-correction`.
+- `intent-guard check --previous-contract` now scores both contracts with the loaded drift thresholds, including `strong_coverage` and `partial_coverage`.
 - **Drift matching is now coverage-based, not any-shared-token.** Matches
   are three-state: strong (counts toward scope-creep / constraint scores),
   partial (recorded as possible, score 0), or none. Partial findings never

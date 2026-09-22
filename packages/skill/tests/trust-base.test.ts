@@ -193,6 +193,73 @@ drift:
   hard_block_on_critical_constraints: false
 `;
 
+/**
+ * A --previous-contract run is trust-base security boundary too: the
+ * thresholds that decide strong vs. partial coverage must come from the
+ * BASE ref's config, never from whatever config.yaml sits in the checked-out
+ * working tree (the head/PR side). This pair of configs differ only in
+ * coverage, chosen so the same match is "partial" (score 0) under one and
+ * "strong" (score > 0) under the other, which is what makes a wrong read
+ * observable instead of accidentally passing anyway.
+ */
+const STRICT_COVERAGE_BASE_CONFIG = `version: 1.0.0
+drift:
+  mode: handoff
+  thresholds:
+    strong_coverage: 0.9
+    partial_coverage: 0.3
+`;
+
+const LENIENT_COVERAGE_HEAD_CONFIG = `version: 1.0.0
+drift:
+  mode: handoff
+  thresholds:
+    strong_coverage: 0.1
+    partial_coverage: 0.05
+`;
+
+/** The base ref's own active contract; deliberately has nothing to say about billing. */
+const TRUST_CURRENT_CONTRACT = `contract_id: ic-20260921-curr01
+version: "1.0.0"
+original_ask: Add a billing export cleanup.
+in_scope:
+  - Billing export cleanup
+out_of_scope: []
+constraints: []
+acceptance_criteria:
+  - id: ac-1
+    description: Export cleanup ships
+    testable: true
+frozen_at: "2026-09-21T00:00:00Z"
+frozen_by: user
+approval:
+  approved_by: tester
+  approved_at: "2026-09-21T00:00:00Z"
+  method: explicit-flag
+pivot_log: []
+`;
+
+/** An archived contract, committed on the base ref, with a partial-coverage rule. */
+const TRUST_PREVIOUS_CONTRACT_ID = "ic-20260921-prev01";
+const TRUST_PREVIOUS_CONTRACT = `contract_id: ${TRUST_PREVIOUS_CONTRACT_ID}
+version: "1.0.0"
+original_ask: Add a settings toggle.
+in_scope:
+  - Settings toggle on the settings page
+out_of_scope: []
+constraints:
+  - source: user-stated
+    rule: billing export cleanup notes
+    priority: critical
+acceptance_criteria:
+  - id: ac-1
+    description: Toggle persists
+    testable: true
+frozen_at: "2026-09-21T00:00:00Z"
+frozen_by: user
+pivot_log: []
+`;
+
 interface RepoSpec {
   /** Files committed on main before the branch forks. */
   base: Record<string, string>;
@@ -898,6 +965,36 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
 
     expect(res.code).toBe(0);
     expect(`${res.stdout}${res.stderr}`).toContain("contract changed in this pull request");
+  });
+
+  it("scores --previous-contract drift with the base ref's config, not the head's", async () => {
+    const dir = repo({
+      base: {
+        [CONTRACT]: TRUST_CURRENT_CONTRACT,
+        [CONFIG]: STRICT_COVERAGE_BASE_CONFIG,
+        [`.intent-guard/contracts/${TRUST_PREVIOUS_CONTRACT_ID}.yaml`]: TRUST_PREVIOUS_CONTRACT,
+      },
+      head: { [CONFIG]: LENIENT_COVERAGE_HEAD_CONFIG },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--trust-base", "main",
+      "--paths", "src/billing/export.ts",
+      "--previous-contract", TRUST_PREVIOUS_CONTRACT_ID,
+      "--json",
+    ]);
+
+    const out = JSON.parse(res.stdout);
+    // Under the base ref's strict coverage (0.9), "billing export cleanup
+    // notes" against src/billing/export.ts is only a partial match: score
+    // stays 0 and the action is proceed. The head's config.yaml (checked
+    // out in the working tree) sets coverage low enough (0.1) that the same
+    // match would be strong and raise constraint_violation. If check-cli
+    // read config from the working tree instead of the trusted base ref for
+    // this comparison, this assertion would see the head's lenient result.
+    expect(out.crossSessionDrift.previous.categories.constraint_violation).toBe(0);
+    expect(out.crossSessionDrift.previous.action).toBe("proceed");
   });
 });
 

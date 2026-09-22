@@ -442,6 +442,71 @@ describe("conductor-check (enforcement gate)", () => {
     expect(out.status).toBe("ok");
     expect(out.crossSessionDrift.previous.action).toBe("soft_block");
   });
+
+  it("passes configured coverage thresholds into previous-contract drift", async () => {
+    const dir = tmpProject();
+    await run("init-cli.js", ["--project", dir]);
+    const configPath = join(dir, ".intent-guard", "config.yaml");
+    const configText = readFileSync(configPath, "utf8");
+    if (!configText.includes("\n  thresholds:\n")) {
+      throw new Error("init config has no drift.thresholds block to patch");
+    }
+    writeFileSync(
+      configPath,
+      configText.replace(
+        "\n  thresholds:\n",
+        "\n  thresholds:\n    strong_coverage: 0.9\n    partial_coverage: 0.3\n",
+      ),
+    );
+
+    const contract = (id: string, rule: string | null) => `contract_id: ${id}
+version: "1.0.0"
+original_ask: Add a settings toggle.
+in_scope:
+  - Settings toggle on the settings page
+out_of_scope: []
+${
+  rule
+    ? `constraints:
+  - source: user-stated
+    rule: ${rule}
+    priority: critical
+`
+    : "constraints: []\n"
+}acceptance_criteria:
+  - id: ac-1
+    description: Toggle persists
+    testable: true
+frozen_at: "2026-09-21T00:00:00Z"
+frozen_by: user
+approval:
+  approved_by: tester
+  approved_at: "2026-09-21T00:00:00Z"
+  method: explicit-flag
+pivot_log: []
+`;
+
+    mkdirSync(join(dir, ".intent-guard", "contracts"), { recursive: true });
+    writeFileSync(
+      join(dir, ".intent-guard", "contracts", "ic-20260921-prev01.yaml"),
+      contract("ic-20260921-prev01", "billing export cleanup notes"),
+    );
+    writeFileSync(
+      join(dir, ".intent-guard", "intent-contract.yaml"),
+      contract("ic-20260921-curr01", null),
+    );
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--paths", "src/billing/export.ts",
+      "--previous-contract", "ic-20260921-prev01",
+      "--json",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.crossSessionDrift.previous.categories.constraint_violation).toBe(0);
+    expect(out.crossSessionDrift.previous.action).toBe("proceed");
+  });
 });
 
 describe("conductor-doctor", () => {

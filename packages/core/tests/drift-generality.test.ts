@@ -18,7 +18,7 @@ const darkModeContract: IntentContract = {
   ],
   constraints: [
     {
-      source: "CLAUDE.md",
+      source: "user-stated",
       rule: "Never send telemetry to third-party analytics services",
       priority: "critical",
     },

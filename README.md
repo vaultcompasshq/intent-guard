@@ -48,7 +48,11 @@ do with this one, so install the scoped name.
 
 Two kinds of finding come out of the gate. The first is drift: the change has
 moved outside what the contract put in scope, into something it put out of
-scope, or across a constraint the contract recorded. The second is the change
+scope, or across a constraint the contract recorded. A constraint finding is
+advisory and leaves the exit code alone when its source is a prose rules file
+(`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, cursor rules); only a `user-stated`
+constraint, or one added with `intent-guard correct --promote`, can block.
+The second is the change
 budget, an optional block on the contract that is evaluated from paths alone,
 offline and without a model: a path matching `protected_paths` is a hard
 block, and a path outside `allowed_paths`, a changed-file count over

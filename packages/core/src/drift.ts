@@ -114,6 +114,21 @@ const PRIORITY_SEVERITY: Record<string, number> = {
   low: 15,
 };
 
+// The cap keys on the constraint's source, not on where it currently lives:
+// extract writes a prose-sourced constraint into the frozen contract
+// verbatim, and freezing does not change its source, so it stays capped
+// after freeze. A strong match is still recorded, and it does not raise
+// constraintViolation, criticalViolated, or the exit code. user-stated and
+// the other contract sources keep priority severity. The only way to a
+// blocking constraint from a prose rule is `intent-guard correct
+// --promote`, which records source: user-correction.
+const PROSE_CONSTRAINT_SOURCES = new Set([
+  "AGENTS.md",
+  "CLAUDE.md",
+  "GEMINI.md",
+  "cursor-rules",
+]);
+
 const PIVOT_PHRASES = /\b(actually|also|while we're at it|and another thing)\b/i;
 
 function pathSemanticTokens(path: string): string[] {
@@ -271,20 +286,28 @@ export function scoreDrift(
       CONSTRAINT_NOISE_TOKENS,
     );
     if (strength === "none") continue;
-    if (strength === "strong") {
+    const prose = PROSE_CONSTRAINT_SOURCES.has(c.source);
+    if (strength === "strong" && !prose) {
       const severity = PRIORITY_SEVERITY[c.priority] ?? PRIORITY_SEVERITY.low;
       if (severity > constraintViolation) constraintViolation = severity;
       if (c.priority === "critical") criticalViolated = true;
     }
     // The priority is in the message but not in the rule id: raising a
     // constraint from high to critical is the same finding about the same
-    // rule, and a stored id should survive that edit.
+    // rule, and a stored id should survive that edit. A prose source is
+    // capped at advisory even when the match is strong: the message names
+    // that, and the matched term, and the score is left alone.
+    const matchedText = matched.join(", ");
+    const message =
+      prose && strength === "strong"
+        ? `advisory ${c.priority} constraint at risk: "${c.rule}" (matched: ${matchedText})`
+        : strength === "partial"
+          ? `possible ${c.priority} constraint at risk: "${c.rule}" (matched: ${matchedText})`
+          : `${c.priority} constraint at risk: "${c.rule}" (matched: ${matchedText})`;
     addFinding(
       "constraint_violation",
       `constraint_violation:${c.rule}`,
-      strength === "partial"
-        ? `possible ${c.priority} constraint at risk: "${c.rule}" (matched: ${matched.join(", ")})`
-        : `${c.priority} constraint at risk: "${c.rule}" (matched: ${matched.join(", ")})`,
+      message,
       matched,
       strength,
     );
