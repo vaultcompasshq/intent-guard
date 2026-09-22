@@ -87,7 +87,7 @@ function makeStubGitPath(): { binDir: string; gitLog: string } {
 
 beforeAll(() => {
   if (!existsSync(join(DIST, "check-cli.js"))) {
-    throw new Error("dist not built — run `pnpm build` before tests");
+    throw new Error("dist not built -- run `pnpm build` before tests");
   }
 });
 

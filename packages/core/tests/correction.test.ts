@@ -84,7 +84,7 @@ describe("buildBrief / renderBriefMarkdown", () => {
       acknowledged: true,
     });
     const md = renderBriefMarkdown(c);
-    expect(md).toContain("# Session brief — ic-20260624-corr01");
+    expect(md).toContain("# Session brief -- ic-20260624-corr01");
     expect(md).toContain("## Intent");
     expect(md).toContain("Corrections (do NOT repeat these mistakes)");
     expect(md).toContain("Never fetch in components");

@@ -1,6 +1,6 @@
 # Superpowers Integration
 
-**Status:** Phase 2 draft — skills + CLIs in `packages/skill/`
+**Status:** Phase 2 draft -- skills + CLIs in `packages/skill/`
 
 ---
 
@@ -31,7 +31,7 @@ contract exists or staged changes drift past a blocking threshold.
 # 1. Draft intent for the task (writes an UNFROZEN draft)
 intent-guard-extract --project . --text "…the ask…"
 
-# 2. Approve it — a deliberate step; an agent must not self-approve
+# 2. Approve it -- a deliberate step; an agent must not self-approve
 intent-guard-freeze --project .                  # interactive confirm, or:
 intent-guard-freeze --project . --approved-by "alice"
 
@@ -57,7 +57,7 @@ CI step so the gate runs outside the agent's control.
 1. Load constraint files from project root
 2. Extract `original_ask`, `in_scope`, `out_of_scope`, `constraints`, `acceptance_criteria`
 3. Run `prompt-coach` if quality score < 60
-4. Present draft to user — one question at a time if gaps
+4. Present draft to user -- one question at a time if gaps
 5. Write `.intent-guard/intent-contract.yaml`
 6. Wait for explicit user approval → set `frozen_by: user`
 
@@ -75,7 +75,7 @@ metadata:
 
 **Runs:** Inside `intent-contract` or standalone when user message is vague
 
-**Never blocks** — only suggests rewrites.
+**Never blocks** -- only suggests rewrites.
 
 ---
 
@@ -96,7 +96,7 @@ metadata:
 
 Per Superpowers `using-superpowers` skill:
 
-1. User instructions (AGENTS.md, CLAUDE.md) — highest
+1. User instructions (AGENTS.md, CLAUDE.md) -- highest
 2. **Intent Guard skills** (intent-contract, drift-guard)
 3. Superpowers process skills (brainstorming, TDD, etc.)
 4. Default system prompt
@@ -123,7 +123,7 @@ Document this in skill frontmatter so users know Intent Guard overrides casual i
 3. Verify intent-contract skill activates
 4. Verify coaching message appears
 5. Approve contract
-6. Run brainstorming — spec links contract_id
+6. Run brainstorming -- spec links contract_id
 7. Attempt out-of-scope file change
 8. Verify drift-guard warns
 ```

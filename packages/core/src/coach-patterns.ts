@@ -14,7 +14,7 @@ export interface CoachPattern {
   coaching: string;
 }
 
-// Illustrative public SaaS names only — used to detect "like Notion + Figma"
+// Illustrative public SaaS names only -- used to detect "like Notion + Figma"
 // comparative overload. Not a portfolio/product catalog; keep this list short.
 const PUBLIC_SAAS_EXEMPLARS =
   /\b(notion|figma|linear|slack|airtable|jira|github|vercel|supabase)\b/i;

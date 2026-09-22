@@ -38,7 +38,7 @@ function tmpProject(): string {
 
 beforeAll(() => {
   if (!existsSync(join(DIST, "check-cli.js"))) {
-    throw new Error("dist not built — run `pnpm build` before tests");
+    throw new Error("dist not built -- run `pnpm build` before tests");
   }
 });
 
@@ -646,7 +646,7 @@ describe("conductor-correct + conductor-brief", { timeout: 60_000 }, () => {
     const dir = await frozenProject();
     const res = await run("brief-cli.js", ["--project", dir]);
     expect(res.code).toBe(0);
-    expect(res.stdout).toContain("# Session brief —");
+    expect(res.stdout).toContain("# Session brief -- ");
     expect(res.stdout).toContain("## Intent");
   });
 });

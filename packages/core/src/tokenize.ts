@@ -68,7 +68,7 @@ export function tokenize(text: string): Set<string> {
 /**
  * Two tokens match if they are equal, or one contains the other and the
  * shorter token is at least 4 characters (handles plurals/stems like
- * stub/stubbed, score/scores — while avoiding noise from 3-char fragments).
+ * stub/stubbed, score/scores -- while avoiding noise from 3-char fragments).
  */
 export function tokensMatch(a: string, b: string): boolean {
   if (a === b) return true;
@@ -94,7 +94,7 @@ export function intersectingTokens(set: Set<string>, other: Set<string>): string
 /**
  * Discriminating tokens of `text`: its tokens minus any token that also
  * describes the agreed in-scope work. A token shared with in-scope is not
- * evidence of drift — e.g. "PDF export" vs in-scope "CSV export" both reduce
+ * evidence of drift -- e.g. "PDF export" vs in-scope "CSV export" both reduce
  * to "export", so "export" is removed and only "pdf" remains discriminating.
  */
 export function discriminatingTokens(
@@ -116,7 +116,7 @@ export function discriminatingTokens(
   return result;
 }
 
-/** Path segments from `/`, `.`, `-`, `_` — used to avoid substring false positives. */
+/** Path segments from `/`, `.`, `-`, `_` -- used to avoid substring false positives. */
 export function pathSegmentTokens(path: string): Set<string> {
   const segments = new Set<string>();
   const normalized = path.toLowerCase().replace(/\\/g, "/");

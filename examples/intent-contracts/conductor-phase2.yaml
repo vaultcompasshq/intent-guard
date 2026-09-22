@@ -17,7 +17,7 @@ out_of_scope:
 
 constraints:
   - source: AGENTS.md
-    rule: "Minimize scope — simplest correct diff"
+    rule: "Minimize scope -- simplest correct diff"
     priority: high
   - source: user-stated
     rule: "Do not touch downstream automation or product workspaces"

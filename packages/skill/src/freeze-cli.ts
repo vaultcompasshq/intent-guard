@@ -109,7 +109,7 @@ async function main() {
 
   if (!approvedBy) {
     // No explicit approver. Only an interactive TTY may approve; otherwise
-    // refuse — an automated run cannot self-approve the contract.
+    // refuse -- an automated run cannot self-approve the contract.
     if (args.yes) {
       approvedBy = gitUser(args.projectRoot) || process.env.USER || "unknown";
       method = "forced";
@@ -119,7 +119,7 @@ async function main() {
       const answer = (await rl.question("Approve and freeze this contract? [y/N] ")).trim().toLowerCase();
       rl.close();
       if (answer !== "y" && answer !== "yes") {
-        console.error("Aborted — contract not frozen.");
+        console.error("Aborted -- contract not frozen.");
         process.exit(1);
       }
       approvedBy = gitUser(args.projectRoot) || process.env.USER || "user";

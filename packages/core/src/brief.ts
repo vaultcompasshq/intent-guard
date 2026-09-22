@@ -16,7 +16,7 @@ export interface SessionBrief {
 
 /**
  * The minimal correct-methodology context for a session. Re-inject THIS after a
- * context reset instead of replaying the messy transcript — it carries the
+ * context reset instead of replaying the messy transcript -- it carries the
  * distilled lessons (corrections) but none of the failed attempts.
  */
 export function buildBrief(
@@ -45,7 +45,7 @@ export function renderBriefMarkdown(
   options?: BriefCorrectionOptions,
 ): string {
   const b = buildBrief(contract, options);
-  const lines: string[] = [`# Session brief — ${b.contract_id}`, "", "## Intent", b.intent];
+  const lines: string[] = [`# Session brief -- ${b.contract_id}`, "", "## Intent", b.intent];
 
   const section = (title: string, items: string[]) => {
     if (items.length === 0) return;

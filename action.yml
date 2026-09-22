@@ -254,10 +254,10 @@ runs:
         # OWN tree, so the constant below is author-controlled and this rule
         # protects nothing there. Self-testing workflows inside this
         # repository are the usual reason to reference it that way.
-        IG_TAG_MAJOR=1
-        IG_TAG_MINOR=5
-        IG_TAG_PATCH=2
-        IG_TAG="${IG_TAG_MAJOR}.${IG_TAG_MINOR}.${IG_TAG_PATCH}"
+        IG_TAG_SCANNER_MAJOR=1
+        IG_TAG_SCANNER_MINOR=5
+        IG_TAG_SCANNER_PATCH=2
+        IG_TAG_SCANNER="${IG_TAG_SCANNER_MAJOR}.${IG_TAG_SCANNER_MINOR}.${IG_TAG_SCANNER_PATCH}"
 
         # GITHUB_BASE_REF being non-empty IS the pull-request test, and it is
         # the same one the run step uses to decide the --base and --trust-base
@@ -297,18 +297,18 @@ runs:
           # lexicographic check would refuse the forward pin this rule
           # deliberately leaves open.
           IG_PR_VERSION_OK=0
-          if [ "${IG_MAJOR}" -gt "${IG_TAG_MAJOR}" ] 2>/dev/null; then
+          if [ "${IG_MAJOR}" -gt "${IG_TAG_SCANNER_MAJOR}" ] 2>/dev/null; then
             IG_PR_VERSION_OK=1
-          elif [ "${IG_MAJOR}" -eq "${IG_TAG_MAJOR}" ] 2>/dev/null; then
-            if [ "${IG_MINOR}" -gt "${IG_TAG_MINOR}" ] 2>/dev/null; then
+          elif [ "${IG_MAJOR}" -eq "${IG_TAG_SCANNER_MAJOR}" ] 2>/dev/null; then
+            if [ "${IG_MINOR}" -gt "${IG_TAG_SCANNER_MINOR}" ] 2>/dev/null; then
               IG_PR_VERSION_OK=1
-            elif [ "${IG_MINOR}" -eq "${IG_TAG_MINOR}" ] 2>/dev/null && [ "${IG_PATCH}" -ge "${IG_TAG_PATCH}" ] 2>/dev/null; then
+            elif [ "${IG_MINOR}" -eq "${IG_TAG_SCANNER_MINOR}" ] 2>/dev/null && [ "${IG_PATCH}" -ge "${IG_TAG_SCANNER_PATCH}" ] 2>/dev/null; then
               IG_PR_VERSION_OK=1
             fi
           fi
 
           if [ "${IG_PR_VERSION_OK}" -ne 1 ]; then
-            printf '::error::intent-guard: on a pull request the `version` input may not ask for a gate older than the one this action tag ships. It asks for %s, and this tag ships %s.\n' "${IG_VERSION}" "${IG_TAG}"
+            printf '::error::intent-guard: on a pull request the `version` input may not ask for a gate older than the one this action tag ships. It asks for %s, and this tag ships %s.\n' "${IG_VERSION}" "${IG_TAG_SCANNER}"
             printf '::error::On a same-repo pull_request event GitHub runs the workflow file from the pull request head, so on this event the workflow file belongs to the pull request. An older gate here would let a change choose the rules it is judged by.\n'
             printf '::error::REMOVE the `version` input and this cannot happen: the default is the gate this action tag ships. Pinning FORWARD is still accepted on a pull request: this rule assumes a newer gate is at least as strict, and it does not bound how far forward you pin.\n'
             exit 1

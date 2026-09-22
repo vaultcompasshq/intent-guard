@@ -22,7 +22,7 @@ export interface DriftSignals {
   /**
    * Open-vocabulary signal phrases describing what the work did, e.g.
    * "new api route", "stubbed notification", "added websocket client".
-   * Any descriptive text works — it is tokenized and matched, not enumerated.
+   * Any descriptive text works -- it is tokenized and matched, not enumerated.
    */
   signals?: string[];
   /** Latest user message, used to detect undocumented pivots. */
@@ -176,7 +176,7 @@ export function targetTokens(input: DriftSignals): { all: Set<string>; pathSegs:
   return { all, pathSegs };
 }
 
-/** Tokens describing the agreed work — used to subtract non-discriminating tokens. */
+/** Tokens describing the agreed work -- used to subtract non-discriminating tokens. */
 function scopeTokens(contract: IntentContract): Set<string> {
   const all = new Set<string>();
   for (const item of [...contract.in_scope, contract.original_ask]) {

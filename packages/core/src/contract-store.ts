@@ -116,7 +116,7 @@ export function writeContract(
 }
 
 export interface FreezeApproval {
-  /** Identity of the approver — required, so approval is attributable. */
+  /** Identity of the approver -- required, so approval is attributable. */
   approvedBy: string;
   method?: "interactive" | "explicit-flag" | "forced";
 }

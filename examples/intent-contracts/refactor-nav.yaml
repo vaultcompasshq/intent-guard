@@ -9,7 +9,7 @@ out_of_scope:
   - "Visual redesign of page content areas"
 constraints:
   - source: AGENTS.md
-    rule: "Minimize scope — navigation refactor only"
+    rule: "Minimize scope -- navigation refactor only"
     priority: high
 acceptance_criteria:
   - id: ac-1

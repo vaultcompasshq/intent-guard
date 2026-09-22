@@ -33,7 +33,7 @@ function nextCorrectionId(contract: IntentContract): string {
 }
 
 /**
- * Append a correction to the contract, returning a new contract. Pure — does
+ * Append a correction to the contract, returning a new contract. Pure -- does
  * not write to disk. When acknowledged + promote, also mirrors the lesson into
  * constraints[] as a `user-correction` rule so re-violations score as drift.
  */
@@ -72,7 +72,7 @@ export function addCorrection(
   };
 }
 
-/** Acknowledged corrections only — the authoritative lessons. */
+/** Acknowledged corrections only -- the authoritative lessons. */
 export function acknowledgedCorrections(
   contract: IntentContract,
 ): CorrectionLogEntry[] {

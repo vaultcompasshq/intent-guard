@@ -49,7 +49,7 @@ function hookPath(dir: string): string {
 
 beforeAll(() => {
   if (!existsSync(join(DIST, "hook-cli.js"))) {
-    throw new Error("dist not built — run `pnpm build` before tests");
+    throw new Error("dist not built -- run `pnpm build` before tests");
   }
 });
 
@@ -158,7 +158,7 @@ describe("coach still takes free text", { timeout: 60_000 }, () => {
 // trailing else, so a mistyped flag ran the command with that flag's effect
 // missing and said nothing. None of them can change a CI verdict the way
 // check/report/drift can, and none of them drops a security control the way
-// hook does, so these are UX — but the parser shape is identical and so is the
+// hook does, so these are UX -- but the parser shape is identical and so is the
 // fix.
 const FLAG_ONLY: Array<{ cli: string; prefix: string[] }> = [
   { cli: "brief-cli.js", prefix: [] },

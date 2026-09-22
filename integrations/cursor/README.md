@@ -100,7 +100,7 @@ on `main`.
 | Claude Code | `integrations/claude-code` sample + same CLI gate |
 | CI | `intent-guard drift --ci` / `intent-guard check` |
 
-Same `intent-contract.yaml` — any model that can read a file can consume it.
+Same `intent-contract.yaml` -- any model that can read a file can consume it.
 
 ---
 
@@ -119,4 +119,4 @@ Same `intent-contract.yaml` — any model that can read a file can consume it.
 | Bugbot | PR time |
 | Intent Guard `drift --ci` | CI optional |
 
-No conflict — different lifecycle stages.
+No conflict -- different lifecycle stages.

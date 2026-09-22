@@ -1,6 +1,6 @@
 # Contributing to Conductor
 
-**Status:** Design phase — implementation contributions open after spec approval.
+**Status:** Design phase -- implementation contributions open after spec approval.
 
 ---
 
@@ -10,7 +10,8 @@ Intent Guard is published and in use, so changes land against a working tool
 rather than a design under review. Read [docs/cli-reference.md](./docs/cli-reference.md)
 for the surface you are changing and [docs/release/stability-policy.md](./docs/release/stability-policy.md)
 for what a version number promises, since some of that surface is a contract
-and cannot change without a major release.
+and cannot change without a major release. Cross-cutting action and hygiene
+claims, each tied to a line, are in [docs/INVARIANTS.md](./docs/INVARIANTS.md).
 
 Open an issue before a large change. A small fix can go straight to a pull
 request.
@@ -36,10 +37,11 @@ Open a GitHub issue (once remote exists) or comment on the spec with:
 
 ---
 
-## Public repo hygiene (portfolio names)
+## Public repo hygiene
 
 Conductor is **public OSS**. Never commit names, paths, or context from other Vault &
-Compass products, private monorepos, or internal portfolio work.
+Compass products, private monorepos, or internal portfolio work. Two gates enforce
+that, and a pull request runs both.
 
 **Do not put in committed files** (including tests, fixtures, changelogs, comments):
 
@@ -53,14 +55,22 @@ and describe the *pattern*, not the source repo.
 
 Local-only notes: `TODO.local.md`, `.local/`.
 
-Before opening a PR, search the diff for private product names and internal paths.
-CI runs `pnpm validate:portfolio-names` (hash blocklist — no plaintext codenames in
-the repo). To add a hash, see the comment at the top of
-`scripts/validate-no-portfolio-names.mjs`.
+Before opening a PR, search the diff for private product names and internal paths,
+then run both gates:
+
+- `pnpm validate:portfolio-names` is the hash blocklist. No plaintext codenames in
+  the repo. To add a hash, see the comment at the top of
+  `scripts/validate-no-portfolio-names.mjs`, and add the same digest to
+  `scripts/check-public-hygiene.mjs`. A test fails if the two sets diverge.
+- `pnpm lint` runs that same blocklist plus two more rules. A non-ASCII em dash or
+  en dash fails, including in a file the hash scan allowlists. A machine-specific
+  absolute path fails: a home directory, `/var/folders`, or `/private`, with two
+  segments under that root. `pnpm lint` prints the offending file and line and
+  points back at this section.
 
 **Git history:** Older commits may still mention product names. Cleaning **current**
 files is required; rewriting **history** needs `git filter-repo` and a force-pushed
-`main` (coordinate with maintainers — usually not worth it once HEAD is clean).
+`main` (coordinate with maintainers -- usually not worth it once HEAD is clean).
 
 ---
 

@@ -93,7 +93,7 @@ function makeStubGitPath(): { binDir: string; gitLog: string } {
 
 beforeAll(() => {
   if (!existsSync(join(DIST, "check-cli.js"))) {
-    throw new Error("dist not built — run `pnpm build` before tests");
+    throw new Error("dist not built -- run `pnpm build` before tests");
   }
 });
 
@@ -101,7 +101,7 @@ describe("subcommand version", () => {
   for (const cli of CLIS) {
     // An empty directory with no .intent-guard: a command that actually ran
     // here would either fail the gate, write a skeleton, or both. --version
-    // must do neither — same property help already has to satisfy.
+    // must do neither -- same property help already has to satisfy.
     it(`${cli} --version prints exactly the package version, exits 0, and touches nothing`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "conductor-version-"));
       const res = await run(cli, ["--version"], dir);

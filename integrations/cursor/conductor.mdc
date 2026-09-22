@@ -9,7 +9,7 @@ Before implementation work:
    `intent-guard extract --project . --text "<user ask>"`.
 2. Do not treat a draft as approved. Ask the user to review it, then run
    `intent-guard freeze --project . --approved-by "<name>"`.
-3. **One contract per feature branch** — regenerate extract/freeze when scope
+3. **One contract per feature branch** -- regenerate extract/freeze when scope
    changes; do not reuse a stale contract from another task (e.g. the integration
    contract on `main` is not a template for product work).
 4. At the start of a resumed session, run `intent-guard-resume --project .` and

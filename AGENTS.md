@@ -14,6 +14,7 @@ Conductor is the intent-fidelity layer for AI-assisted development: Intent Contr
 | 2 | [README.md](./README.md) | Product overview, package layout, dev commands |
 | 3 | [docs/schemas/directory-layout.md](./docs/schemas/directory-layout.md) | What the tool writes, and where |
 | 4 | [docs/release/stability-policy.md](./docs/release/stability-policy.md) | What a version number promises |
+| 5 | [docs/INVARIANTS.md](./docs/INVARIANTS.md) | Action and hygiene claims, each tied to a line |
 
 Maintainer records (status, backlog, roadmap, design specs, validation runs)
 are deliberately not in this repository. The public content policy has always
@@ -33,8 +34,8 @@ maintainer notes rather than reconstructing them from git history.
 | Hardening - generic scorer, gate, approval | - | Complete (PRs #1, #3, #5) |
 | 3 - Memory-index persistence | 7-10 | Core complete (`history`, generated index, resume, pivot, cross-session drift) |
 | 3b - decay/dedup, LLM normalization | - | Deferred |
-| 4 - Unified CLI + public release | 11-14 | **Complete** — `1.0.0` on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.0.0)) |
-| 1.1.0 - Change Budget | - | Done — on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.1.0)) |
+| 4 - Unified CLI + public release | 11-14 | **Complete** -- `1.0.0` on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.0.0)) |
+| 1.1.0 - Change Budget | - | Done -- on npm ([release](https://github.com/vaultcompasshq/conductor/releases/tag/v1.1.0)) |
 
 ---
 
@@ -108,7 +109,7 @@ Paste actual test output before claiming tests pass.
 - Keep this repo focused on Conductor packages, docs, examples, and integration samples.
 - Do not commit local per-project `.intent-guard/intent-contract.yaml` files here; consuming application repos own their active contracts.
 - Keep examples synthetic. Do not commit customer data, private project specs, API keys, or internal portfolio data.
-- **Never name portfolio products or link to private V&C app repos** in tracked files. Use generic "private downstream app repo" / "downstream integration" wording. Enforce with `pnpm validate:portfolio-names`; policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md). Maintainer notes belong in gitignored `.local/` or `TODO.local.md` only.
+- **Never name portfolio products or link to private V&C app repos** in tracked files. Use generic "private downstream app repo" / "downstream integration" wording. Enforce with `pnpm validate:portfolio-names` and `pnpm lint` (hash blocklist, machine paths, em dash and en dash); policy: [docs/release/public-content-policy.md](./docs/release/public-content-policy.md). Maintainer notes belong in gitignored `.local/` or `TODO.local.md` only.
 - Runtime wiring for downstream products belongs in those downstream repos. This repo should expose packages and documented integration surfaces.
 
 ---

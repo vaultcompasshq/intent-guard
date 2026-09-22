@@ -2,7 +2,7 @@
 /**
  * Public-repo hygiene guard: fail if tracked files contain tokens whose
  * SHA-256 (lowercased) matches the blocklist below. Plaintext portfolio
- * codenames are never stored in this repo — only hashes. To add an entry:
+ * codenames are never stored in this repo -- only hashes. To add an entry:
  *
  *   node -e "const c=require('crypto');const t=process.argv[1];console.log(c.createHash('sha256').update(t.toLowerCase()).digest('hex'))" '<token>'
  *
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-// SHA-256(lowercase token) — no plaintext codenames in the repository.
+// SHA-256(lowercase token) -- no plaintext codenames in the repository.
 const BANNED_HASHES = new Set([
   "8bb4b7a9e837acadf49af332f3211a29f98e2239aa985825f1fe62cdf780c068",
   "9f9f3ba21e38f52a4a40f521490c33c4a2da799b5235c53374ad159ea8d0000b",
@@ -44,7 +44,7 @@ const ALLOWLIST = new Set([
 // "Desktop/Projects" segment, which is not where this repository lives, so
 // the guard could not have caught a leaked path from the machine it runs
 // on. Generalised (matching dep-guard's version of this guard) to any
-// absolute /Users/<name>/... path running through a directory named
+// absolute home-directory path running through a directory named
 // "projects" at any depth and in any case, rather than one fixed layout.
 const INTERNAL_PATH = /\/Users\/[^/\s]+\/(?:[^/\s]+\/)*[Pp]rojects\/[^/\s]+/;
 const TOKEN = /\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*\b/gi;

@@ -64,7 +64,7 @@ interface ActionFile {
 const ACTION_FILE = process.env.IG_ACTION_FILE ?? join(ROOT, "action.yml");
 
 // The raw text, kept alongside the parsed form: the pull-request pin test
-// below reads the IG_TAG_* constants out of the actual script source, rather
+// below reads the IG_TAG_SCANNER_* constants out of the actual script source, rather
 // than a copy written down in this file that could go on agreeing with
 // itself after action.yml moved.
 const actionYmlText = readFileSync(ACTION_FILE, "utf8");
@@ -1039,11 +1039,11 @@ describe("action.yml validates its inputs before a shell sees them", () => {
 });
 
 describe("action.yml validates its inputs, pinning the gate backward on a pull request", () => {
-  // The three numbers IG_TAG is built from, read out of action.yml rather
+  // The three numbers IG_TAG_SCANNER is built from, read out of action.yml rather
   // than written down here: a copy in this file would go on agreeing with
   // itself after the action moved.
   function tagPart(part: "MAJOR" | "MINOR" | "PATCH"): string {
-    const found = new RegExp(`IG_TAG_${part}=([0-9]+)`).exec(actionYmlText);
+    const found = new RegExp(`IG_TAG_SCANNER_${part}=([0-9]+)`).exec(actionYmlText);
     expect([part, found === null]).toEqual([part, false]);
     return (found as RegExpExecArray)[1];
   }
@@ -1057,8 +1057,8 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   // comparison does the work rather than the major leg.
   function scriptWithFutureTag(): string {
     const future = validateScript.replace(
-      /IG_TAG_MINOR=([0-9]+)/,
-      (_all, digits) => `IG_TAG_MINOR=${Number(digits) + 1}`,
+      /IG_TAG_SCANNER_MINOR=([0-9]+)/,
+      (_all, digits) => `IG_TAG_SCANNER_MINOR=${Number(digits) + 1}`,
     );
     expect(future).not.toBe(validateScript);
     return future;
