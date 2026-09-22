@@ -51,4 +51,27 @@ describe("action.yml hardening drift check", () => {
   it("audits signatures from the cd subshell", () => {
     expect(actionYml).toContain('( cd "${npm_config_prefix}/lib" && npm audit signatures )');
   });
+
+  // Exact executable lines, not a substring of the file. A comment that
+  // repeats IG_TAG_SCANNER_MINOR=5 or the Node sentence must not keep
+  // these green after the real line is deleted or weakened.
+  it("pins the scanner tag a pull request is compared against", () => {
+    const lines = executableLines(actionYml);
+    expect(lines).toContain("IG_TAG_SCANNER_MAJOR=1");
+    expect(lines).toContain("IG_TAG_SCANNER_MINOR=5");
+    expect(lines).toContain("IG_TAG_SCANNER_PATCH=2");
+  });
+
+  it("pins the Node remediation the npm floor prints", () => {
+    expect(executableLines(actionYml)).toContain(
+      "printf '::error::Pin a Node release carrying a newer npm. Node 20.13.0 and later, and 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1 and is not. Or pin vaultcompasshq/intent-guard@v1.5.2, which does not verify.\\n'",
+    );
+  });
 });
+
+function executableLines(text) {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+}

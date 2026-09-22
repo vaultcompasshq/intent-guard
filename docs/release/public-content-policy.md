@@ -27,9 +27,10 @@ Generic placeholders (`private downstream app repo`, synthetic paths). Describe 
 
 ```bash
 pnpm validate:portfolio-names
+pnpm lint
 ```
 
-CI runs this on every PR (SHA-256 hash blocklist in `scripts/validate-no-portfolio-names.mjs` -- no plaintext codenames in git). To add a blocked token, hash it and paste into `BANNED_HASHES`; see the script header comment.
+CI runs both on every PR. `pnpm validate:portfolio-names` is the SHA-256 hash blocklist in `scripts/validate-no-portfolio-names.mjs` (no plaintext codenames in git). `pnpm lint` (`scripts/check-public-hygiene.mjs`) checks that same blocklist, refuses a non-ASCII em dash or en dash, and refuses a machine-specific absolute path. To add a blocked token, hash it and paste the digest into `BANNED_HASHES` in both scripts. A test fails if the two sets diverge.
 
 Agents and maintainers: read [AGENTS.md](../../AGENTS.md) Boundaries.
 

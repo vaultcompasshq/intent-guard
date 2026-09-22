@@ -291,7 +291,7 @@ binary rather than about the change. Run this on `ubuntu-latest` or
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `version` | `1.5.2` | Exact version of `@vaultcompass/intent-guard` to install, matching `^[0-9]+\.[0-9]+\.[0-9]+$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
+| `version` | `1.5.2` | Exact version of `@vaultcompass/intent-guard` to install, matching `^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
 | `project` | `.` | Project root, relative to the workspace. No `..`, no absolute path, no leading `-`. |
 | `base` | *(from the event)* | Ref the changed paths are measured against. On a `pull_request` event, `origin/$GITHUB_BASE_REF`. It decides which paths are judged, never where the rules are read from; the action warns on a run that has one and no trust base. |
 | `paths` | *(empty)* | Explicit comma-separated paths instead of, or as well as, `base`. One line: a newline in the value is refused rather than read as another separator. |

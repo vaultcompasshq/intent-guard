@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm validate:portfolio-names && pnpm build && pnpm -r test && vitest run examples/validate-action.test.ts examples/validate-examples.test.ts examples/validate-integrations.test.ts examples/validate-offline-lifecycle.test.ts scripts/tests/release-kind.test.mjs scripts/tests/action-hardening-drift.test.mjs scripts/tests/check-public-hygiene.test.mjs scripts/tests/coauthor-trailer.test.mjs",
+    "test": "pnpm validate:portfolio-names && pnpm build && pnpm -r test && vitest run examples/validate-action.test.ts examples/validate-examples.test.ts examples/validate-integrations.test.ts examples/validate-offline-lifecycle.test.ts scripts/tests/release-kind.test.mjs scripts/tests/action-hardening-drift.test.mjs scripts/tests/check-public-hygiene.test.mjs scripts/tests/coauthor-trailer.test.mjs scripts/tests/hash-blocklist.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "node scripts/check-public-hygiene.mjs",
     "release:smoke": "pnpm build && node scripts/release-smoke.mjs",

@@ -30,6 +30,15 @@ comparison that refuses an older pin is `action.yml:300` through
 `action.yml:311`. The comparison runs only when `GITHUB_BASE_REF` is
 non-empty (`action.yml:270`).
 
+That constant is trusted only when the workflow names this action by owner
+and ref (`vaultcompasshq/intent-guard@TAG`). A local-path reference, the
+`./some/dir` form, reads `action.yml` out of the pull request's own tree, so
+the constant is author-controlled and the rule protects nothing there.
+`action.yml:251` through `action.yml:256` says so. Self-testing workflows
+inside this repository are the usual reason to reference it that way. The
+drift check pins the three assignment lines as executable lines, so a
+comment that repeats `IG_TAG_SCANNER_MINOR=5` does not keep the pin green.
+
 ## npm older than 10.5.2 is refused before install
 
 The floor is accept-only. `action.yml:538` accepts a major above 10.
@@ -39,8 +48,9 @@ else leaves `NPM_OK` at 0. The refusal text is `action.yml:549`: `npm 10.5.2
 or newer`. The remediation is `action.yml:550`: Node 20.13.0 and later, and
 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1.
 
-README states the same floor at `README.md:265` and the same Node bound at
-`README.md:268` through `README.md:269`.
+README states the same floor at `README.md:269` and the same Node bound at
+`README.md:272` through `README.md:273`. The drift check also pins the
+remediation printf at `action.yml:550` as an executable line.
 
 The drift check pins the five comparison fragments and the `npm 10.5.2 or
 newer` sentence. The comment at `action.yml:490` says `OR NEWER` in
@@ -68,14 +78,15 @@ is written at `action.yml:575`.
 
 ## The action tag and the installed package are different numbers
 
-`README.md:251` pins `vaultcompasshq/intent-guard@v1.5.3`.
-`README.md:256` says that tag installs `@vaultcompass/intent-guard@1.5.2`.
+`README.md:255` pins `vaultcompasshq/intent-guard@v1.5.3`.
+`README.md:260` says that tag installs `@vaultcompass/intent-guard@1.5.2`.
 The installed version is the `version` input default at `action.yml:41`,
 the scanner constant at `action.yml:257` through `action.yml:260`, and the
 package version `1.5.2` in `package.json:4`, `packages/cli/package.json:3`,
 `packages/core/package.json:3`, `packages/schema/package.json:3` and
-`packages/skill/package.json:3`. `CHANGELOG.md:32` is the 1.5.3 action
-release. `CHANGELOG.md:59` still records the scanner constant as 1.5.2.
+`packages/skill/package.json:3`. `CHANGELOG.md:37` is the 1.5.3 action
+release. `CHANGELOG.md:64` through `CHANGELOG.md:65` still records the
+scanner constant as 1.5.2.
 
 ## Public repository hygiene is a lint, and CI runs it
 
@@ -92,6 +103,9 @@ build-test job.
 
 `.github/workflows/ci.yml:58` is the step `Refuse pull requests with bot
 co-author trailers`. The pattern is `.github/workflows/ci.yml:66`.
-`scripts/tests/coauthor-trailer.test.mjs` reads that pattern back out of
-the workflow and matches a planted `Co-authored-by: Cursor <cursoragent@cursor.com>`
-line. A message with no trailer does not match.
+`scripts/tests/coauthor-trailer.test.mjs` reads that pattern from the
+executable line only, skipping lines that begin with `#`, and matches a
+planted `cursoragent@cursor.com` trailer, a `noreply@anthropic.com` trailer,
+and a `[bot]` trailer. A message with no trailer does not match. A comment
+that copies the strong pattern does not keep the check green if the
+executable line is weaker.
