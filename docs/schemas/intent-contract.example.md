@@ -61,6 +61,14 @@ metadata:
   superpowers_spec_path: docs/superpowers/specs/2026-06-17-csv-export-design.md
 ```
 
+> **Prose-sourced constraints are advisory only.** The `CLAUDE.md` and
+> `AGENTS.md` constraints above are reported when matched, but they never
+> raise the exit code, even at `priority: critical` and even after
+> `freeze`. The cap follows the constraint's `source`, not its priority.
+> Only `source: user-stated` (as on the third constraint here) or a
+> constraint added by `intent-guard correct --promote` can block. See the
+> `intent-guard check` section of [cli-reference.md](../cli-reference.md).
+
 ---
 
 ## Drift example (same contract, turn 40)

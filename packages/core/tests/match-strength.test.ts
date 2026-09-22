@@ -272,7 +272,10 @@ describe("scoreDrift coverage threshold", () => {
       const finding = result.finding_details.find((f) => f.category === "constraint_violation");
       expect(finding?.strength).toBe("strong");
       expect(finding?.message).toMatch(/advisory/);
-      expect(finding?.message).toContain("billing");
+      // The rule text ("Never billing") already contains "billing", so a
+      // plain toContain("billing") would pass even if the matched-term
+      // suffix were dropped entirely. Pin the rendered suffix itself.
+      expect(finding?.message).toContain("(matched: billing)");
     }
 
     const frozen = scoreDrift(

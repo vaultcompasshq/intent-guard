@@ -114,10 +114,14 @@ const PRIORITY_SEVERITY: Record<string, number> = {
   low: 15,
 };
 
-// Loaded from a prose rules file, not written as a frozen-contract field.
-// A strong match is recorded, and it does not raise constraintViolation,
-// criticalViolated, or the exit code. user-stated and the other contract
-// sources keep priority severity.
+// The cap keys on the constraint's source, not on where it currently lives:
+// extract writes a prose-sourced constraint into the frozen contract
+// verbatim, and freezing does not change its source, so it stays capped
+// after freeze. A strong match is still recorded, and it does not raise
+// constraintViolation, criticalViolated, or the exit code. user-stated and
+// the other contract sources keep priority severity. The only way to a
+// blocking constraint from a prose rule is `intent-guard correct
+// --promote`, which records source: user-correction.
 const PROSE_CONSTRAINT_SOURCES = new Set([
   "AGENTS.md",
   "CLAUDE.md",
