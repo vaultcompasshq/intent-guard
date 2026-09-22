@@ -27,6 +27,19 @@ function executablePatternLine(text) {
   return hits[0];
 }
 
+// Pinning what pattern= is set to says nothing about which variable the
+// step actually greps with. A strong pattern= can sit untouched while a
+// second, weaker variable is the one interpolated into grep, and the
+// assertions above would still pass. This pins the use site to the same
+// variable, so the definition and the use cannot drift apart.
+function executableGrepLine(text) {
+  const hits = codeLines(text)
+    .map((line) => line.trim())
+    .filter((line) => line.includes("grep -iE"));
+  expect(hits).toHaveLength(1);
+  return hits[0];
+}
+
 function trailerPattern(text) {
   const match = executablePatternLine(text).match(/^pattern='(\^Co-authored-by:.*)'$/);
   expect(match).not.toBeNull();
@@ -39,6 +52,10 @@ describe("CI bot co-author refusal", () => {
       codeLines(ci).some((line) => line.includes("Refuse pull requests with bot co-author trailers")),
     ).toBe(true);
     expect(executablePatternLine(ci)).toBe(PATTERN_LINE);
+  });
+
+  it("greps with the pattern it pins, not a second variable", () => {
+    expect(executableGrepLine(ci)).toContain('grep -iE "$pattern"');
   });
 
   it("refuses planted bot trailers and accepts a clean message", () => {
