@@ -587,9 +587,9 @@ describe(".github/workflows/release.yml wiring", () => {
 
   // Every step before the decision, in order.
   const STEPS_BEFORE_DECISION = [
-    "uses:actions/checkout@v4",
-    "uses:pnpm/action-setup@v4",
-    "uses:actions/setup-node@v4",
+    "uses:actions/checkout@v7",
+    "uses:pnpm/action-setup@v6",
+    "uses:actions/setup-node@v7",
     "Assert the tagged commit is on main",
   ];
 
