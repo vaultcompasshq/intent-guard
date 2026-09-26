@@ -461,4 +461,4 @@ Adopter feedback is a row in [FINDINGS.md](FINDINGS.md). How to change this repo
 
 ## License
 
-MIT, see [LICENSE](./LICENSE)
+MIT, see [LICENSE](./LICENSE). Built by [Vault & Compass](https://vaultcompass.io).
