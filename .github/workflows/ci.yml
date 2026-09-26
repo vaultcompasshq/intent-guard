@@ -9,13 +9,13 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -83,7 +83,7 @@ jobs:
           fi
           echo "Checked $count commit(s) for bot co-author trailers; none found."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Required. The intent gate measures this branch against its merge
           # base, and a shallow checkout has no merge base to diff against.
@@ -91,11 +91,11 @@ jobs:
           # because an empty path set is what a passing gate looks like.
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm

@@ -7,8 +7,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **Bumped `vitest` from `^3.0.5` to `^4.1.11` across the workspace root and
+  `packages/cli`, `packages/core`, `packages/schema`, and `packages/skill`,
+  closing seven Dependabot alerts on GHSA-82fw-gwwq-j7x9 (a path traversal in
+  `@vitest/mocker`, a dev dependency).** The lockfile now resolves
+  `@vitest/mocker`, `@vitest/expect`, `@vitest/spy`, `@vitest/utils`,
+  `@vitest/pretty-format`, `@vitest/runner`, and `@vitest/snapshot` at
+  `4.1.11` alongside `vitest` itself. Done by hand rather than by merging
+  Dependabot's own PR: that PR's regenerated lockfile dropped this
+  repository's `pnpm.overrides` block, which frozen install then rejected
+  with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. The `pnpm.overrides` block
+  (`esbuild`, `fast-uri`, `nanoid`, `postcss`) is unchanged and still present
+  in the regenerated lockfile. No test or vitest config file needed changes
+  for the v3-to-v4 migration; the full workspace suite (659 tests) passes
+  unmodified.
+
 ### Changed
 
+- Moved this repository's own CI and release workflow pins off their prior
+  majors: `actions/checkout@v4` to `@v7`, `actions/setup-node@v4` to `@v7`,
+  and `pnpm/action-setup@v4` to `@v6`, in `.github/workflows/ci.yml` and
+  `.github/workflows/release.yml`. `scripts/tests/release-kind.test.mjs`
+  asserts the release job's step list including these exact pins, so its
+  `STEPS_BEFORE_DECISION` fixture was updated to match.
 - A constraint whose `source` is a prose rules file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or cursor rules) is advisory-only: a strong match is still reported, with the matched term in the message, but it never raises `constraint_violation`, `criticalViolated`, or the exit code. This holds even after `intent-guard freeze` writes the constraint into the frozen contract, because freezing does not change its `source`. The only route to a blocking constraint is `intent-guard correct --promote`, which records `source: user-correction`.
 - `intent-guard check --previous-contract` now scores both contracts with the loaded drift thresholds, including `strong_coverage` and `partial_coverage`.
 - The action hardening drift check pins the npm 10.5.2 floor comparisons, the version-shape regex and its occurrence count, `npm install` with `--ignore-scripts`, and the `npm audit signatures` subshell. Each pin was proven by deleting the real line while comment copies survived. `IG_TAG_*` is now `IG_TAG_SCANNER_*`. `pnpm lint` runs the family hygiene guard (hash blocklist, machine paths, em dash and en dash) and CI runs it. README states the npm floor, the Node 20.13.0 remediation, and that action tag v1.5.3 installs package 1.5.2.
