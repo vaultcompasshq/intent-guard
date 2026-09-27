@@ -346,6 +346,37 @@ describe("spec bridge: superpowers", () => {
     );
   });
 
+  it("rejects a budget block whose protected_paths carry an absolute path and a brace group, and names the file", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  protected_paths:",
+          '    - "/etc/**"',
+          '    - "src/{a,b}/**"',
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /Invalid budget block in .*online-checks\.md/,
+    );
+    try {
+      importSpecContract(dir, { format: "superpowers" });
+      expect.fail("expected importSpecContract to throw");
+    } catch (error) {
+      const message = (error as Error).message;
+      expect(message).toContain("/etc/**");
+      expect(message).toContain("src/{a,b}/**");
+    }
+  });
+
   it("rejects a budget fence with duplicate top-level keys", () => {
     const dir = superpowersProject(
       "2026-08-16-online-checks-design.md",

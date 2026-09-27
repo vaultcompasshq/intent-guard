@@ -7,6 +7,37 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A change budget's `protected_paths` and `allowed_paths` are now validated
+  the same way everywhere a budget block can enter or leave a contract, not
+  only at `intent-guard extract --protected-path`.** (#103) The rule that a
+  glob has to be relative, whitespace-free, free of a `..` or stray `.`
+  segment, and free of a brace group or character class (the matcher in
+  `packages/core/src/budget.ts` treats those as literal characters, not
+  wildcards) previously lived only in `extract-cli.ts`; the JSON schema
+  budget entries were checked against required only `minLength: 1`. A spec
+  document imported with `intent-guard import-spec`, or a draft hand-edited
+  before `intent-guard freeze`, could still carry `/etc/**`, `../x`, a
+  surrounding-whitespace glob, or `src/{a,b}/**` into a frozen contract,
+  where it protected nothing or the wrong thing.
+
+  The rules now live once, in `packages/core/src/budget-paths.ts`
+  (`validateBudgetGlob`, `validateBudgetPaths`), and every writer and reader
+  of a budget block uses it: `extract-cli.ts` calls it in place of its own
+  copy, `import-spec` refuses to write a contract whose budget fails it
+  (naming the file, the entry, and the reason), `freeze` refuses to approve
+  one (the last gate before a hand-edited draft is trusted), and `check` /
+  `report` refuse to gate on an already-frozen contract that still carries
+  one, so a contract written before this validator existed, or hand-edited
+  after freezing, cannot silently protect nothing. The JSON schema also
+  gained a conservative pattern rejecting a leading slash, a backslash, and
+  surrounding whitespace on `protected_paths` and `allowed_paths` items; the
+  rest of the rule (no `..` segment, no brace group or character class, and
+  so on) is deliberately left to the shared validator rather than the
+  schema, and is what the gate's own check catches for a contract the schema
+  pattern alone would have let through.
+
 ## [1.6.0] - 2026-09-26
 
 ### Security

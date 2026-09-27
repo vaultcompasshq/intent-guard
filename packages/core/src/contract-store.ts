@@ -7,6 +7,7 @@ import {
 } from "@vaultcompass/intent-guard-schema";
 import { archiveContract } from "./history.js";
 import { LEGACY_STATE_DIR, ensureStateDir, stateDir } from "./state-dir.js";
+import { describeBudgetPathIssues, validateBudgetPaths } from "./budget-paths.js";
 
 /**
  * The pre-1.3.0 state directory name, `.conductor`.
@@ -127,11 +128,24 @@ export interface FreezeApproval {
  * the gate requires it (see isContractFrozen). Software can't prove a human
  * approved in a headless run, but it can require a deliberate, recorded act
  * rather than a default of the drafting step.
+ *
+ * This is also the last gate before a hand-edited budget block is trusted:
+ * `intent-guard extract` and `intent-guard import-spec` both validate a
+ * `protected_paths`/`allowed_paths` entry as they write it, but a draft can
+ * still be hand-edited between drafting and freezing, and the schema itself
+ * only requires each entry to be non-empty. A budget carrying an entry that
+ * cannot possibly match a path (see budget-paths.ts) refuses to freeze,
+ * naming the entry and why, rather than being trusted as a contract that
+ * protects nothing.
  */
 export function freezeContract(
   contract: IntentContract,
   approval: FreezeApproval,
 ): IntentContract {
+  const issues = validateBudgetPaths(contract.budget);
+  if (issues.length > 0) {
+    throw new Error(`Cannot freeze: invalid budget block.\n${describeBudgetPathIssues(issues)}`);
+  }
   const now = new Date().toISOString();
   return {
     ...contract,

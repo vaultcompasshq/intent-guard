@@ -2,6 +2,7 @@ import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { readContract, isContractFrozen, DEFAULT_CONTRACT_FILE } from "./contract-store.js";
 import { scoreDrift, type DriftSignals, type DriftScore } from "./drift.js";
 import { evaluateBudget, type BudgetResult } from "./budget.js";
+import { describeBudgetPathIssue, validateBudgetPaths } from "./budget-paths.js";
 import { loadConfig } from "./config.js";
 import { STATE_DIR } from "./state-dir.js";
 import {
@@ -173,6 +174,20 @@ export function checkGate(
     reasons.push(
       "Intent contract exists but is not frozen by user. Approve and freeze before implementing.",
     );
+  }
+
+  // A protected/allowed path that cannot possibly match anything is exactly
+  // the miss this gate exists to catch: fail closed rather than silently
+  // ignore it. intent-guard extract, import-spec, and freeze all validate an
+  // entry as it is written (see budget-paths.ts), but this contract may
+  // predate that validation or have been hand-edited after freezing, so the
+  // gate checks again here, independent of whether there is a diff to
+  // evaluate the budget against.
+  if (contract) {
+    const budgetPathIssues = validateBudgetPaths(contract.budget);
+    for (const issue of budgetPathIssues) {
+      reasons.push(`Budget ${describeBudgetPathIssue(issue)}.`);
+    }
   }
 
   // The single most important line in pull-request mode. A contract change is

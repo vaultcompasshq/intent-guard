@@ -69,6 +69,14 @@ export {
   type BudgetSeverity,
 } from "./budget.js";
 export {
+  describeBudgetPathIssue,
+  describeBudgetPathIssues,
+  validateBudgetGlob,
+  validateBudgetPaths,
+  type BudgetPathIssue,
+  type BudgetPathRule,
+} from "./budget-paths.js";
+export {
   DRIFT_LOG_FILE,
   appendDriftEvent,
   driftLogPath,

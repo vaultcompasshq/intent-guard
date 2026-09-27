@@ -10,6 +10,7 @@ import { parse as parseYaml } from "yaml";
 import type { ChangeBudget, IntentContract } from "@vaultcompass/intent-guard-schema";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
 import { draftContract } from "./extract.js";
+import { describeBudgetPathIssues, validateBudgetPaths } from "./budget-paths.js";
 
 export type SpecBridgeFormat = "auto" | "spec-kit" | "kiro" | "superpowers";
 
@@ -441,18 +442,31 @@ function extractBudget(files: SpecBridgeFile[]): {
 }
 
 /**
- * Validates the budget in place, against the same schema the gate reads, by
- * validating the contract it was just attached to. Only errors inside
- * `/budget` are reported, so an unrelated draft problem is not blamed on the
- * spec file. An invalid budget is an error naming the file, never a silent
- * skip: a budget that quietly vanished would leave the gate wide open.
+ * Validates the budget in place: first against the shared glob rules in
+ * budget-paths.ts, which name the offending value and why in one readable
+ * line, then against the same schema the gate reads, by validating the
+ * contract it was just attached to (only errors inside `/budget` are
+ * reported, so an unrelated draft problem is not blamed on the spec file).
+ * The glob check runs first because it is a superset of what the schema's
+ * own pattern catches (leading slash, backslash, surrounding whitespace):
+ * without this order, an entry that fails both would be reported through
+ * AJV's terser "must match pattern" message instead of the one naming the
+ * value. Either failure is an error naming the file, never a silent skip: a
+ * budget that quietly vanished, or that carries a `protected_paths` entry
+ * matching nothing, would leave the gate wide open.
  */
 function assertBudgetValid(contract: IntentContract, path: string): void {
+  const issues = validateBudgetPaths(contract.budget);
+  if (issues.length > 0) {
+    throw new Error(`Invalid budget block in ${path}:\n${describeBudgetPathIssues(issues)}`);
+  }
   const result = validateIntentContract(contract);
-  if (result.valid) return;
-  const budgetErrors = result.errors.filter((error) => error.startsWith("/budget"));
-  if (budgetErrors.length === 0) return;
-  throw new Error(`Invalid budget block in ${path}:\n${budgetErrors.join("\n")}`);
+  if (!result.valid) {
+    const budgetErrors = result.errors.filter((error) => error.startsWith("/budget"));
+    if (budgetErrors.length > 0) {
+      throw new Error(`Invalid budget block in ${path}:\n${budgetErrors.join("\n")}`);
+    }
+  }
 }
 
 /**

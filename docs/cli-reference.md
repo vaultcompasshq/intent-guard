@@ -468,12 +468,17 @@ and are case-sensitive.
 Nothing else is a wildcard. Brace groups (`src/{a,b}/**`) and character
 classes (`src/[ab]/**`) are not expanded: the matcher escapes `{`, `}`, `[`
 and `]` as literal characters, so a glob written with them matches only a
-path that literally contains them, which in practice is no path at all.
-`intent-guard extract --protected-path` rejects such a value outright, but a
-budget block written by hand or pulled in by `import-spec` is not checked
-for it, and a `protected_paths` entry that silently matches nothing is a
-gate that silently protects nothing. Write two entries instead of a brace
-group.
+path that literally contains them, which in practice is no path at all. A
+`protected_paths` or `allowed_paths` entry that silently matches nothing is a
+gate that silently protects nothing, so a value with a brace group or
+character class, a leading slash, a backslash, surrounding whitespace, a
+`..` segment, or a stray `.` segment (anywhere but a leading `./`) is
+rejected wherever a budget block can enter or leave a contract: at
+`intent-guard extract --protected-path`, at `intent-guard import-spec` (a
+fenced yaml block in a spec), at `intent-guard freeze` (the last gate before
+a hand-edited draft is trusted), and again at `intent-guard check` /
+`intent-guard report`, which refuse to gate on an already-frozen contract
+that still carries one. Write two entries instead of a brace group.
 
 Absent `budget` means no budget enforcement, so existing contracts are
 unaffected. The

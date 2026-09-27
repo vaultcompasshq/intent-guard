@@ -262,13 +262,21 @@
       "properties": {
         "allowed_paths": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Work must stay within these globs; a changed path outside them is drift."
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\s/\\\\](?:[^\\\\]*[^\\s\\\\])?$"
+          },
+          "description": "Work must stay within these globs; a changed path outside them is drift. The pattern rejects a leading slash, a backslash, and leading/trailing whitespace; the full glob rules (no '..' segment, no brace group or character class, and so on) are enforced by the shared validator in packages/core/src/budget-paths.ts, not here."
         },
         "protected_paths": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Globs that must never be touched."
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\s/\\\\](?:[^\\\\]*[^\\s\\\\])?$"
+          },
+          "description": "Globs that must never be touched. The pattern rejects a leading slash, a backslash, and leading/trailing whitespace; the full glob rules (no '..' segment, no brace group or character class, and so on) are enforced by the shared validator in packages/core/src/budget-paths.ts, not here."
         },
         "max_files": {
           "type": "integer",
