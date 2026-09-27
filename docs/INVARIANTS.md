@@ -82,8 +82,8 @@ They are not right now: `README.md:265` pins `vaultcompasshq/intent-guard@v1.7.0
 and `README.md:272` says that tag installs `@vaultcompass/intent-guard@1.7.0`,
 because this release moved the action tag and the packages together. They
 diverged briefly at 1.5.3, an action-only tag documented at
-`CHANGELOG.md:144` that moved the workflow file without publishing new
-packages; `CHANGELOG.md:172` still records that history, naming
+`CHANGELOG.md:149` that moved the workflow file without publishing new
+packages; `CHANGELOG.md:176` still records that history, naming
 `IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
 version is the `version` input default at `action.yml:41`, the scanner
 constant at `action.yml:257` through `action.yml:260`, and the package
