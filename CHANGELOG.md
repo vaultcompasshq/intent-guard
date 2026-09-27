@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-26
+
 ### Security
 
 - **Bumped `vitest` from `^3.0.5` to `^4.1.11` across the workspace root and
@@ -29,12 +31,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - `intent-guard extract` takes a repeatable `--protected-path <glob>` flag
   that appends to `budget.protected_paths` on the drafted contract, in the
   same shape `intent-guard import-spec` already writes. Each value must be a
-  non-empty relative glob: no leading `-` or `/`, no backslash, no
-  surrounding whitespace, no `..` segment, and no `.` segment except a
-  leading `./`. (The leading-`-` check closes a hole where
-  `--protected-path --dry-run` stored `--dry-run` as the glob and the draft
-  was written to disk instead of only printed.) Without the flag, extract's
-  output is unchanged: no `budget` block, same as before.
+  relative glob as git would print the path: no leading slash, no
+  backslash, no `..` segment, no `.` segment other than a leading `./`, no
+  surrounding whitespace, and no leading `-` (so a following flag cannot be
+  swallowed as the value). Braces and character classes (`{`, `}`, `[`, `]`)
+  are rejected too, because the matcher treats them literally rather than
+  expanding them; `*`, `**`, and `?` are supported. (The leading-`-` check
+  closes a hole where `--protected-path --dry-run` stored `--dry-run` as
+  the glob and the draft was written to disk instead of only printed.)
+  Without the flag, extract writes no `budget` block at all, same as
+  before.
 
 ### Tests
 

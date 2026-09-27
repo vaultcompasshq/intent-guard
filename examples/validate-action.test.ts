@@ -621,7 +621,7 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
       "install",
       "-g",
       "--ignore-scripts",
-      "@vaultcompass/intent-guard@1.5.2",
+      "@vaultcompass/intent-guard@1.6.0",
     ]);
   });
 
@@ -931,7 +931,7 @@ describe("action.yml validates its inputs before a shell sees them", () => {
     // the run, a value beginning with a dot or ending in .tgz is read by npm
     // as a PATH, and a leading-zero string is invalid semver so npm reads it
     // as a dist-tag too.
-    expect(runValidate({ version: "1.5.2" }).status).toBe(0);
+    expect(runValidate({ version: "1.6.0" }).status).toBe(0);
     for (const rejected of [
       ".",
       "..",
@@ -1049,9 +1049,9 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   }
 
   // The same validate script, with the tag constant advanced by one minor
-  // version: the action as it will be the day a 1.6.0 gate ships and this tag
+  // version: the action as it will be the day a 1.7.0 gate ships and this tag
   // starts shipping it. NOT here because the rule is invisible on the shipped
-  // file -- it is visible, every published version below 1.5.2 is refused
+  // file -- it is visible, every published version below 1.6.0 is refused
   // there already -- but because this exercises the comparison at a boundary
   // the published set cannot reach today, where the minor leg of the
   // comparison does the work rather than the major leg.
@@ -1081,13 +1081,13 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
 
   it("refuses a below-tag pin on a pull request, on the shipped file", () => {
     // 1.5.1 is a real published version, well-formed, and it clears the shape
-    // check. It sits below the tag this action ships (1.5.2) and is refused
+    // check. It sits below the tag this action ships (1.6.0) and is refused
     // here rather than several steps later at the gate itself.
     const refused = runValidate({ version: "1.5.1" }, PULL_REQUEST_EVENT);
     expect(refused.status).toBe(1);
     // Both numbers, for the same reason the npm floor names both.
     expect(refused.stdout).toContain("1.5.1");
-    expect(refused.stdout).toContain("1.5.2");
+    expect(refused.stdout).toContain("1.6.0");
     expect(refused.stdout).toMatch(/pull request/);
     expect(refused.stdout).toContain("REMOVE the `version` input");
 
@@ -1112,7 +1112,7 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const run = runValidateScript(future, { version: "1.5.2" }, PULL_REQUEST_EVENT);
     expect(run.status).toBe(1);
     expect(run.stdout).toContain("1.5.2");
-    expect(run.stdout).toContain("1.6.2");
+    expect(run.stdout).toContain("1.7.0");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
@@ -1133,9 +1133,9 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
 
   it("allows pinning forward on a pull request, and orders numerically", () => {
     // 1.10.0 is the case a lexicographic comparison gets wrong: it sorts
-    // below 1.6.2 as text and above it as a version.
+    // below 1.7.0 as text and above it as a version.
     const future = scriptWithFutureTag();
-    for (const ok of ["1.6.2", "1.6.3", "1.7.0", "1.10.0", "2.0.0", "10.0.0"]) {
+    for (const ok of ["1.7.0", "1.7.1", "1.8.0", "1.10.0", "2.0.0", "10.0.0"]) {
       expect([
         ok,
         runValidateScript(future, { version: ok }, PULL_REQUEST_EVENT).status,
@@ -1150,7 +1150,7 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const shipped = `${tagPart("MAJOR")}.${tagPart("MINOR")}.${tagPart("PATCH")}`;
     expect(runValidate({ version: shipped }, PULL_REQUEST_EVENT).status).toBe(0);
     expect(runValidate({}, PULL_REQUEST_EVENT).status).toBe(0);
-    for (const ok of ["1.5.2", "1.5.3", "1.10.0", "2.0.0"]) {
+    for (const ok of ["1.6.0", "1.6.1", "1.10.0", "2.0.0"]) {
       expect([ok, runValidate({ version: ok }, PULL_REQUEST_EVENT).status]).toEqual([ok, 0]);
     }
   });
