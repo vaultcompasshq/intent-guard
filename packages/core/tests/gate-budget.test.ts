@@ -1,11 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initConductor } from "../src/init.js";
 import { freezeContract, writeContract } from "../src/contract-store.js";
 import { checkGate } from "../src/gate.js";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
+
+/**
+ * Freezes a contract with no budget, then appends a raw budget block to the
+ * yaml file directly, bypassing freezeContract's own validation entirely --
+ * the way a human hand-editing the file after freezing would, or how a
+ * contract frozen before this validator existed would look today.
+ */
+function setupHandFrozenWithInvalidBudget(budgetYaml: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "conductor-gate-budget-invalid-"));
+  initConductor(dir);
+  const frozen = freezeContract(draftContract(undefined), {
+    approvedBy: "tester",
+    method: "explicit-flag",
+  });
+  const path = writeContract(dir, frozen);
+  writeFileSync(path, `${readFileSync(path, "utf8")}${budgetYaml}`, "utf8");
+  return dir;
+}
 
 function draftContract(budget: IntentContract["budget"]): IntentContract {
   return {
@@ -64,5 +82,44 @@ describe("checkGate change budget", () => {
     });
     expect(result.budget).toBeUndefined();
     expect(result.status).toBe("ok");
+  });
+
+  it("blocks with a non-zero exit when a frozen contract carries a whitespace-padded budget entry, even with no diff", () => {
+    // Exercises the gate's own validateBudgetPaths check directly: nothing
+    // in the schema catches this (the schema only requires minLength 1), so
+    // this is the only fail-closed path for a contract that carries one.
+    const dir = setupHandFrozenWithInvalidBudget(
+      'budget:\n  protected_paths:\n    - " src/legacy/** "\n',
+    );
+    const result = checkGate(dir, {});
+    expect(result.status).toBe("blocked");
+    expect(result.exitCode).toBe(1);
+    expect(
+      result.reasons.some((r) => r.includes("protected_paths") && r.includes("src/legacy/**")),
+    ).toBe(true);
+  });
+
+  it("blocks with a non-zero exit when a frozen contract carries a '..' segment, even with no diff", () => {
+    const dir = setupHandFrozenWithInvalidBudget(
+      'budget:\n  protected_paths:\n    - "../x"\n',
+    );
+    const result = checkGate(dir, {});
+    expect(result.status).toBe("blocked");
+    expect(result.exitCode).toBe(1);
+    expect(
+      result.reasons.some((r) => r.includes("protected_paths") && r.includes("../x")),
+    ).toBe(true);
+  });
+
+  it("does not block on a protected_paths entry with a brace group, a character class, or a leading '-'", () => {
+    // Contract-level accepts these: they are literal characters to the
+    // matcher, and real git paths can contain them (app/[slug]/** is a
+    // Next.js/SvelteKit dynamic-route directory).
+    const dir = setupHandFrozenWithInvalidBudget(
+      'budget:\n  protected_paths:\n    - "src/{a,b}/**"\n    - "app/[slug]/**"\n    - "-legacy/**"\n',
+    );
+    const result = checkGate(dir, {});
+    expect(result.status).toBe("ok");
+    expect(result.exitCode).toBe(0);
   });
 });

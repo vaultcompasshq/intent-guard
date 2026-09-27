@@ -7,6 +7,62 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- **A change budget's `protected_paths` and `allowed_paths` are now validated
+  the same way everywhere a budget block can enter or leave a contract, not
+  only at `intent-guard extract --protected-path`.** (#103) The rule that a
+  glob has to be relative, whitespace-free, and free of a `..` or stray `.`
+  segment previously lived only in `extract-cli.ts`; the JSON schema required
+  only `minLength: 1`. A spec document imported with `intent-guard
+  import-spec`, or a draft hand-edited before `intent-guard freeze`, could
+  still carry `/etc/**`, `../x`, or a surrounding-whitespace glob into a
+  frozen contract, where it protected nothing or the wrong thing.
+
+  The rules now live once, in `packages/core/src/budget-paths.ts`, split into
+  two tiers. Contract-level (`validateBudgetGlob`: non-empty, no leading
+  slash, no backslash, no surrounding whitespace, no `..` segment, no stray
+  `.` segment, not just `./` alone, no internal empty segment such as
+  `src//x` -- a trailing one, `src//`, is accepted, since the matcher strips
+  it the same as a single trailing slash) applies at
+  `import-spec` (naming the file, the entry, and the reason, and writing
+  nothing), at `freeze` (the last gate before a hand-edited draft is
+  trusted), and at `check` / `report` (which refuse to gate on an
+  already-frozen contract that still carries one, rather than silently
+  ignoring it). Flag-level (`validateProtectedPathFlag`, used only by
+  `extract --protected-path`) adds two rules on top that apply to a
+  command-line value but not to one already written into a contract: no
+  leading `-` (it would be read as the next flag) and no brace group or
+  character class. A brace group (`src/{a,b}/**`) or a character class
+  (`app/[slug]/**`) is accepted at the contract level and rejected only by
+  the flag, because the matcher in `packages/core/src/budget.ts` treats `{ }
+  [ ]` as literal characters rather than expanding them, and a real git path
+  can contain them -- `app/[slug]/**` is a Next.js or SvelteKit dynamic-route
+  directory, and rejecting it at the contract level would block a working
+  protection on every check that follows. `intent-guard check` / `intent-guard
+  report` in `--trust-base` mode also now name an invalid entry in the head's
+  proposed (unapproved) budget on the proposal line, without changing the
+  exit code, since the base contract still governs the run; the base's own
+  budget is still enforced as a blocking reason exactly as before. That
+  proposal line is skipped when the head's issues are identical to the
+  base's, so an unchanged bad contract is named once, as a blocking reason,
+  rather than twice.
+
+  **Migration cost:** an already-frozen contract that carries a
+  `protected_paths` or `allowed_paths` entry the contract-level rule rejects
+  (leading slash, backslash, surrounding whitespace, `..` segment, stray `.`
+  segment, `./` alone, or an internal empty segment) now blocks every `check`
+  and `report` run after upgrading, with no code change on the adopter's part.
+  The remedy is to edit the contract and run `intent-guard freeze` again. In
+  `--trust-base` (pull-request) mode that fix lands the same out-of-band way
+  any re-freeze does: the fixing pull request is itself judged against the
+  now-invalid base contract and is blocked, and a re-freeze committed on a
+  branch trips the self-approval refusal, so the corrected, re-approved
+  contract has to reach the base ref through the project's normal merge path
+  before a pull request can pass again. No change is expected in practice: a
+  leading slash, a backslash, or surrounding whitespace in an existing
+  budget entry was already a glob that matched nothing.
+
 ## [1.6.0] - 2026-09-26
 
 ### Security

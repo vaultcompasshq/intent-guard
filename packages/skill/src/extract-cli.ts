@@ -7,6 +7,7 @@ import {
   loadAllConstraints,
   loadConfig,
   scorePrompt,
+  validateProtectedPathFlag,
   writeContract,
 } from "@vaultcompass/intent-guard-core";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
@@ -41,34 +42,18 @@ function badUsage(reason?: string): never {
 // that does not exist and gets a different sentence.
 const VALUE_FLAGS = new Set(["--project", "--text", "--protected-path"]);
 
-// A repeatable --protected-path is appended to budget.protected_paths, so each
-// value has to already look like a glob the gate can evaluate: relative (the
-// gate compares against git-relative changed paths, so a leading slash could
-// never match anything), without a '..' segment (a budget meant to protect a
-// path has no business climbing out of the project), and not itself another
-// flag (a value starting with '-' -- most concretely `--protected-path
-// --dry-run` -- would otherwise be swallowed as the glob while the flag it
-// looks like silently never takes effect). A backslash, surrounding
-// whitespace, or a stray '.' segment (anywhere but a leading './') are all
-// rejected too: none of them are meaningful in a glob the gate evaluates, and
-// each is more likely a mistake than an intentional pattern. Brace groups
-// (`{a,b}`) and character classes (`[abc]`) are rejected as well: budget.ts's
-// matchesGlob escapes `{ } [ ]` as literal characters rather than expanding
-// them, so a path like `src/{legacy,vendor}/**` would pass validation, get
-// frozen into a contract, and then never match anything at gate time.
+// A repeatable --protected-path is appended to budget.protected_paths, and a
+// value that would not protect anything at gate time -- or that looks like a
+// mistaken flag or shell expansion typed on this command line -- is refused
+// here rather than frozen into a contract. This flag uses the stricter,
+// flag-only rules (validateProtectedPathFlag): a value already written into
+// a contract by import-spec or by hand is allowed a leading '-', a brace
+// group, or a character class, since those are literal characters real git
+// paths can contain, but a value typed straight into this flag is not, the
+// same way `--protected-path --dry-run` would otherwise swallow the next
+// flag. See budget-paths.ts for the full rule set and why each rule exists.
 function isValidProtectedPath(value: string): boolean {
-  if (value.trim().length === 0) return false;
-  if (value !== value.trim()) return false;
-  if (value.startsWith("-")) return false;
-  if (value.startsWith("/")) return false;
-  if (value.includes("\\")) return false;
-  if (/[{}[\]]/.test(value)) return false;
-  const segments = value.split("/");
-  for (let i = 0; i < segments.length; i++) {
-    if (segments[i] === "..") return false;
-    if (segments[i] === "." && (i !== 0 || segments.length === 1)) return false;
-  }
-  return true;
+  return validateProtectedPathFlag(value) === null;
 }
 
 function parseArgs(argv: string[]) {

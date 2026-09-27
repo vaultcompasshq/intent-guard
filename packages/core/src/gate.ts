@@ -2,6 +2,11 @@ import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { readContract, isContractFrozen, DEFAULT_CONTRACT_FILE } from "./contract-store.js";
 import { scoreDrift, type DriftSignals, type DriftScore } from "./drift.js";
 import { evaluateBudget, type BudgetResult } from "./budget.js";
+import {
+  describeBudgetPathIssue,
+  validateBudgetPaths,
+  type BudgetPathIssue,
+} from "./budget-paths.js";
 import { loadConfig } from "./config.js";
 import { STATE_DIR } from "./state-dir.js";
 import {
@@ -104,13 +109,42 @@ export function checkGate(
   const config = trusted === null ? loadConfig(projectRoot) : trusted.config;
   const reasons: string[] = [];
 
+  // The head's own budget is never judged -- the base governs this run --
+  // but a defect in what the head proposes is worth naming now: merging it
+  // as-is would freeze (or already has frozen) a contract that enforces
+  // nothing for that entry, and lock every later check after merge. This is
+  // a diagnostic on the proposal line, not a reason, so it never changes the
+  // exit code below.
+  //
+  // Skipped when the head's issues are exactly the base's: an unchanged
+  // defect is not something THIS pull request is proposing, it is inherited,
+  // and it is already named once as a blocking reason (below) whenever the
+  // base itself is invalid. Without this, an untouched bad contract reported
+  // the same entry twice, as a proposal and as a reason, which reads as the
+  // pull request having introduced it.
+  const sameBudgetIssues = (a: BudgetPathIssue[], b: BudgetPathIssue[]): boolean =>
+    a.length === b.length &&
+    a.every(
+      (issue, i) =>
+        issue.rule === b[i].rule && issue.value === b[i].value && issue.reason === b[i].reason,
+    );
+  const headBudgetIssues =
+    trusted !== null && trusted.headContract
+      ? validateBudgetPaths(trusted.headContract.budget)
+      : [];
+  const baseBudgetIssues =
+    trusted !== null && trusted.contract ? validateBudgetPaths(trusted.contract.budget) : [];
+  const headBudgetProposals = sameBudgetIssues(headBudgetIssues, baseBudgetIssues)
+    ? []
+    : headBudgetIssues.map((issue) => `proposed budget invalid: ${describeBudgetPathIssue(issue)}`);
+
   // Present only in pull-request mode, and mutated in exactly one place below.
   const summary: TrustBaseSummary | null =
     trusted === null
       ? null
       : {
           ref: trusted.ref,
-          proposals: trusted.proposals,
+          proposals: [...trusted.proposals, ...headBudgetProposals],
           contractChanged: trusted.contractChanged,
           configChanged: trusted.configChanged,
           baseContractFound: trusted.contract !== null || trusted.contractError !== null,
@@ -173,6 +207,20 @@ export function checkGate(
     reasons.push(
       "Intent contract exists but is not frozen by user. Approve and freeze before implementing.",
     );
+  }
+
+  // A protected/allowed path that cannot possibly match anything is exactly
+  // the miss this gate exists to catch: fail closed rather than silently
+  // ignore it. intent-guard extract, import-spec, and freeze all validate an
+  // entry as it is written (see budget-paths.ts), but this contract may
+  // predate that validation or have been hand-edited after freezing, so the
+  // gate checks again here, independent of whether there is a diff to
+  // evaluate the budget against.
+  if (contract) {
+    const budgetPathIssues = validateBudgetPaths(contract.budget);
+    for (const issue of budgetPathIssues) {
+      reasons.push(`Budget ${describeBudgetPathIssue(issue)}.`);
+    }
   }
 
   // The single most important line in pull-request mode. A contract change is

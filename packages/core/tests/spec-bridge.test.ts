@@ -346,6 +346,67 @@ describe("spec bridge: superpowers", () => {
     );
   });
 
+  it("rejects a budget block whose protected_paths carry an absolute path and a '..' segment, and names the file", () => {
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  protected_paths:",
+          '    - "/etc/**"',
+          '    - "../x"',
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    expect(() => importSpecContract(dir, { format: "superpowers" })).toThrow(
+      /Invalid budget block in .*online-checks\.md/,
+    );
+    try {
+      importSpecContract(dir, { format: "superpowers" });
+      expect.fail("expected importSpecContract to throw");
+    } catch (error) {
+      const message = (error as Error).message;
+      expect(message).toContain("/etc/**");
+      expect(message).toContain("../x");
+    }
+  });
+
+  it("accepts a budget block whose protected_paths carry a brace group, a character class, and a leading '-'", () => {
+    // These are literal characters to budget.ts's matchesGlob, and real git
+    // paths can contain them (app/[slug]/** is a Next.js/SvelteKit
+    // dynamic-route directory). Only the extract --protected-path flag
+    // rejects them; a value that reached a contract through import-spec, or a
+    // hand edit, is accepted.
+    const dir = superpowersProject(
+      "2026-08-16-online-checks-design.md",
+      "2026-08-16-online-checks.md",
+      {
+        plan: [
+          PLAN_BODY,
+          "```yaml",
+          "budget:",
+          "  protected_paths:",
+          '    - "src/{a,b}/**"',
+          '    - "app/[slug]/**"',
+          '    - "-legacy/**"',
+          "```",
+          "",
+        ].join("\n"),
+      },
+    );
+
+    const imported = importSpecContract(dir, { format: "superpowers" });
+    expect(imported.contract.budget).toEqual({
+      protected_paths: ["src/{a,b}/**", "app/[slug]/**", "-legacy/**"],
+    });
+  });
+
   it("rejects a budget fence with duplicate top-level keys", () => {
     const dir = superpowersProject(
       "2026-08-16-online-checks-design.md",

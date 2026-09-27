@@ -467,13 +467,38 @@ and are case-sensitive.
 
 Nothing else is a wildcard. Brace groups (`src/{a,b}/**`) and character
 classes (`src/[ab]/**`) are not expanded: the matcher escapes `{`, `}`, `[`
-and `]` as literal characters, so a glob written with them matches only a
-path that literally contains them, which in practice is no path at all.
-`intent-guard extract --protected-path` rejects such a value outright, but a
-budget block written by hand or pulled in by `import-spec` is not checked
-for it, and a `protected_paths` entry that silently matches nothing is a
-gate that silently protects nothing. Write two entries instead of a brace
-group.
+and `]` as literal characters, so a glob written with either one matches only
+a path that literally contains those characters. That is not "no path at
+all": `app/[slug]/**` matches a directory literally named `[slug]`, which is
+exactly how Next.js and SvelteKit name a dynamic-route directory, so a
+protected path written that way is a real, working protection. A brace group
+written as alternation (`src/{a,b}/**`) is the case that usually matches
+nothing, because a directory literally named `{a,b}` is rare; write two
+entries instead.
+
+A `protected_paths` or `allowed_paths` entry that silently matches nothing is
+a gate that silently protects nothing, so a value is rejected wherever a
+budget block can enter or leave a contract, in two tiers:
+
+- **Contract-level** (`intent-guard import-spec`, `intent-guard freeze` -- the
+  last gate before a hand-edited draft is trusted -- and `intent-guard check`
+  / `intent-guard report`, which refuse to gate on an already-frozen contract
+  that still carries one): non-empty, no leading slash, no backslash, no
+  surrounding whitespace, no `..` segment, no stray `.` segment (anywhere but
+  a leading `./`), not just `./` on its own (which normalizes to nothing),
+  and no INTERNAL empty segment (`src//x`) -- a trailing one (`src//`) is
+  accepted, because the matcher strips trailing slashes before comparing a
+  no-wildcard glob, the same as it does for a single trailing slash (`src/`).
+  A brace group, a character class, and a leading `-` are all accepted here,
+  because a real git path can contain any of them.
+- **Flag-level** (`intent-guard extract --protected-path` only): every
+  contract-level rule above, plus no leading `-` and no brace group or
+  character class. A value typed straight into a command-line flag is far
+  more likely a typo or a shell-expansion mistake than an intended literal
+  match, and a leading `-` would otherwise be read as the next flag (most
+  concretely `--protected-path --dry-run`); a value that already made it into
+  a contract through `import-spec` or a hand edit had a chance to be
+  reviewed first.
 
 Absent `budget` means no budget enforcement, so existing contracts are
 unaffected. The

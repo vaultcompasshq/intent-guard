@@ -850,6 +850,101 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
     expect(out.trustBase.proposals).toContain("contract changed in this pull request");
   });
 
+  it("reports an invalid budget entry the head proposes, without blocking a run the base governs", async () => {
+    // The base's own budget is untouched and valid, and the head only ADDS a
+    // bad entry to its own (unapproved) copy of the contract. Merging this
+    // pull request as-is would freeze a contract that could never enforce
+    // protected_paths for that entry, and lock every later check after
+    // merge, so the run must name it -- but the base still governs THIS run,
+    // so the exit code stays 0.
+    const headWithBadBudget = BASE_CONTRACT.replace(
+      'budget:\n  protected_paths:\n    - "**/payment/**"\n',
+      'budget:\n  protected_paths:\n    - "**/payment/**"\n    - "../x"\n',
+    );
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { [CONTRACT]: headWithBadBudget, "docs/usage.md": "usage\n" },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("ok");
+    expect(
+      out.trustBase.proposals.some(
+        (p: string) => p.includes("protected_paths") && p.includes("../x"),
+      ),
+    ).toBe(true);
+  });
+
+  it("blocks under trust-base mode when the base contract itself carries an invalid budget entry, even though the head's copy is fixed", async () => {
+    // Discriminating on purpose: the head's contract is the ORIGINAL, valid
+    // BASE_CONTRACT (as if the entry had already been fixed there), while the
+    // base ref is the broken one. A gate that wrongly validated the head's
+    // budget instead of the base's would pass this run; the base still has
+    // to govern it, so it must block.
+    const baseWithBadBudget = BASE_CONTRACT.replace(
+      'budget:\n  protected_paths:\n    - "**/payment/**"\n',
+      'budget:\n  protected_paths:\n    - "../x"\n',
+    );
+    const dir = repo({
+      base: { [CONTRACT]: baseWithBadBudget },
+      head: { [CONTRACT]: BASE_CONTRACT, "docs/usage.md": "usage\n" },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("blocked");
+    expect(
+      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("../x")),
+    ).toBe(true);
+  });
+
+  it("does not repeat the base's own budget defect as a proposal when the head's copy is unchanged", async () => {
+    // The head did not introduce this entry; it inherited it, byte-identical,
+    // from the base. It still has to block (the base governs, and reasons
+    // names it), but it is not something THIS pull request is proposing, so
+    // the proposal line should not say so a second time.
+    const baseWithBadBudget = BASE_CONTRACT.replace(
+      'budget:\n  protected_paths:\n    - "**/payment/**"\n',
+      'budget:\n  protected_paths:\n    - "../x"\n',
+    );
+    const dir = repo({
+      base: { [CONTRACT]: baseWithBadBudget },
+      head: { [CONTRACT]: baseWithBadBudget, "docs/usage.md": "usage\n" },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "main",
+      "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("blocked");
+    expect(
+      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("../x")),
+    ).toBe(true);
+    expect(
+      out.trustBase.proposals.some((p: string) => p.includes("proposed budget invalid")),
+    ).toBe(false);
+  });
+
   it("does not raise self-approval when the gate is not enforcing a frozen contract", async () => {
     const dir = repo({
       base: { [CONTRACT]: BASE_CONTRACT },

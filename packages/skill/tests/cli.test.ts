@@ -334,6 +334,37 @@ describe("conductor-extract", () => {
     expect(res.stderr).toMatch(/protected-path/i);
     expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
+
+  it("rejects a character class in a --protected-path", async () => {
+    // Contract-level (import-spec, freeze, check/report) accepts this, since
+    // app/[slug]/** is a real Next.js/SvelteKit dynamic-route directory. The
+    // flag stays stricter: a bracket typed on a command line is more likely a
+    // mistaken shell expansion than an intended literal path.
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "app/[slug]/**",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a plain leading '-' in a --protected-path, even when it is not a flag lookalike", async () => {
+    // Contract-level accepts this (a directory can start with a dash). The
+    // flag stays stricter for the same reason it always was: it would be
+    // read as a flag, exactly as --protected-path --dry-run would be.
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "-legacy/**",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
 });
 
 describe("conductor-import-spec", () => {
@@ -421,6 +452,92 @@ describe("conductor-import-spec", () => {
     expect(out.contract_yaml).toContain("Add the export button");
   });
 
+  it("rejects a budget block whose protected_paths carry /etc/** and a '..' segment, writing nothing", async () => {
+    const dir = tmpProject();
+    mkdirSync(join(dir, "docs", "superpowers", "specs"), { recursive: true });
+    mkdirSync(join(dir, "docs", "superpowers", "plans"), { recursive: true });
+    writeFileSync(
+      join(dir, "docs", "superpowers", "specs", "2026-09-02-csv-export-design.md"),
+      "# CSV export design\n\n## What this is\n\nAdd a CSV export button to the report table.\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "docs", "superpowers", "plans", "2026-09-02-csv-export.md"),
+      [
+        "# CSV export plan",
+        "",
+        "## Tasks",
+        "",
+        "- [ ] Add the export button",
+        "",
+        "```yaml",
+        "budget:",
+        "  protected_paths:",
+        '    - "/etc/**"',
+        '    - "../x"',
+        "```",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const res = await run("import-spec-cli.js", [
+      "--project", dir,
+      "--from", "superpowers",
+      "--spec", "docs/superpowers/specs/2026-09-02-csv-export-design.md",
+      "--plan", "docs/superpowers/plans/2026-09-02-csv-export.md",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("/etc/**");
+    expect(res.stderr).toContain("../x");
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("accepts a budget block whose protected_paths carry a braced glob, a character class, and a leading '-'", async () => {
+    // Contract-level accepts these (literal characters real git paths can
+    // contain, such as a Next.js/SvelteKit app/[slug]/** route directory).
+    // Only the extract --protected-path flag rejects them.
+    const dir = tmpProject();
+    mkdirSync(join(dir, "docs", "superpowers", "specs"), { recursive: true });
+    mkdirSync(join(dir, "docs", "superpowers", "plans"), { recursive: true });
+    writeFileSync(
+      join(dir, "docs", "superpowers", "specs", "2026-09-02-csv-export-design.md"),
+      "# CSV export design\n\n## What this is\n\nAdd a CSV export button to the report table.\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(dir, "docs", "superpowers", "plans", "2026-09-02-csv-export.md"),
+      [
+        "# CSV export plan",
+        "",
+        "## Tasks",
+        "",
+        "- [ ] Add the export button",
+        "",
+        "```yaml",
+        "budget:",
+        "  protected_paths:",
+        '    - "src/{a,b}/**"',
+        '    - "app/[slug]/**"',
+        '    - "-legacy/**"',
+        "```",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const res = await run("import-spec-cli.js", [
+      "--project", dir,
+      "--from", "superpowers",
+      "--spec", "docs/superpowers/specs/2026-09-02-csv-export-design.md",
+      "--plan", "docs/superpowers/plans/2026-09-02-csv-export.md",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.written_path).toContain("intent-contract.yaml");
+    expect(out.contract_yaml).toContain("src/{a,b}/**");
+  });
+
   it("rejects --spec with --from spec-kit instead of ignoring it", async () => {
     const dir = tmpProject();
     const res = await run("import-spec-cli.js", [
@@ -490,6 +607,22 @@ describe("conductor-freeze (approval gate)", () => {
     const out = JSON.parse(res.stdout);
     expect(out.already_frozen).toBe(true);
     expect(out.approved_by).toBe("alice");
+  });
+
+  it("refuses to freeze a hand-edited draft whose protected_paths carries a '..' segment", async () => {
+    const dir = tmpProject();
+    await run("extract-cli.js", ["--project", dir, "--text", "Add a theme toggle. Verify it persists."]);
+    const contractPath = join(dir, ".intent-guard", "intent-contract.yaml");
+    const draft = readFileSync(contractPath, "utf8");
+    // extract itself refuses this glob at the flag; a hand-edited draft
+    // between drafting and freezing is the path this rejection has to catch.
+    writeFileSync(contractPath, `${draft}budget:\n  protected_paths:\n    - "../x"\n`, "utf8");
+
+    const res = await run("freeze-cli.js", ["--project", dir, "--approved-by", "alice", "--json"]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("../x");
+    const stillDraft = readFileSync(contractPath, "utf8");
+    expect(stillDraft).not.toContain("approved_by: alice");
   });
 });
 
@@ -594,6 +727,66 @@ describe("conductor-check (enforcement gate)", () => {
     const out = JSON.parse(res.stdout);
     expect(out.status).toBe("ok");
     expect(out.budget.ok).toBe(true);
+  });
+
+  it("blocks with exit 1 when a frozen contract carries a whitespace-padded budget entry", async () => {
+    // freeze itself now refuses this glob, so the only way a frozen contract
+    // carries one is a hand edit after freezing, or a contract frozen before
+    // this validator existed. check must not silently ignore it: this
+    // exercises the gate's own validateBudgetPaths check, since nothing in
+    // the schema catches a whitespace-padded value.
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") +
+        '\nbudget:\n  protected_paths:\n    - " src/legacy/** "\n',
+    );
+    const res = await run("check-cli.js", ["--project", dir, "--json"]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("blocked");
+    expect(
+      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("src/legacy/**")),
+    ).toBe(true);
+  });
+
+  it("blocks with exit 1 when a frozen contract carries a '..' segment, naming the value", async () => {
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") + '\nbudget:\n  protected_paths:\n    - "../x"\n',
+    );
+    const res = await run("check-cli.js", ["--project", dir, "--json"]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("blocked");
+    expect(
+      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("../x")),
+    ).toBe(true);
+  });
+
+  it("does not block on a protected_paths entry with a brace group, a character class, or a leading '-'", async () => {
+    // Contract-level accepts these: literal characters real git paths can
+    // contain, such as a Next.js/SvelteKit app/[slug]/** route directory.
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") +
+        '\nbudget:\n  protected_paths:\n    - "src/{a,b}/**"\n    - "app/[slug]/**"\n    - "-legacy/**"\n',
+    );
+    const res = await run("check-cli.js", ["--project", dir, "--json"]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("ok");
   });
 
   it("surfaces previous-contract drift as informational JSON", async () => {
