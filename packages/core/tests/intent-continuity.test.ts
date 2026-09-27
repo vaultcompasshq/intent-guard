@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import {
+  addCorrection,
   addPivot,
   archiveContract,
   archivedContractPath,
@@ -76,6 +77,49 @@ describe("intent continuity", () => {
     const resume = renderResume(dir);
     expect(resume).toContain("# Session brief");
     expect(resume).toContain("CSV export for the report table");
+  });
+
+  it("generated index contains no em dash or en dash anywhere", () => {
+    const dir = tmpProject();
+    const older = contract("ic-20260801-hhhhhh", "2026-08-01T10:00:00.000Z");
+    writeContract(dir, older);
+
+    let active: IntentContract = {
+      ...contract("ic-20260802-iiiiii", "2026-08-02T10:00:00.000Z"),
+      constraints: [
+        {
+          source: "AGENTS.md",
+          rule: "Must not touch legacy code",
+          priority: "high",
+          file_path: "AGENTS.md",
+        },
+      ],
+    };
+    active = addPivot(active, {
+      change: "Also support keyboard shortcuts",
+      reason: "User asked for accessibility",
+      acknowledged: true,
+    });
+    active = addCorrection(active, {
+      wrong: "Used a modal instead of an inline export button",
+      right: "Use an inline export button",
+      rule: "No modal dialogs for export",
+      acknowledged: true,
+    });
+    writeContract(dir, active);
+
+    const index = renderIndex(dir);
+
+    // Every section this index renders exercised at least once, so the
+    // dash check below is not trivially satisfied by empty sections.
+    expect(index).toContain("## Active");
+    expect(index).toContain("## Recent contracts");
+    expect(index).toContain("AGENTS.md");
+    expect(index).toContain("Also support keyboard shortcuts");
+    expect(index).toContain("No modal dialogs for export");
+
+    const emOrEnDash = new RegExp("[\\u2014\\u2013]");
+    expect(index).not.toMatch(emOrEnDash);
   });
 
   it("records an acknowledged pivot and updates active scope", () => {
