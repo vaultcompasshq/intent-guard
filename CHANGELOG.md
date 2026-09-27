@@ -7,6 +7,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`validateBudgetGlob` rejected `./` but accepted `.//` and `.///`, even
+  though all three normalize to a path that matches nothing.** (#112) The
+  empty-segment check stripped trailing slashes before running, so `.//`
+  reduced to `.` and passed the leading-dot rule, while `normalizePath` in
+  `budget.ts` still turned the original value into an empty match target.
+  `validateBudgetGlob` in `packages/core/src/budget-paths.ts` now simulates
+  the same two-step normalization the matcher applies (strip one leading
+  `./`, then strip every trailing slash) and rejects the value whenever
+  nothing survives, regardless of how many trailing slashes it had. `src//`
+  still normalizes to the working prefix `src` and is accepted; `src//x`
+  still has an internal empty segment and is rejected.
+
 ## [1.7.0] - 2026-09-27
 
 ### Changed
