@@ -24,6 +24,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   for the v3-to-v4 migration; the full workspace suite (659 tests) passes
   unmodified.
 
+### Added
+
+- `intent-guard extract` takes a repeatable `--protected-path <glob>` flag
+  that appends to `budget.protected_paths` on the drafted contract, in the
+  same shape `intent-guard import-spec` already writes. Each value must be a
+  non-empty relative glob: no leading `-` or `/`, no backslash, no
+  surrounding whitespace, no `..` segment, and no `.` segment except a
+  leading `./`. (The leading-`-` check closes a hole where
+  `--protected-path --dry-run` stored `--dry-run` as the glob and the draft
+  was written to disk instead of only printed.) Without the flag, extract's
+  output is unchanged: no `budget` block, same as before.
+
+### Tests
+
+- Added a regression test asserting the generated `.intent-guard/index.md`
+  contains no U+2014 (em dash) or U+2013 (en dash) anywhere, covering the
+  active-contract, recent-contracts, constraints, pivots, and corrections
+  sections. Closes the gap the "Rendered markdown uses ASCII `--`" change
+  below left: that fix was not itself pinned by a test.
+
 ### Changed
 
 - Moved this repository's own CI and release workflow pins off their prior

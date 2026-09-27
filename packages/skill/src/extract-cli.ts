@@ -18,11 +18,16 @@ Draft an unfrozen Intent Contract from an ask. Approval is a separate step:
 review the draft, then run intent-guard freeze.
 
 Flags:
-  --text <user ask>   The ask to draft a contract from (required)
-  --project <root>    Project root (default: .)
-  --dry-run           Print the draft without writing it
-  --help, -h          Show this help
-  --version, -v       Print the version`;
+  --text <user ask>          The ask to draft a contract from (required)
+  --project <root>           Project root (default: .)
+  --protected-path <glob>    Add a glob to budget.protected_paths (repeatable)
+  --dry-run                  Print the draft without writing it
+  --help, -h                 Show this help
+  --version, -v              Print the version
+
+With no --protected-path, the draft carries no budget block: budget is
+otherwise authored by hand or by intent-guard import-spec (a fenced yaml
+budget block in a superpowers spec).`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 function badUsage(reason?: string): never {
@@ -34,11 +39,42 @@ function badUsage(reason?: string): never {
 // The flags that take a value. Reaching the arm below with one of these means
 // the value was missing or empty, which is a different mistake from a flag
 // that does not exist and gets a different sentence.
-const VALUE_FLAGS = new Set(["--project", "--text"]);
+const VALUE_FLAGS = new Set(["--project", "--text", "--protected-path"]);
+
+// A repeatable --protected-path is appended to budget.protected_paths, so each
+// value has to already look like a glob the gate can evaluate: relative (the
+// gate compares against git-relative changed paths, so a leading slash could
+// never match anything), without a '..' segment (a budget meant to protect a
+// path has no business climbing out of the project), and not itself another
+// flag (a value starting with '-' -- most concretely `--protected-path
+// --dry-run` -- would otherwise be swallowed as the glob while the flag it
+// looks like silently never takes effect). A backslash, surrounding
+// whitespace, or a stray '.' segment (anywhere but a leading './') are all
+// rejected too: none of them are meaningful in a glob the gate evaluates, and
+// each is more likely a mistake than an intentional pattern. Brace groups
+// (`{a,b}`) and character classes (`[abc]`) are rejected as well: budget.ts's
+// matchesGlob escapes `{ } [ ]` as literal characters rather than expanding
+// them, so a path like `src/{legacy,vendor}/**` would pass validation, get
+// frozen into a contract, and then never match anything at gate time.
+function isValidProtectedPath(value: string): boolean {
+  if (value.trim().length === 0) return false;
+  if (value !== value.trim()) return false;
+  if (value.startsWith("-")) return false;
+  if (value.startsWith("/")) return false;
+  if (value.includes("\\")) return false;
+  if (/[{}[\]]/.test(value)) return false;
+  const segments = value.split("/");
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i] === "..") return false;
+    if (segments[i] === "." && (i !== 0 || segments.length === 1)) return false;
+  }
+  return true;
+}
 
 function parseArgs(argv: string[]) {
   let projectRoot = ".";
   let userText = "";
+  const protectedPaths: string[] = [];
   let dryRun = false;
   let help = false;
   let version = false;
@@ -49,6 +85,14 @@ function parseArgs(argv: string[]) {
       projectRoot = argv[++i];
     } else if (arg === "--text" && argv[i + 1]) {
       userText = argv[++i];
+    } else if (arg === "--protected-path" && argv[i + 1]) {
+      const value = argv[++i];
+      if (!isValidProtectedPath(value)) {
+        badUsage(
+          `--protected-path '${value}' must be a non-empty relative glob (no leading '-' or '/', no backslash, no surrounding whitespace, no '..' segment, no '.' segment except a leading './'). Braces and character classes ('{', '}', '[', ']') are not supported by the matcher and are rejected; '*', '**', and '?' are.`,
+        );
+      }
+      protectedPaths.push(value);
     } else if (arg === "--dry-run") {
       dryRun = true;
     } else if (arg === "--freeze") {
@@ -73,7 +117,7 @@ function parseArgs(argv: string[]) {
     }
   }
 
-  return { projectRoot, userText, dryRun, help, version };
+  return { projectRoot, userText, protectedPaths, dryRun, help, version };
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -82,7 +126,7 @@ if (args.version) printVersion();
 
 if (!args.userText) {
   console.error(
-    "Usage: intent-guard-extract --text <user ask> [--project <root>] [--dry-run]",
+    "Usage: intent-guard-extract --text <user ask> [--project <root>] [--protected-path <glob>]... [--dry-run]",
   );
   process.exit(1);
 }
@@ -101,6 +145,11 @@ const coaching = coachMessage(scored, args.userText);
 // extract only ever writes an UNFROZEN draft. Approval is a separate,
 // deliberate step: intent-guard-freeze.
 const contract = draft;
+// With no --protected-path, the draft carries no budget block at all, so
+// existing callers see byte-identical output to before this flag existed.
+if (args.protectedPaths.length > 0) {
+  contract.budget = { protected_paths: args.protectedPaths };
+}
 const validation = validateIntentContract(contract);
 const needsCoaching =
   scored.score < config.coach.show_when_score_below || scored.issues.length > 0;
