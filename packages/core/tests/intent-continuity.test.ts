@@ -114,9 +114,64 @@ describe("intent continuity", () => {
     // dash check below is not trivially satisfied by empty sections.
     expect(index).toContain("## Active");
     expect(index).toContain("## Recent contracts");
+    // The archived contract's own id must show up here, not just the
+    // section heading -- otherwise an archiving regression that quietly
+    // renders "- none" instead would still pass this test.
+    expect(index).toContain("ic-20260801-hhhhhh");
     expect(index).toContain("AGENTS.md");
     expect(index).toContain("Also support keyboard shortcuts");
     expect(index).toContain("No modal dialogs for export");
+
+    const emOrEnDash = new RegExp("[\\u2014\\u2013]");
+    expect(index).not.toMatch(emOrEnDash);
+  });
+
+  it("renders the empty-project fallback lines without a dash", () => {
+    const dir = tmpProject();
+
+    const index = renderIndex(dir);
+
+    expect(index).toContain(
+      "No frozen contract yet -- run intent-guard-extract, review, then intent-guard-freeze",
+    );
+    expect(index).toContain(
+      "Loaded from AGENTS.md, CLAUDE.md, GEMINI.md, .cursor/rules when present",
+    );
+    // Recent contracts, recent pivots, and acknowledged corrections all fall
+    // back to a bare "- none" line when there is nothing to render.
+    expect(index.match(/^- none$/gm)?.length).toBe(3);
+
+    const emOrEnDash = new RegExp("[\\u2014\\u2013]");
+    expect(index).not.toMatch(emOrEnDash);
+  });
+
+  it("renders a draft active contract and an unapproved archived entry without a dash", () => {
+    const dir = tmpProject();
+
+    // A draft carries no approval at all (extract only ever writes an
+    // unfrozen draft), which exercises summarizeContract's "draft" branch
+    // and its empty approved-by suffix.
+    const { approval: _draftApproval, ...draftFields } = contract(
+      "ic-20260803-jjjjjj",
+      "2026-08-03T10:00:00.000Z",
+    );
+    const draft: IntentContract = draftFields;
+    writeContract(dir, draft);
+
+    // An archived entry with no approved_by exercises the archived-list
+    // fallback separately from the active-contract fallback above.
+    const { approval: _archivedApproval, ...archivedFields } = contract(
+      "ic-20260804-kkkkkk",
+      "2026-08-04T10:00:00.000Z",
+    );
+    const unapprovedArchived: IntentContract = archivedFields;
+    archiveContract(dir, unapprovedArchived);
+
+    const index = renderIndex(dir);
+
+    expect(index).toContain("draft");
+    expect(index).toContain("ic-20260803-jjjjjj");
+    expect(index).toContain("ic-20260804-kkkkkk");
 
     const emOrEnDash = new RegExp("[\\u2014\\u2013]");
     expect(index).not.toMatch(emOrEnDash);
