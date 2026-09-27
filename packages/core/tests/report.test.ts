@@ -71,6 +71,35 @@ describe("conductor report", () => {
     expect(markdown).toContain("protected");
   });
 
+  it("warns without blocking when the frozen contract carries an invalid budget entry", () => {
+    // 1.7.0 warns rather than blocks (docs/release/stability-policy.md's
+    // deprecation rule); 2.0.0 turns this into a blocking reason. writeContract
+    // does not itself validate budget paths (only freezeContract does), so this
+    // is the same hand-edited-after-freezing shape the gate has to catch.
+    const dir = tmpProject();
+    writeContract(dir, {
+      ...frozenContract(),
+      budget: { protected_paths: ["../x"] },
+    });
+
+    const report = buildConductorReport(dir, {
+      signals: { changedPaths: ["README.md"] },
+    });
+    const markdown = renderConductorReportMarkdown(report);
+
+    expect(report.status).toBe("ok");
+    expect(report.exitCode).toBe(0);
+    expect(report.gate.reasons).toEqual([]);
+    expect(
+      report.gate.warnings.some(
+        (w) => w.includes("protected_paths") && w.includes("../x") && w.includes("2.0.0"),
+      ),
+    ).toBe(true);
+    expect(markdown).toContain("## Gate warnings");
+    expect(markdown).toContain("../x");
+    expect(markdown).toContain("2.0.0");
+  });
+
   it("blocks and explains out-of-scope package drift", () => {
     const dir = tmpProject();
     writeContract(dir, frozenContract());

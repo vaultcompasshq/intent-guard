@@ -27,9 +27,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   it the same as a single trailing slash) applies at
   `import-spec` (naming the file, the entry, and the reason, and writing
   nothing), at `freeze` (the last gate before a hand-edited draft is
-  trusted), and at `check` / `report` (which refuse to gate on an
-  already-frozen contract that still carries one, rather than silently
-  ignoring it). Flag-level (`validateProtectedPathFlag`, used only by
+  trusted), and at `check` / `report` (which warn about one on an
+  already-frozen contract in 1.7.0, naming the entry and the reason and
+  stating that it will block starting in 2.0.0, rather than silently ignoring
+  it). Flag-level (`validateProtectedPathFlag`, used only by
   `extract --protected-path`) adds two rules on top that apply to a
   command-line value but not to one already written into a contract: no
   leading `-` (it would be read as the next flag) and no brace group or
@@ -42,26 +43,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   protection on every check that follows. `intent-guard check` / `intent-guard
   report` in `--trust-base` mode also now name an invalid entry in the head's
   proposed (unapproved) budget on the proposal line, without changing the
-  exit code, since the base contract still governs the run; the base's own
-  budget is still enforced as a blocking reason exactly as before. That
-  proposal line is skipped when the head's issues are identical to the
-  base's, so an unchanged bad contract is named once, as a blocking reason,
-  rather than twice.
+  exit code, since the base contract still governs the run; an invalid entry
+  on the base's own budget is warned about under the base contract the same
+  way, not blocked, in 1.7.0 (see below). That proposal line is skipped when
+  the head's issues are identical to the base's, so an unchanged bad contract
+  is named once, as a warning, rather than twice.
 
-  **Migration cost:** an already-frozen contract that carries a
-  `protected_paths` or `allowed_paths` entry the contract-level rule rejects
-  (leading slash, backslash, surrounding whitespace, `..` segment, stray `.`
-  segment, `./` alone, or an internal empty segment) now blocks every `check`
-  and `report` run after upgrading, with no code change on the adopter's part.
-  The remedy is to edit the contract and run `intent-guard freeze` again. In
+  **Migration cost:** none on upgrade to 1.7.0. An already-frozen contract
+  that carries a `protected_paths` or `allowed_paths` entry the
+  contract-level rule rejects (leading slash, backslash, surrounding
+  whitespace, `..` segment, stray `.` segment, `./` alone, or an internal
+  empty segment) does not start blocking `check` or `report` on this
+  upgrade: instead, every run of either command warns, naming the entry and
+  the reason and stating that it will block starting in `2.0.0`. The remedy
+  is to edit the contract and run `intent-guard freeze` again before then. In
   `--trust-base` (pull-request) mode that fix lands the same out-of-band way
-  any re-freeze does: the fixing pull request is itself judged against the
-  now-invalid base contract and is blocked, and a re-freeze committed on a
-  branch trips the self-approval refusal, so the corrected, re-approved
-  contract has to reach the base ref through the project's normal merge path
-  before a pull request can pass again. No change is expected in practice: a
-  leading slash, a backslash, or surrounding whitespace in an existing
-  budget entry was already a glob that matched nothing.
+  any re-freeze does: a re-freeze committed on a branch trips the
+  self-approval refusal, so the corrected, re-approved contract has to reach
+  the base ref through the project's normal merge path before a pull request
+  can pass again. No change is expected in practice: a leading slash, a
+  backslash, or surrounding whitespace in an existing budget entry was
+  already a glob that matched nothing.
 
 ## [1.6.0] - 2026-09-26
 
