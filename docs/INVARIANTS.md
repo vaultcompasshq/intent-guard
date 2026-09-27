@@ -48,8 +48,8 @@ else leaves `NPM_OK` at 0. The refusal text is `action.yml:549`: `npm 10.5.2
 or newer`. The remediation is `action.yml:550`: Node 20.13.0 and later, and
 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1.
 
-README states the same floor at `README.md:269` and the same Node bound at
-`README.md:272` through `README.md:273`. The drift check also pins the
+README states the same floor at `README.md:275` and the same Node bound at
+`README.md:278` through `README.md:279`. The drift check also pins the
 remediation printf at `action.yml:550` as an executable line.
 
 The drift check pins the five comparison fragments and the `npm 10.5.2 or
@@ -83,7 +83,8 @@ and `README.md:266` says that tag installs `@vaultcompass/intent-guard@1.6.0`,
 because this release moved the action tag and the packages together. They
 diverged briefly at 1.5.3, an action-only tag documented at
 `CHANGELOG.md:86` that moved the workflow file without publishing new
-packages; `CHANGELOG.md:63` still records that history. The installed
+packages; `CHANGELOG.md:113` still records that history, naming
+`IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
 version is the `version` input default at `action.yml:41`, the scanner
 constant at `action.yml:257` through `action.yml:260`, and the package
 version `1.6.0` in `package.json:4`, `packages/cli/package.json:3`,

@@ -1064,6 +1064,20 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     return future;
   }
 
+  // The same validate script, with the tag constant's PATCH leg raised by
+  // two: the shipped tag's patch is 0, so no published version sits below it
+  // at the same major.minor, and the same-minor-lower-patch arm of the
+  // comparison never runs against the real file. This exercises that arm
+  // without waiting for a patch release to make a real fixture possible.
+  function scriptWithPatchOverride(): string {
+    const patched = validateScript.replace(
+      /IG_TAG_SCANNER_PATCH=([0-9]+)/,
+      (_all, digits) => `IG_TAG_SCANNER_PATCH=${Number(digits) + 2}`,
+    );
+    expect(patched).not.toBe(validateScript);
+    return patched;
+  }
+
   function runValidateScript(
     script: string,
     overrides: Record<string, string>,
@@ -1113,6 +1127,20 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     expect(run.status).toBe(1);
     expect(run.stdout).toContain("1.5.2");
     expect(run.stdout).toContain("1.7.0");
+    expect(run.stdout).toMatch(/pull request/);
+    expect(run.stdout).toContain("REMOVE the `version` input");
+  });
+
+  it("refuses a pull request pinned to a lower patch at the same major.minor", () => {
+    // The shipped tag's patch is 0, so no real published version can exercise
+    // the same-minor-lower-patch arm of the comparison. Raising the tag's
+    // patch leg to 2 makes 1.6.1 (same major.minor, lower patch) a case that
+    // arm alone must catch.
+    const patched = scriptWithPatchOverride();
+    const run = runValidateScript(patched, { version: "1.6.1" }, PULL_REQUEST_EVENT);
+    expect(run.status).toBe(1);
+    expect(run.stdout).toContain("1.6.1");
+    expect(run.stdout).toContain("1.6.2");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
