@@ -87,15 +87,16 @@ separate (`intent-guard-freeze`).
 |------|---------|
 | `--project <root>` | target project (default `.`) |
 | `--text "<ask>"` | the user's ask (required) |
-| `--protected-path <glob>` | append a glob to `budget.protected_paths` (repeatable) |
+| `--protected-path <glob>` | append a glob to `budget.protected_paths` (repeatable; syntax under [Glob syntax](#glob-syntax)) |
 | `--dry-run` | print the draft JSON, write nothing |
 
 Each `--protected-path` value must be a relative glob as git would print the
 path: no leading slash, no backslash, no `..` segment, no `.` segment other
 than a leading `./`, no surrounding whitespace, and it may not start with `-`
-(so a following flag cannot be swallowed as the value). `*`, `**` and `?` are
-supported; braces and character classes are not, because the matcher treats
-them literally. Without `--protected-path`, the draft carries no
+(so a following flag cannot be swallowed as the value). Only the wildcards
+listed under [Glob syntax](#glob-syntax) are supported; a value with a brace
+group or a character class is rejected here rather than frozen into a
+contract where it would match nothing. Without `--protected-path`, the draft carries no
 `budget` block at all -- a budget is otherwise authored by hand or produced by
 `intent-guard import-spec` from a fenced yaml block in a superpowers spec (see
 [Change budget](#change-budget)).
@@ -235,7 +236,8 @@ de-duplicated and keeps first-seen order.
 
 Git lists paths relative to the **repository root**, not to `--project`. When
 `--project` points at a subdirectory of the repo, either run the gate from the
-repository root or write the budget globs repo-relative, or nothing will match.
+repository root or write the budget globs repo-relative, or nothing will match
+(the wildcards themselves are listed under [Glob syntax](#glob-syntax)).
 
 It fails closed. An unknown ref, a directory that is not a repository, a shallow
 clone with no merge base, or a git that will not run all print one line to
@@ -445,9 +447,34 @@ budget:
 | `max_files` | changed-file count exceeds the cap | soft_block |
 | `allow_new_dependencies: false` | a manifest/lockfile is edited | soft_block |
 
-Globs support `*` (within a segment), `**` (across segments), and `?`. A glob
-with no wildcard is treated as a directory prefix, so `src` and `src/` both
-cover everything under `src/` (an exact file path still matches only itself).
+#### Glob syntax
+
+This is the one description of the glob syntax; every other mention of a
+glob in this reference and the README points here. The matcher is
+`matchesGlob` in `packages/core/src/budget.ts`, and it understands exactly
+three wildcards:
+
+| Wildcard | Matches |
+|----------|---------|
+| `*` | any run of characters within one path segment (never `/`) |
+| `**` | any number of whole segments; `src/**/x.ts` also matches `src/x.ts` |
+| `?` | exactly one character within a segment |
+
+A glob with no wildcard at all is treated as a directory prefix, so `src`
+and `src/` both cover everything under `src/`, and an exact file path still
+matches only itself. Globs are written repo-relative, as git prints paths,
+and are case-sensitive.
+
+Nothing else is a wildcard. Brace groups (`src/{a,b}/**`) and character
+classes (`src/[ab]/**`) are not expanded: the matcher escapes `{`, `}`, `[`
+and `]` as literal characters, so a glob written with them matches only a
+path that literally contains them, which in practice is no path at all.
+`intent-guard extract --protected-path` rejects such a value outright, but a
+budget block written by hand or pulled in by `import-spec` is not checked
+for it, and a `protected_paths` entry that silently matches nothing is a
+gate that silently protects nothing. Write two entries instead of a brace
+group.
+
 Absent `budget` means no budget enforcement, so existing contracts are
 unaffected. The
 dependency rule is intentionally coarse: a path cannot tell an add from a bump,
