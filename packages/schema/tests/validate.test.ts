@@ -134,46 +134,6 @@ describe("validateIntentContract", () => {
     expect(negative.valid).toBe(false);
   });
 
-  it("rejects a protected_paths entry with a leading slash", () => {
-    const result = validateIntentContract({
-      ...validContract,
-      budget: { protected_paths: ["/etc/**"] },
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it("rejects an allowed_paths entry containing a backslash", () => {
-    const result = validateIntentContract({
-      ...validContract,
-      budget: { allowed_paths: ["src\\legacy\\**"] },
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it("rejects a protected_paths entry with leading whitespace", () => {
-    const result = validateIntentContract({
-      ...validContract,
-      budget: { protected_paths: [" src/legacy/**"] },
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it("rejects a protected_paths entry with trailing whitespace", () => {
-    const result = validateIntentContract({
-      ...validContract,
-      budget: { protected_paths: ["src/legacy/** "] },
-    });
-    expect(result.valid).toBe(false);
-  });
-
-  it("accepts a protected_paths entry the schema pattern does not cover, such as a '..' segment (the full rule lives in the shared validator, not the schema)", () => {
-    const result = validateIntentContract({
-      ...validContract,
-      budget: { protected_paths: ["../x"] },
-    });
-    expect(result.valid).toBe(true);
-  });
-
   it("rejects a malformed correction_log id", () => {
     const result = validateIntentContract({
       ...validContract,

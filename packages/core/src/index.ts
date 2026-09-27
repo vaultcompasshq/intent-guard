@@ -73,6 +73,7 @@ export {
   describeBudgetPathIssues,
   validateBudgetGlob,
   validateBudgetPaths,
+  validateProtectedPathFlag,
   type BudgetPathIssue,
   type BudgetPathRule,
 } from "./budget-paths.js";

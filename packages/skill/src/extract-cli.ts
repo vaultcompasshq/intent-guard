@@ -7,7 +7,7 @@ import {
   loadAllConstraints,
   loadConfig,
   scorePrompt,
-  validateBudgetGlob,
+  validateProtectedPathFlag,
   writeContract,
 } from "@vaultcompass/intent-guard-core";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
@@ -43,12 +43,17 @@ function badUsage(reason?: string): never {
 const VALUE_FLAGS = new Set(["--project", "--text", "--protected-path"]);
 
 // A repeatable --protected-path is appended to budget.protected_paths, and a
-// value that would not protect anything at gate time is refused here rather
-// than frozen into a contract. The full set of rules -- and why each one
-// exists -- lives once, shared with intent-guard import-spec, intent-guard
-// freeze, and intent-guard check/report, in budget-paths.ts.
+// value that would not protect anything at gate time -- or that looks like a
+// mistaken flag or shell expansion typed on this command line -- is refused
+// here rather than frozen into a contract. This flag uses the stricter,
+// flag-only rules (validateProtectedPathFlag): a value already written into
+// a contract by import-spec or by hand is allowed a leading '-', a brace
+// group, or a character class, since those are literal characters real git
+// paths can contain, but a value typed straight into this flag is not, the
+// same way `--protected-path --dry-run` would otherwise swallow the next
+// flag. See budget-paths.ts for the full rule set and why each rule exists.
 function isValidProtectedPath(value: string): boolean {
-  return validateBudgetGlob(value) === null;
+  return validateProtectedPathFlag(value) === null;
 }
 
 function parseArgs(argv: string[]) {

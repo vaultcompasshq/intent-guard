@@ -36,4 +36,18 @@ describe("freezeContract budget path validation", () => {
       }),
     ).toThrow(/\.\.\/x/);
   });
+
+  it("freezes a contract whose protected_paths carries a brace group, a character class, and a leading '-'", () => {
+    // Contract-level accepts these: they are literal characters to the
+    // matcher, and real git paths (app/[slug]/** is a Next.js/SvelteKit
+    // dynamic-route directory) can contain them. Only the extract
+    // --protected-path flag rejects them.
+    const frozen = freezeContract(
+      draftContract({
+        protected_paths: ["src/{a,b}/**", "app/[slug]/**", "-legacy/**"],
+      }),
+      { approvedBy: "tester", method: "explicit-flag" },
+    );
+    expect(frozen.approval?.approved_by).toBe("tester");
+  });
 });

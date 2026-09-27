@@ -444,6 +444,14 @@ export interface TrustedControls {
   /** True when the head carries a contract at all. */
   headContractFound: boolean;
   /**
+   * The head's own (unapproved) contract, or null when it carries none.
+   * Never judged against -- the base governs the run -- but read by the
+   * gate to report a defect in what the head proposes, such as a budget
+   * entry that would enforce nothing once merged, on the proposal line
+   * rather than as a blocking reason.
+   */
+  headContract: IntentContract | null;
+  /**
    * True when the head's approval block (or frozen_by) is not the base's.
    * On its own this is a fact, not a verdict: the gate decides what to do
    * with it, and only refuses when it is enforcing a frozen contract.
@@ -520,6 +528,7 @@ export function loadTrustedControls(projectRoot: string, ref: string): TrustedCo
     contractShapeChange,
     configShapeChange,
     headContractFound: head.file !== null,
+    headContract: head.contract,
     approvalDiffers: approvalOf(base.contract) !== approvalOf(head.contract),
     proposals,
   };

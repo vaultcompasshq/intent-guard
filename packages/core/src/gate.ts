@@ -105,13 +105,26 @@ export function checkGate(
   const config = trusted === null ? loadConfig(projectRoot) : trusted.config;
   const reasons: string[] = [];
 
+  // The head's own budget is never judged -- the base governs this run --
+  // but a defect in what the head proposes is worth naming now: merging it
+  // as-is would freeze (or already has frozen) a contract that enforces
+  // nothing for that entry, and lock every later check after merge. This is
+  // a diagnostic on the proposal line, not a reason, so it never changes the
+  // exit code below.
+  const headBudgetProposals =
+    trusted !== null && trusted.headContract
+      ? validateBudgetPaths(trusted.headContract.budget).map(
+          (issue) => `proposed budget invalid: ${describeBudgetPathIssue(issue)}`,
+        )
+      : [];
+
   // Present only in pull-request mode, and mutated in exactly one place below.
   const summary: TrustBaseSummary | null =
     trusted === null
       ? null
       : {
           ref: trusted.ref,
-          proposals: trusted.proposals,
+          proposals: [...trusted.proposals, ...headBudgetProposals],
           contractChanged: trusted.contractChanged,
           configChanged: trusted.configChanged,
           baseContractFound: trusted.contract !== null || trusted.contractError !== null,
