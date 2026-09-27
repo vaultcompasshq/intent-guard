@@ -64,7 +64,9 @@ block, and a path outside `allowed_paths`, a changed-file count over
 `allow_new_dependencies` is false are soft blocks. A missing or unapproved
 contract fails too, because a gate with nothing to check against is not a
 gate that passed. A budget block does not appear on a contract by itself:
-`intent-guard extract --protected-path <glob>` (repeatable) adds
+`intent-guard extract --protected-path <glob>` (repeatable; the supported
+wildcards are `*`, `**` and `?` only, see
+[Glob syntax](docs/cli-reference.md#glob-syntax)) adds
 `protected_paths` to the draft, `intent-guard import-spec` can pull a full
 budget block from a fenced yaml block in a superpowers spec, and otherwise the
 drafted contract is hand-edited before `intent-guard freeze`.
