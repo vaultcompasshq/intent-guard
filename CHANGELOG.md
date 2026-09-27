@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-27
+
 ### Changed
 
 - **A change budget's `protected_paths` and `allowed_paths` are now validated

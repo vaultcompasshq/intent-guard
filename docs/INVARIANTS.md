@@ -18,12 +18,12 @@ form `[[ ! "${IG_VERSION}" =~ <shape> ]]` twice
 (`scripts/tests/action-hardening-drift.test.mjs`). The description is the
 third copy. Removing one executable match drops both counts.
 
-The default is `1.6.0` at `action.yml:41`.
+The default is `1.7.0` at `action.yml:41`.
 
 ## On a pull request, `version` may not pin older than this tag's scanner
 
 `IG_TAG_SCANNER_MAJOR`, `IG_TAG_SCANNER_MINOR` and `IG_TAG_SCANNER_PATCH`
-are `1`, `6` and `0` at `action.yml:257` through `action.yml:259`.
+are `1`, `7` and `0` at `action.yml:257` through `action.yml:259`.
 `IG_TAG_SCANNER` is assembled from those three at `action.yml:260`. The
 comparison that refuses an older pin is `action.yml:300` through
 `action.yml:307`, and the error that names both versions is
@@ -78,16 +78,16 @@ is written at `action.yml:575`.
 
 ## The action tag and the installed package can be different numbers
 
-They are not right now: `README.md:259` pins `vaultcompasshq/intent-guard@v1.6.0`,
-and `README.md:266` says that tag installs `@vaultcompass/intent-guard@1.6.0`,
+They are not right now: `README.md:265` pins `vaultcompasshq/intent-guard@v1.7.0`,
+and `README.md:272` says that tag installs `@vaultcompass/intent-guard@1.7.0`,
 because this release moved the action tag and the packages together. They
 diverged briefly at 1.5.3, an action-only tag documented at
-`CHANGELOG.md:86` that moved the workflow file without publishing new
-packages; `CHANGELOG.md:113` still records that history, naming
+`CHANGELOG.md:144` that moved the workflow file without publishing new
+packages; `CHANGELOG.md:172` still records that history, naming
 `IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
 version is the `version` input default at `action.yml:41`, the scanner
 constant at `action.yml:257` through `action.yml:260`, and the package
-version `1.6.0` in `package.json:4`, `packages/cli/package.json:3`,
+version `1.7.0` in `package.json:4`, `packages/cli/package.json:3`,
 `packages/core/package.json:3`, `packages/schema/package.json:3` and
 `packages/skill/package.json:3`. Whenever a future action-only tag moves
 `action.yml` without a package release, this section goes stale again the
