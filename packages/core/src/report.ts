@@ -293,6 +293,12 @@ export function renderConductorReportMarkdown(report: ConductorReport): string {
     ? report.gate.reasons.map((reason) => `- ${reason}`)
     : ["- No blocking gate reasons."]);
 
+  section(
+    lines,
+    "Gate warnings",
+    report.gate.warnings.map((warning) => `- ${warning}`),
+  );
+
   if (report.gate.drift) {
     const drift = report.gate.drift;
     lines.push(

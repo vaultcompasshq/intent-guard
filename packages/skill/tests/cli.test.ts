@@ -729,10 +729,12 @@ describe("conductor-check (enforcement gate)", () => {
     expect(out.budget.ok).toBe(true);
   });
 
-  it("blocks with exit 1 when a frozen contract carries a whitespace-padded budget entry", async () => {
+  it("warns with exit 0 when a frozen contract carries a whitespace-padded budget entry", async () => {
     // freeze itself now refuses this glob, so the only way a frozen contract
     // carries one is a hand edit after freezing, or a contract frozen before
-    // this validator existed. check must not silently ignore it: this
+    // this validator existed. check must not silently ignore it, but 1.7.0
+    // warns rather than blocks (docs/release/stability-policy.md's
+    // deprecation rule); 2.0.0 turns this into a blocking reason. This
     // exercises the gate's own validateBudgetPaths check, since nothing in
     // the schema catches a whitespace-padded value.
     const dir = await frozenProjectWith(
@@ -745,15 +747,17 @@ describe("conductor-check (enforcement gate)", () => {
         '\nbudget:\n  protected_paths:\n    - " src/legacy/** "\n',
     );
     const res = await run("check-cli.js", ["--project", dir, "--json"]);
-    expect(res.code).toBe(1);
+    expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
-    expect(out.status).toBe("blocked");
+    expect(out.status).toBe("ok");
     expect(
-      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("src/legacy/**")),
+      out.warnings.some(
+        (w: string) => w.includes("protected_paths") && w.includes("src/legacy/**") && w.includes("2.0.0"),
+      ),
     ).toBe(true);
   });
 
-  it("blocks with exit 1 when a frozen contract carries a '..' segment, naming the value", async () => {
+  it("warns with exit 0 when a frozen contract carries a '..' segment, naming the value", async () => {
     const dir = await frozenProjectWith(
       "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
     );
@@ -763,12 +767,30 @@ describe("conductor-check (enforcement gate)", () => {
       readFileSync(contractFile, "utf8") + '\nbudget:\n  protected_paths:\n    - "../x"\n',
     );
     const res = await run("check-cli.js", ["--project", dir, "--json"]);
-    expect(res.code).toBe(1);
+    expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
-    expect(out.status).toBe("blocked");
+    expect(out.status).toBe("ok");
     expect(
-      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("../x")),
+      out.warnings.some((w: string) => w.includes("protected_paths") && w.includes("../x") && w.includes("2.0.0")),
     ).toBe(true);
+  });
+
+  it("prints the budget-path warning in check's plain-text output", async () => {
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") + '\nbudget:\n  protected_paths:\n    - "../x"\n',
+    );
+    const res = await run("check-cli.js", ["--project", dir]);
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain("✓ Intent Guard gate: ok");
+    expect(res.stdout).toContain("warning:");
+    expect(res.stdout).toContain("protected_paths");
+    expect(res.stdout).toContain("../x");
+    expect(res.stdout).toContain("2.0.0");
   });
 
   it("does not block on a protected_paths entry with a brace group, a character class, or a leading '-'", async () => {
@@ -923,6 +945,35 @@ describe("conductor-report", () => {
     expect(res.stdout).toContain("# Intent Guard report");
     expect(res.stdout).toContain("Status: ok");
     expect(res.stdout).toContain("Acceptance criteria");
+  });
+
+  it("surfaces a budget-path warning in the report's markdown and JSON, without blocking", async () => {
+    const dir = await frozenProjectWith(
+      "Update the readme usage docs. Do not change source. Done when one usage example is documented.",
+    );
+    const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
+    writeFileSync(
+      contractFile,
+      readFileSync(contractFile, "utf8") + '\nbudget:\n  protected_paths:\n    - "../x"\n',
+    );
+
+    const textRes = await run("report-cli.js", ["--project", dir]);
+    expect(textRes.code).toBe(0);
+    expect(textRes.stdout).toContain("Status: ok");
+    expect(textRes.stdout).toContain("## Gate warnings");
+    expect(textRes.stdout).toContain("protected_paths");
+    expect(textRes.stdout).toContain("../x");
+    expect(textRes.stdout).toContain("2.0.0");
+
+    const jsonRes = await run("report-cli.js", ["--project", dir, "--json"]);
+    expect(jsonRes.code).toBe(0);
+    const out = JSON.parse(jsonRes.stdout);
+    expect(out.status).toBe("ok");
+    expect(
+      out.gate.warnings.some(
+        (w: string) => w.includes("protected_paths") && w.includes("../x") && w.includes("2.0.0"),
+      ),
+    ).toBe(true);
   });
 
   it("returns JSON and exit 1 for blocking drift", async () => {

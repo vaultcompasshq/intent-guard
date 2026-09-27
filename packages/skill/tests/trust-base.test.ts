@@ -883,12 +883,15 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
     ).toBe(true);
   });
 
-  it("blocks under trust-base mode when the base contract itself carries an invalid budget entry, even though the head's copy is fixed", async () => {
+  it("warns under trust-base mode when the base contract itself carries an invalid budget entry, even though the head's copy is fixed", async () => {
     // Discriminating on purpose: the head's contract is the ORIGINAL, valid
     // BASE_CONTRACT (as if the entry had already been fixed there), while the
     // base ref is the broken one. A gate that wrongly validated the head's
-    // budget instead of the base's would pass this run; the base still has
-    // to govern it, so it must block.
+    // budget instead of the base's would pass this run for the wrong reason;
+    // the base still has to govern it, so the warning must come from the
+    // base's copy. 1.7.0 warns rather than blocks
+    // (docs/release/stability-policy.md's deprecation rule); 2.0.0 turns this
+    // into a blocking reason.
     const baseWithBadBudget = BASE_CONTRACT.replace(
       'budget:\n  protected_paths:\n    - "**/payment/**"\n',
       'budget:\n  protected_paths:\n    - "../x"\n',
@@ -905,19 +908,21 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
       "--json",
     ]);
 
-    expect(res.code).toBe(1);
+    expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
-    expect(out.status).toBe("blocked");
+    expect(out.status).toBe("ok");
     expect(
-      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("../x")),
+      out.warnings.some(
+        (w: string) => w.includes("protected_paths") && w.includes("../x") && w.includes("2.0.0"),
+      ),
     ).toBe(true);
   });
 
   it("does not repeat the base's own budget defect as a proposal when the head's copy is unchanged", async () => {
     // The head did not introduce this entry; it inherited it, byte-identical,
-    // from the base. It still has to block (the base governs, and reasons
-    // names it), but it is not something THIS pull request is proposing, so
-    // the proposal line should not say so a second time.
+    // from the base. The base still governs, and warnings names it, but it is
+    // not something THIS pull request is proposing, so the proposal line
+    // should not say so a second time.
     const baseWithBadBudget = BASE_CONTRACT.replace(
       'budget:\n  protected_paths:\n    - "**/payment/**"\n',
       'budget:\n  protected_paths:\n    - "../x"\n',
@@ -934,11 +939,11 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
       "--json",
     ]);
 
-    expect(res.code).toBe(1);
+    expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
-    expect(out.status).toBe("blocked");
+    expect(out.status).toBe("ok");
     expect(
-      out.reasons.some((r: string) => r.includes("protected_paths") && r.includes("../x")),
+      out.warnings.some((w: string) => w.includes("protected_paths") && w.includes("../x")),
     ).toBe(true);
     expect(
       out.trustBase.proposals.some((p: string) => p.includes("proposed budget invalid")),

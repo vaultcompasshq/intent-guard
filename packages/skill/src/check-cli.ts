@@ -259,12 +259,19 @@ function proposalLines(): string[] {
   ];
 }
 
+// Non-blocking, so it prints in both branches below: a warning can stand
+// alone on an otherwise-ok run, or sit next to an unrelated blocking reason.
+function warningLines(): string[] {
+  return result.warnings.map((warning) => `  warning: ${warning}`);
+}
+
 if (args.json) {
   console.log(JSON.stringify({ ...result, crossSessionDrift: crossSession }));
 } else if (result.status === "blocked") {
   console.error("✖ Intent Guard gate: BLOCKED");
   for (const reason of result.reasons) console.error(`  - ${reason}`);
   for (const line of proposalLines()) console.error(line);
+  for (const line of warningLines()) console.error(line);
   if (result.drift) {
     console.error("");
     console.error(formatDriftMessage(result.drift));
@@ -272,6 +279,7 @@ if (args.json) {
 } else {
   console.log("✓ Intent Guard gate: ok");
   for (const line of proposalLines()) console.log(line);
+  for (const line of warningLines()) console.log(line);
   if (result.drift && result.drift.action !== "proceed") {
     console.log(`  drift: ${result.drift.action} (${result.drift.overall}/100)`);
   }
