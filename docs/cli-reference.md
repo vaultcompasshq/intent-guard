@@ -489,10 +489,11 @@ budget block can enter or leave a contract: rejected at `import-spec` and
   they do not refuse it yet, so an upgrade never starts blocking on its own):
   non-empty, no leading slash, no backslash, no
   surrounding whitespace, no `..` segment, no stray `.` segment (anywhere but
-  a leading `./`), not just `./` on its own (which normalizes to nothing),
-  and no INTERNAL empty segment (`src//x`) -- a trailing one (`src//`) is
-  accepted, because the matcher strips trailing slashes before comparing a
-  no-wildcard glob, the same as it does for a single trailing slash (`src/`).
+  a leading `./`), not just `./` on its own, or `./` followed by any run of
+  trailing slashes (`.//`, `.///`), all of which normalize to nothing, and no
+  INTERNAL empty segment (`src//x`) -- a trailing one (`src//`) is accepted,
+  because the matcher strips trailing slashes before comparing a no-wildcard
+  glob, the same as it does for a single trailing slash (`src/`).
   A brace group, a character class, and a leading `-` are all accepted here,
   because a real git path can contain any of them.
 - **Flag-level** (`intent-guard extract --protected-path` only): every

@@ -84,6 +84,14 @@ describe("validateBudgetGlob (contract-level)", () => {
     expect(validateBudgetGlob("./")).not.toBeNull();
   });
 
+  it("rejects './/' with the same reason as './', both normalizing to nothing", () => {
+    expect(validateBudgetGlob(".//")).toBe(validateBudgetGlob("./"));
+  });
+
+  it("rejects './//' with the same reason as './', both normalizing to nothing", () => {
+    expect(validateBudgetGlob(".///")).toBe(validateBudgetGlob("./"));
+  });
+
   it("accepts a value with no empty segment", () => {
     expect(validateBudgetGlob("src/legacy/**")).toBeNull();
   });

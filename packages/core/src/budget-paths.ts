@@ -52,7 +52,17 @@ export function validateBudgetGlob(value: string): string | null {
   if (value.includes("\\")) {
     return "must not contain a backslash";
   }
-  if (value === "./") {
+  // Simulate the same two-step normalization budget.ts's matcher applies to
+  // a no-wildcard glob before treating it as a directory prefix:
+  // normalizePath strips one leading './', then matchesGlob's own
+  // no-wildcard branch strips every trailing slash. If nothing survives
+  // both steps, the value is './' itself, or './' followed by any run of
+  // trailing slashes ('.//', './//', ...) -- every one of them normalizes
+  // to an empty prefix, and no real git path (which is never empty) can
+  // ever equal or start with that. Reject all of them with the same
+  // reason, regardless of how many trailing slashes produced it.
+  const matcherNormalized = value.replace(/^\.\//, "").replace(/\/+$/, "");
+  if (matcherNormalized === "") {
     return "must not be just './' (that normalizes to nothing and cannot match any path)";
   }
   // Trailing slashes are stripped before this check, not before any other:
