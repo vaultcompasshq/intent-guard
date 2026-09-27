@@ -303,7 +303,7 @@ binary rather than about the change. Run this on `ubuntu-latest` or
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `version` | `1.6.0` | Exact version of `@vaultcompass/intent-guard` to install, matching `^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
+| `version` | `1.6.0` | Exact version of `@vaultcompass/intent-guard` to install: three dot-separated numbers with no leading zeros, nothing else (the exact pattern is in `action.yml`). A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
 | `project` | `.` | Project root, relative to the workspace. No `..`, no absolute path, no leading `-`. |
 | `base` | *(from the event)* | Ref the changed paths are measured against. On a `pull_request` event, `origin/$GITHUB_BASE_REF`. It decides which paths are judged, never where the rules are read from; the action warns on a run that has one and no trust base. |
 | `paths` | *(empty)* | Explicit comma-separated paths instead of, or as well as, `base`. One line: a newline in the value is refused rather than read as another separator. |
@@ -336,7 +336,8 @@ post them somewhere itself.
 
 To run this gate alongside dep-guard and vault-guard in a single job, use
 [the Conductor action](https://github.com/vaultcompasshq/conductor) instead,
-which installs and runs all three.
+which installs and runs all three, and can also run gitleaks and
+osv-scanner beside them from your own install step.
 
 ### Develop from source
 
