@@ -223,6 +223,104 @@ describe("conductor-extract", () => {
     expect(res.stderr).toMatch(/protected-path/i);
     expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
+
+  it("rejects a --protected-path value that looks like another flag", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "--dry-run",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    // The bug this guards against: "--dry-run" was silently stored as the
+    // glob, --dry-run itself never took effect, and the draft was written.
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a --protected-path with a backslash", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "src\\legacy\\**",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a --protected-path with leading or trailing whitespace", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", " src/legacy/** ",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a --protected-path that is just '.'", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", ".",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a --protected-path with a '.' segment that is not a leading './'", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "src/./x",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects an empty --protected-path", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a whitespace-only --protected-path", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "   ",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("accepts a leading './' and brace expansion in a --protected-path", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "./{src,config}/**",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.contract_yaml).toContain("./{src,config}/**");
+  });
 });
 
 describe("conductor-import-spec", () => {

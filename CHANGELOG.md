@@ -29,8 +29,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - `intent-guard extract` takes a repeatable `--protected-path <glob>` flag
   that appends to `budget.protected_paths` on the drafted contract, in the
   same shape `intent-guard import-spec` already writes. Each value must be a
-  non-empty relative glob (no leading slash, no `..` segment). Without the
-  flag, extract's output is unchanged: no `budget` block, same as before.
+  non-empty relative glob: no leading `-` or `/`, no backslash, no
+  surrounding whitespace, no `..` segment, and no `.` segment except a
+  leading `./`. (The leading-`-` check closes a hole where
+  `--protected-path --dry-run` stored `--dry-run` as the glob and the draft
+  was written to disk instead of only printed.) Without the flag, extract's
+  output is unchanged: no `budget` block, same as before.
 
 ### Tests
 

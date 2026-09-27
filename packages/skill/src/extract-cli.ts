@@ -44,12 +44,26 @@ const VALUE_FLAGS = new Set(["--project", "--text", "--protected-path"]);
 // A repeatable --protected-path is appended to budget.protected_paths, so each
 // value has to already look like a glob the gate can evaluate: relative (the
 // gate compares against git-relative changed paths, so a leading slash could
-// never match anything) and without a '..' segment (a budget meant to protect
-// a path has no business climbing out of the project).
+// never match anything), without a '..' segment (a budget meant to protect a
+// path has no business climbing out of the project), and not itself another
+// flag (a value starting with '-' -- most concretely `--protected-path
+// --dry-run` -- would otherwise be swallowed as the glob while the flag it
+// looks like silently never takes effect). A backslash, surrounding
+// whitespace, or a stray '.' segment (anywhere but a leading './') are all
+// rejected too: none of them are meaningful in a glob the gate evaluates, and
+// each is more likely a mistake than an intentional pattern.
 function isValidProtectedPath(value: string): boolean {
   if (value.trim().length === 0) return false;
+  if (value !== value.trim()) return false;
+  if (value.startsWith("-")) return false;
   if (value.startsWith("/")) return false;
-  return !value.split("/").includes("..");
+  if (value.includes("\\")) return false;
+  const segments = value.split("/");
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i] === "..") return false;
+    if (segments[i] === "." && (i !== 0 || segments.length === 1)) return false;
+  }
+  return true;
 }
 
 function parseArgs(argv: string[]) {
@@ -70,7 +84,7 @@ function parseArgs(argv: string[]) {
       const value = argv[++i];
       if (!isValidProtectedPath(value)) {
         badUsage(
-          `--protected-path '${value}' must be a non-empty relative glob (no leading slash, no '..' segment)`,
+          `--protected-path '${value}' must be a non-empty relative glob (no leading '-' or '/', no backslash, no surrounding whitespace, no '..' segment, no '.' segment except a leading './')`,
         );
       }
       protectedPaths.push(value);
@@ -107,7 +121,7 @@ if (args.version) printVersion();
 
 if (!args.userText) {
   console.error(
-    "Usage: intent-guard-extract --text <user ask> [--project <root>] [--dry-run]",
+    "Usage: intent-guard-extract --text <user ask> [--project <root>] [--protected-path <glob>]... [--dry-run]",
   );
   process.exit(1);
 }
