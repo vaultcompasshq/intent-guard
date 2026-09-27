@@ -152,6 +152,77 @@ describe("conductor-extract", () => {
     expect(written).not.toContain("frozen_by: user");
     expect(written).not.toContain("approval:");
   });
+
+  it("writes no budget block without --protected-path (current output shape)", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button. No new API endpoints. Verify file downloads.",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.contract_yaml).not.toContain("budget:");
+    const written = readFileSync(out.written_path, "utf8");
+    expect(written).not.toContain("budget:");
+  });
+
+  it("one --protected-path yields a budget block with that path", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "src/legacy/**",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.contract_yaml).toContain("budget:");
+    expect(out.contract_yaml).toContain("protected_paths:");
+    expect(out.contract_yaml).toContain("src/legacy/**");
+    const written = readFileSync(out.written_path, "utf8");
+    expect(written).toContain("budget:");
+    expect(written).toContain("src/legacy/**");
+  });
+
+  it("two --protected-path flags yield both, in order", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "src/legacy/**",
+      "--protected-path", "config/**",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    const written = readFileSync(out.written_path, "utf8");
+    const idxLegacy = written.indexOf("src/legacy/**");
+    const idxConfig = written.indexOf("config/**");
+    expect(idxLegacy).toBeGreaterThan(-1);
+    expect(idxConfig).toBeGreaterThan(idxLegacy);
+  });
+
+  it("rejects a --protected-path with a leading slash", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "/etc/passwd",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
+
+  it("rejects a --protected-path with a '..' segment", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "../secrets/**",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
+  });
 });
 
 describe("conductor-import-spec", () => {

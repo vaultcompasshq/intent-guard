@@ -87,7 +87,14 @@ separate (`intent-guard-freeze`).
 |------|---------|
 | `--project <root>` | target project (default `.`) |
 | `--text "<ask>"` | the user's ask (required) |
+| `--protected-path <glob>` | append a glob to `budget.protected_paths` (repeatable) |
 | `--dry-run` | print the draft JSON, write nothing |
+
+Each `--protected-path` value must be a non-empty relative glob: no leading
+slash, no `..` segment. Without `--protected-path`, the draft carries no
+`budget` block at all -- a budget is otherwise authored by hand or produced by
+`intent-guard import-spec` from a fenced yaml block in a superpowers spec (see
+[Change budget](#change-budget)).
 
 JSON: `valid`, `written_path`, `frozen` (always false), `next_step`,
 `prompt_score`, `needs_coaching`, `coaching`, `contract_yaml`.

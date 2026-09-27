@@ -24,6 +24,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   for the v3-to-v4 migration; the full workspace suite (659 tests) passes
   unmodified.
 
+### Added
+
+- `intent-guard extract` takes a repeatable `--protected-path <glob>` flag
+  that appends to `budget.protected_paths` on the drafted contract, in the
+  same shape `intent-guard import-spec` already writes. Each value must be a
+  non-empty relative glob (no leading slash, no `..` segment). Without the
+  flag, extract's output is unchanged: no `budget` block, same as before.
+
 ### Changed
 
 - Moved this repository's own CI and release workflow pins off their prior

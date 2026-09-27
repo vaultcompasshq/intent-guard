@@ -59,7 +59,11 @@ block, and a path outside `allowed_paths`, a changed-file count over
 `max_files`, or an edit to a manifest or lockfile when
 `allow_new_dependencies` is false are soft blocks. A missing or unapproved
 contract fails too, because a gate with nothing to check against is not a
-gate that passed.
+gate that passed. A budget block does not appear on a contract by itself:
+`intent-guard extract --protected-path <glob>` (repeatable) adds
+`protected_paths` to the draft, `intent-guard import-spec` can pull a full
+budget block from a fenced yaml block in a superpowers spec, and otherwise the
+drafted contract is hand-edited before `intent-guard freeze`.
 
 What it does not do is read the diff. It sees which files a change touched,
 never what changed inside them, so work that stays within the approved paths
