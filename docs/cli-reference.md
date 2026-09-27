@@ -90,8 +90,11 @@ separate (`intent-guard-freeze`).
 | `--protected-path <glob>` | append a glob to `budget.protected_paths` (repeatable) |
 | `--dry-run` | print the draft JSON, write nothing |
 
-Each `--protected-path` value must be a non-empty relative glob: no leading
-slash, no `..` segment. Without `--protected-path`, the draft carries no
+Each `--protected-path` value must be a relative glob as git would print the
+path: no leading slash, no backslash, no `..` segment, no `.` segment other
+than a leading `./`, no surrounding whitespace, and it may not start with `-`
+(so a following flag cannot be swallowed as the value). `**` and braces are
+accepted. Without `--protected-path`, the draft carries no
 `budget` block at all -- a budget is otherwise authored by hand or produced by
 `intent-guard import-spec` from a fenced yaml block in a superpowers spec (see
 [Change budget](#change-budget)).
