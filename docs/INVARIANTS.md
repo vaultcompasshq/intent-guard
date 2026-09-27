@@ -48,8 +48,8 @@ else leaves `NPM_OK` at 0. The refusal text is `action.yml:549`: `npm 10.5.2
 or newer`. The remediation is `action.yml:550`: Node 20.13.0 and later, and
 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1.
 
-README states the same floor at `README.md:275` and the same Node bound at
-`README.md:278` through `README.md:279`. The drift check also pins the
+README states the same floor at `README.md:281` and the same Node bound at
+`README.md:284` through `README.md:285`. The drift check also pins the
 remediation printf at `action.yml:550` as an executable line.
 
 The drift check pins the five comparison fragments and the `npm 10.5.2 or
