@@ -130,7 +130,7 @@ export function checkGate(
   //
   // Skipped when the head's issues are exactly the base's: an unchanged
   // defect is not something THIS pull request is proposing, it is inherited,
-  // and it is already named once as a blocking reason (below) whenever the
+  // and it is already named once as a warning (below) whenever the
   // base itself is invalid. Without this, an untouched bad contract reported
   // the same entry twice, as a proposal and as a reason, which reads as the
   // pull request having introduced it.

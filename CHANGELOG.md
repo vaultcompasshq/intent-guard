@@ -9,9 +9,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- **A change budget's `protected_paths` and `allowed_paths` are now validated
+- **A change budget's `protected_paths` and `allowed_paths` are now checked
   the same way everywhere a budget block can enter or leave a contract, not
-  only at `intent-guard extract --protected-path`.** (#103) The rule that a
+  only at `intent-guard extract --protected-path`: refused at `import-spec`
+  and `freeze`, warned about at `check` and `report`.** (#103) The rule that a
   glob has to be relative, whitespace-free, and free of a `..` or stray `.`
   segment previously lived only in `extract-cli.ts`; the JSON schema required
   only `minLength: 1`. A spec document imported with `intent-guard
@@ -60,8 +61,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `--trust-base` (pull-request) mode that fix lands the same out-of-band way
   any re-freeze does: a re-freeze committed on a branch trips the
   self-approval refusal, so the corrected, re-approved contract has to reach
-  the base ref through the project's normal merge path before a pull request
-  can pass again. No change is expected in practice: a leading slash, a
+  the base ref through the project's normal merge path before the warning
+  clears on pull-request runs (pull requests still pass meanwhile; only the
+  one carrying the re-freeze is blocked, by self-approval). No change is
+  expected in practice: a leading slash, a
   backslash, or surrounding whitespace in an existing budget entry was
   already a glob that matched nothing.
 

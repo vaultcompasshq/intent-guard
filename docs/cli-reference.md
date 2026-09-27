@@ -477,8 +477,9 @@ nothing, because a directory literally named `{a,b}` is rare; write two
 entries instead.
 
 A `protected_paths` or `allowed_paths` entry that silently matches nothing is
-a gate that silently protects nothing, so a value is rejected wherever a
-budget block can enter or leave a contract, in two tiers:
+a gate that silently protects nothing, so a value is checked wherever a
+budget block can enter or leave a contract: rejected at `import-spec` and
+`freeze`, warned about at `check` and `report` until 2.0.0, in two tiers:
 
 - **Contract-level** (`intent-guard import-spec` and `intent-guard freeze` --
   the last gate before a hand-edited draft is trusted -- refuse a NEW entry
