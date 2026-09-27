@@ -310,16 +310,29 @@ describe("conductor-extract", () => {
     expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
 
-  it("accepts a leading './' and brace expansion in a --protected-path", async () => {
+  it("accepts a leading './' in a --protected-path", async () => {
     const dir = tmpProject();
     const res = await run("extract-cli.js", [
       "--project", dir,
       "--text", "Add a CSV export button.",
-      "--protected-path", "./{src,config}/**",
+      "--protected-path", "./src/**",
     ]);
     expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
-    expect(out.contract_yaml).toContain("./{src,config}/**");
+    expect(out.contract_yaml).toContain("./src/**");
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(true);
+  });
+
+  it("rejects brace expansion in a --protected-path", async () => {
+    const dir = tmpProject();
+    const res = await run("extract-cli.js", [
+      "--project", dir,
+      "--text", "Add a CSV export button.",
+      "--protected-path", "src/{a,b}/**",
+    ]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/protected-path/i);
+    expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
 });
 

@@ -51,13 +51,18 @@ const VALUE_FLAGS = new Set(["--project", "--text", "--protected-path"]);
 // looks like silently never takes effect). A backslash, surrounding
 // whitespace, or a stray '.' segment (anywhere but a leading './') are all
 // rejected too: none of them are meaningful in a glob the gate evaluates, and
-// each is more likely a mistake than an intentional pattern.
+// each is more likely a mistake than an intentional pattern. Brace groups
+// (`{a,b}`) and character classes (`[abc]`) are rejected as well: budget.ts's
+// matchesGlob escapes `{ } [ ]` as literal characters rather than expanding
+// them, so a path like `src/{legacy,vendor}/**` would pass validation, get
+// frozen into a contract, and then never match anything at gate time.
 function isValidProtectedPath(value: string): boolean {
   if (value.trim().length === 0) return false;
   if (value !== value.trim()) return false;
   if (value.startsWith("-")) return false;
   if (value.startsWith("/")) return false;
   if (value.includes("\\")) return false;
+  if (/[{}[\]]/.test(value)) return false;
   const segments = value.split("/");
   for (let i = 0; i < segments.length; i++) {
     if (segments[i] === "..") return false;
@@ -84,7 +89,7 @@ function parseArgs(argv: string[]) {
       const value = argv[++i];
       if (!isValidProtectedPath(value)) {
         badUsage(
-          `--protected-path '${value}' must be a non-empty relative glob (no leading '-' or '/', no backslash, no surrounding whitespace, no '..' segment, no '.' segment except a leading './')`,
+          `--protected-path '${value}' must be a non-empty relative glob (no leading '-' or '/', no backslash, no surrounding whitespace, no '..' segment, no '.' segment except a leading './'). Braces and character classes ('{', '}', '[', ']') are not supported by the matcher and are rejected; '*', '**', and '?' are.`,
         );
       }
       protectedPaths.push(value);
