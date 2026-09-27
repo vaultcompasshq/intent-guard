@@ -91,6 +91,13 @@ describe("validateBudgetGlob (contract-level)", () => {
   it("rejects a value with an empty segment (consecutive slashes)", () => {
     expect(validateBudgetGlob("src//x")).not.toBeNull();
   });
+
+  it("accepts a value with a trailing double slash, which the matcher strips to a working prefix", () => {
+    // budget.ts's matchesGlob strips trailing slashes with /\/+$/ before
+    // comparing a no-wildcard glob, so src// is exactly as working as src or
+    // src/. Only an INTERNAL empty segment (src//x, above) can never match.
+    expect(validateBudgetGlob("src//")).toBeNull();
+  });
 });
 
 // Flag-level rules: extract --protected-path only. A superset of the

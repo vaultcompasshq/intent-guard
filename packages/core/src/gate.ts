@@ -2,7 +2,11 @@ import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { readContract, isContractFrozen, DEFAULT_CONTRACT_FILE } from "./contract-store.js";
 import { scoreDrift, type DriftSignals, type DriftScore } from "./drift.js";
 import { evaluateBudget, type BudgetResult } from "./budget.js";
-import { describeBudgetPathIssue, validateBudgetPaths } from "./budget-paths.js";
+import {
+  describeBudgetPathIssue,
+  validateBudgetPaths,
+  type BudgetPathIssue,
+} from "./budget-paths.js";
 import { loadConfig } from "./config.js";
 import { STATE_DIR } from "./state-dir.js";
 import {
@@ -111,12 +115,28 @@ export function checkGate(
   // nothing for that entry, and lock every later check after merge. This is
   // a diagnostic on the proposal line, not a reason, so it never changes the
   // exit code below.
-  const headBudgetProposals =
+  //
+  // Skipped when the head's issues are exactly the base's: an unchanged
+  // defect is not something THIS pull request is proposing, it is inherited,
+  // and it is already named once as a blocking reason (below) whenever the
+  // base itself is invalid. Without this, an untouched bad contract reported
+  // the same entry twice, as a proposal and as a reason, which reads as the
+  // pull request having introduced it.
+  const sameBudgetIssues = (a: BudgetPathIssue[], b: BudgetPathIssue[]): boolean =>
+    a.length === b.length &&
+    a.every(
+      (issue, i) =>
+        issue.rule === b[i].rule && issue.value === b[i].value && issue.reason === b[i].reason,
+    );
+  const headBudgetIssues =
     trusted !== null && trusted.headContract
-      ? validateBudgetPaths(trusted.headContract.budget).map(
-          (issue) => `proposed budget invalid: ${describeBudgetPathIssue(issue)}`,
-        )
+      ? validateBudgetPaths(trusted.headContract.budget)
       : [];
+  const baseBudgetIssues =
+    trusted !== null && trusted.contract ? validateBudgetPaths(trusted.contract.budget) : [];
+  const headBudgetProposals = sameBudgetIssues(headBudgetIssues, baseBudgetIssues)
+    ? []
+    : headBudgetIssues.map((issue) => `proposed budget invalid: ${describeBudgetPathIssue(issue)}`);
 
   // Present only in pull-request mode, and mutated in exactly one place below.
   const summary: TrustBaseSummary | null =

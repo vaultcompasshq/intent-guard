@@ -22,7 +22,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   The rules now live once, in `packages/core/src/budget-paths.ts`, split into
   two tiers. Contract-level (`validateBudgetGlob`: non-empty, no leading
   slash, no backslash, no surrounding whitespace, no `..` segment, no stray
-  `.` segment, not just `./` alone, no empty segment) applies at
+  `.` segment, not just `./` alone, no internal empty segment such as
+  `src//x` -- a trailing one, `src//`, is accepted, since the matcher strips
+  it the same as a single trailing slash) applies at
   `import-spec` (naming the file, the entry, and the reason, and writing
   nothing), at `freeze` (the last gate before a hand-edited draft is
   trusted), and at `check` / `report` (which refuse to gate on an
@@ -41,13 +43,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   report` in `--trust-base` mode also now name an invalid entry in the head's
   proposed (unapproved) budget on the proposal line, without changing the
   exit code, since the base contract still governs the run; the base's own
-  budget is still enforced as a blocking reason exactly as before.
+  budget is still enforced as a blocking reason exactly as before. That
+  proposal line is skipped when the head's issues are identical to the
+  base's, so an unchanged bad contract is named once, as a blocking reason,
+  rather than twice.
 
   **Migration cost:** an already-frozen contract that carries a
   `protected_paths` or `allowed_paths` entry the contract-level rule rejects
   (leading slash, backslash, surrounding whitespace, `..` segment, stray `.`
-  segment, `./` alone, or an empty segment) now blocks every `check` and
-  `report` run after upgrading, with no code change on the adopter's part.
+  segment, `./` alone, or an internal empty segment) now blocks every `check`
+  and `report` run after upgrading, with no code change on the adopter's part.
   The remedy is to edit the contract and run `intent-guard freeze` again. In
   `--trust-base` (pull-request) mode that fix lands the same out-of-band way
   any re-freeze does: the fixing pull request is itself judged against the

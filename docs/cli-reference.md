@@ -486,9 +486,11 @@ budget block can enter or leave a contract, in two tiers:
   that still carries one): non-empty, no leading slash, no backslash, no
   surrounding whitespace, no `..` segment, no stray `.` segment (anywhere but
   a leading `./`), not just `./` on its own (which normalizes to nothing),
-  and no empty segment (`src//x`). A brace group, a character class, and a
-  leading `-` are all accepted here, because a real git path can contain any
-  of them.
+  and no INTERNAL empty segment (`src//x`) -- a trailing one (`src//`) is
+  accepted, because the matcher strips trailing slashes before comparing a
+  no-wildcard glob, the same as it does for a single trailing slash (`src/`).
+  A brace group, a character class, and a leading `-` are all accepted here,
+  because a real git path can contain any of them.
 - **Flag-level** (`intent-guard extract --protected-path` only): every
   contract-level rule above, plus no leading `-` and no brace group or
   character class. A value typed straight into a command-line flag is far

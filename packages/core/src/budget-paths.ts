@@ -55,7 +55,12 @@ export function validateBudgetGlob(value: string): string | null {
   if (value === "./") {
     return "must not be just './' (that normalizes to nothing and cannot match any path)";
   }
-  if (value.includes("//")) {
+  // Trailing slashes are stripped before this check, not before any other:
+  // budget.ts's matchesGlob does the same (`/\/+$/`) for a no-wildcard glob,
+  // so `src//` is exactly as working a prefix as `src` or `src/`. Only an
+  // INTERNAL empty segment -- `src//x` -- is a glob no real git path (which
+  // never contains one) can ever match.
+  if (value.replace(/\/+$/, "").includes("//")) {
     return "must not contain an empty path segment (consecutive '/')";
   }
   const segments = value.split("/");
