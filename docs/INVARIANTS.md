@@ -18,12 +18,12 @@ form `[[ ! "${IG_VERSION}" =~ <shape> ]]` twice
 (`scripts/tests/action-hardening-drift.test.mjs`). The description is the
 third copy. Removing one executable match drops both counts.
 
-The default is `1.5.2` at `action.yml:41`.
+The default is `1.6.0` at `action.yml:41`.
 
 ## On a pull request, `version` may not pin older than this tag's scanner
 
 `IG_TAG_SCANNER_MAJOR`, `IG_TAG_SCANNER_MINOR` and `IG_TAG_SCANNER_PATCH`
-are `1`, `5` and `2` at `action.yml:257` through `action.yml:259`.
+are `1`, `6` and `0` at `action.yml:257` through `action.yml:259`.
 `IG_TAG_SCANNER` is assembled from those three at `action.yml:260`. The
 comparison that refuses an older pin is `action.yml:300` through
 `action.yml:307`, and the error that names both versions is
@@ -48,8 +48,8 @@ else leaves `NPM_OK` at 0. The refusal text is `action.yml:549`: `npm 10.5.2
 or newer`. The remediation is `action.yml:550`: Node 20.13.0 and later, and
 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1.
 
-README states the same floor at `README.md:269` and the same Node bound at
-`README.md:272` through `README.md:273`. The drift check also pins the
+README states the same floor at `README.md:275` and the same Node bound at
+`README.md:278` through `README.md:279`. The drift check also pins the
 remediation printf at `action.yml:550` as an executable line.
 
 The drift check pins the five comparison fragments and the `npm 10.5.2 or
@@ -76,17 +76,22 @@ signatures`. They are comments. The drift check pins the subshell, so those
 comments do not keep it green. The synthetic manifest the command depends on
 is written at `action.yml:575`.
 
-## The action tag and the installed package are different numbers
+## The action tag and the installed package can be different numbers
 
-`README.md:255` pins `vaultcompasshq/intent-guard@v1.5.3`.
-`README.md:260` says that tag installs `@vaultcompass/intent-guard@1.5.2`.
-The installed version is the `version` input default at `action.yml:41`,
-the scanner constant at `action.yml:257` through `action.yml:260`, and the
-package version `1.5.2` in `package.json:4`, `packages/cli/package.json:3`,
+They are not right now: `README.md:259` pins `vaultcompasshq/intent-guard@v1.6.0`,
+and `README.md:266` says that tag installs `@vaultcompass/intent-guard@1.6.0`,
+because this release moved the action tag and the packages together. They
+diverged briefly at 1.5.3, an action-only tag documented at
+`CHANGELOG.md:86` that moved the workflow file without publishing new
+packages; `CHANGELOG.md:113` still records that history, naming
+`IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
+version is the `version` input default at `action.yml:41`, the scanner
+constant at `action.yml:257` through `action.yml:260`, and the package
+version `1.6.0` in `package.json:4`, `packages/cli/package.json:3`,
 `packages/core/package.json:3`, `packages/schema/package.json:3` and
-`packages/skill/package.json:3`. `CHANGELOG.md:37` is the 1.5.3 action
-release. `CHANGELOG.md:64` through `CHANGELOG.md:65` still records the
-scanner constant as 1.5.2.
+`packages/skill/package.json:3`. Whenever a future action-only tag moves
+`action.yml` without a package release, this section goes stale again the
+same way, and the next package release is what re-converges it.
 
 ## Public repository hygiene is a lint, and CI runs it
 

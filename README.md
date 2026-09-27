@@ -87,7 +87,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.5.2`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.6.0`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -256,14 +256,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0        # required: the base branch has to be present
-      - uses: vaultcompasshq/intent-guard@v1.5.3
+      - uses: vaultcompasshq/intent-guard@v1.6.0
 ```
 
 No `version` input, because the default is the scanner this action tag shipped
-with. The action tag and the installed package are separate numbers.
-`vaultcompasshq/intent-guard@v1.5.3` installs `@vaultcompass/intent-guard@1.5.2`:
-1.5.3 moved the action and left the packages at 1.5.2. Read the tag as which
-workflow step you pinned, not as which package version gets installed.
+with. The action tag and the installed package can be separate numbers, as
+they were briefly at 1.5.3, an action-only tag that moved the workflow file
+without publishing new packages. `vaultcompasshq/intent-guard@v1.6.0` installs
+`@vaultcompass/intent-guard@1.6.0`: this release moved both together. Read the
+tag as which workflow step you pinned, and check the `version` input default
+below for which package version that tag actually installs.
 
 `fetch-depth: 0` is not optional on a pull request. Both `--base` and
 `--trust-base` resolve a branch the default shallow checkout does not fetch, and
@@ -295,7 +297,7 @@ binary rather than about the change. Run this on `ubuntu-latest` or
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `version` | `1.5.2` | Exact version of `@vaultcompass/intent-guard` to install, matching `^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
+| `version` | `1.6.0` | Exact version of `@vaultcompass/intent-guard` to install, matching `^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`. A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
 | `project` | `.` | Project root, relative to the workspace. No `..`, no absolute path, no leading `-`. |
 | `base` | *(from the event)* | Ref the changed paths are measured against. On a `pull_request` event, `origin/$GITHUB_BASE_REF`. It decides which paths are judged, never where the rules are read from; the action warns on a run that has one and no trust base. |
 | `paths` | *(empty)* | Explicit comma-separated paths instead of, or as well as, `base`. One line: a newline in the value is refused rather than read as another separator. |

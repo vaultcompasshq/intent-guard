@@ -53,13 +53,13 @@ describe("action.yml hardening drift check", () => {
   });
 
   // Exact executable lines, not a substring of the file. A comment that
-  // repeats IG_TAG_SCANNER_MINOR=5 or the Node sentence must not keep
+  // repeats IG_TAG_SCANNER_MINOR=6 or the Node sentence must not keep
   // these green after the real line is deleted or weakened.
   it("pins the scanner tag a pull request is compared against", () => {
     const lines = executableLines(actionYml);
     expect(lines).toContain("IG_TAG_SCANNER_MAJOR=1");
-    expect(lines).toContain("IG_TAG_SCANNER_MINOR=5");
-    expect(lines).toContain("IG_TAG_SCANNER_PATCH=2");
+    expect(lines).toContain("IG_TAG_SCANNER_MINOR=6");
+    expect(lines).toContain("IG_TAG_SCANNER_PATCH=0");
   });
 
   it("pins the Node remediation the npm floor prints", () => {
