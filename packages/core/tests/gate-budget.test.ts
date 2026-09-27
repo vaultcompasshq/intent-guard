@@ -84,31 +84,40 @@ describe("checkGate change budget", () => {
     expect(result.status).toBe("ok");
   });
 
-  it("blocks with a non-zero exit when a frozen contract carries a whitespace-padded budget entry, even with no diff", () => {
+  it("warns without blocking when a frozen contract carries a whitespace-padded budget entry, even with no diff", () => {
     // Exercises the gate's own validateBudgetPaths check directly: nothing
     // in the schema catches this (the schema only requires minLength 1), so
-    // this is the only fail-closed path for a contract that carries one.
+    // this is the only path that surfaces it for an already-frozen contract.
+    // 1.7.0 warns rather than blocks (docs/release/stability-policy.md's
+    // deprecation rule); 2.0.0 turns this into a blocking reason.
     const dir = setupHandFrozenWithInvalidBudget(
       'budget:\n  protected_paths:\n    - " src/legacy/** "\n',
     );
     const result = checkGate(dir, {});
-    expect(result.status).toBe("blocked");
-    expect(result.exitCode).toBe(1);
+    expect(result.status).toBe("ok");
+    expect(result.exitCode).toBe(0);
     expect(
-      result.reasons.some((r) => r.includes("protected_paths") && r.includes("src/legacy/**")),
+      result.warnings.some(
+        (w) =>
+          w.includes("protected_paths") && w.includes("src/legacy/**") && w.includes("2.0.0"),
+      ),
     ).toBe(true);
+    expect(result.reasons).toEqual([]);
   });
 
-  it("blocks with a non-zero exit when a frozen contract carries a '..' segment, even with no diff", () => {
+  it("warns without blocking when a frozen contract carries a '..' segment, even with no diff", () => {
     const dir = setupHandFrozenWithInvalidBudget(
       'budget:\n  protected_paths:\n    - "../x"\n',
     );
     const result = checkGate(dir, {});
-    expect(result.status).toBe("blocked");
-    expect(result.exitCode).toBe(1);
+    expect(result.status).toBe("ok");
+    expect(result.exitCode).toBe(0);
     expect(
-      result.reasons.some((r) => r.includes("protected_paths") && r.includes("../x")),
+      result.warnings.some(
+        (w) => w.includes("protected_paths") && w.includes("../x") && w.includes("2.0.0"),
+      ),
     ).toBe(true);
+    expect(result.reasons).toEqual([]);
   });
 
   it("does not block on a protected_paths entry with a brace group, a character class, or a leading '-'", () => {

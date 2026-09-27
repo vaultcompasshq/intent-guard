@@ -43,4 +43,4 @@ Legacy per-command binaries (`conductor-check`, etc.) remain available via
 
 ## Deprecation
 
-Deprecated flags or commands get one minor release with warnings, then removal in the next major.
+Deprecated flags or commands get one minor release with warnings, then removal in the next major. A validation tightening that would otherwise turn an existing valid contract invalid follows the same pattern: one minor release warning about the newly-invalid shape, then enforcement (a blocking reason) in the next major.

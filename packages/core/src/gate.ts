@@ -47,6 +47,17 @@ export interface GateResult {
   /** Process exit code: 0 when ok, 1 when blocked. */
   exitCode: 0 | 1;
   reasons: string[];
+  /**
+   * Non-blocking notices: present on every result, empty when there is
+   * nothing to warn about. Never affects `status` or `exitCode`. Carries a
+   * deprecation-style notice from the gate itself, such as an already-frozen
+   * contract whose `protected_paths` or `allowed_paths` entry is invalid --
+   * refused at `freeze` and `import-spec` for a NEW contract, but only warned
+   * about here through 1.x so an upgrade never starts blocking on its own
+   * (see docs/release/stability-policy.md's deprecation rule). 2.0.0 turns
+   * this into a blocking reason.
+   */
+  warnings: string[];
   contractFound: boolean;
   contractFrozen: boolean;
   drift?: DriftScore;
@@ -108,6 +119,7 @@ export function checkGate(
 
   const config = trusted === null ? loadConfig(projectRoot) : trusted.config;
   const reasons: string[] = [];
+  const warnings: string[] = [];
 
   // The head's own budget is never judged -- the base governs this run --
   // but a defect in what the head proposes is worth naming now: merging it
@@ -118,7 +130,7 @@ export function checkGate(
   //
   // Skipped when the head's issues are exactly the base's: an unchanged
   // defect is not something THIS pull request is proposing, it is inherited,
-  // and it is already named once as a blocking reason (below) whenever the
+  // and it is already named once as a warning (below) whenever the
   // base itself is invalid. Without this, an untouched bad contract reported
   // the same entry twice, as a proposal and as a reason, which reads as the
   // pull request having introduced it.
@@ -163,6 +175,7 @@ export function checkGate(
         status: "blocked",
         exitCode: 1,
         reasons: [`Intent contract is invalid: ${(err as Error).message}`],
+        warnings: [],
         contractFound: true,
         contractFrozen: false,
       };
@@ -174,6 +187,7 @@ export function checkGate(
       status: "blocked" as const,
       exitCode: 1 as const,
       reasons: [`Intent contract is invalid: ${trusted.contractError.message}`],
+      warnings: [],
       contractFound: true,
       contractFrozen: false,
     });
@@ -198,6 +212,7 @@ export function checkGate(
       status: requireFrozen ? ("blocked" as const) : ("ok" as const),
       exitCode: requireFrozen ? (1 as const) : (0 as const),
       reasons,
+      warnings,
       contractFound,
       contractFrozen,
     });
@@ -210,16 +225,27 @@ export function checkGate(
   }
 
   // A protected/allowed path that cannot possibly match anything is exactly
-  // the miss this gate exists to catch: fail closed rather than silently
-  // ignore it. intent-guard extract, import-spec, and freeze all validate an
-  // entry as it is written (see budget-paths.ts), but this contract may
-  // predate that validation or have been hand-edited after freezing, so the
-  // gate checks again here, independent of whether there is a diff to
-  // evaluate the budget against.
+  // the miss this gate exists to catch, so it is never silently ignored.
+  // intent-guard extract, import-spec, and freeze all validate an entry as it
+  // is written (see budget-paths.ts) and refuse a NEW one with this shape,
+  // but this contract may predate that validation or have been hand-edited
+  // after freezing, so the gate checks again here, independent of whether
+  // there is a diff to evaluate the budget against.
+  //
+  // This is a warning, not a blocking reason, through 1.x: PR #109 made this
+  // a blocking reason outright, but a schema-valid frozen contract carrying
+  // one of these shapes passed every check before that PR merged, so turning
+  // it into a hard block on upgrade would freeze every later check on a
+  // contract nobody re-approved. docs/release/stability-policy.md's
+  // deprecation rule applies (one minor release with warnings, then
+  // enforcement in the next major), so 1.7.0 warns, naming the entry and the
+  // reason, and 2.0.0 turns this into a blocking reason.
   if (contract) {
     const budgetPathIssues = validateBudgetPaths(contract.budget);
     for (const issue of budgetPathIssues) {
-      reasons.push(`Budget ${describeBudgetPathIssue(issue)}.`);
+      warnings.push(
+        `Budget ${describeBudgetPathIssue(issue)}. This will block check and report starting in 2.0.0; edit the contract and run intent-guard freeze again before then.`,
+      );
     }
   }
 
@@ -293,6 +319,7 @@ export function checkGate(
     status: blocked ? ("blocked" as const) : ("ok" as const),
     exitCode: blocked ? (1 as const) : (0 as const),
     reasons,
+    warnings,
     contractFound,
     contractFrozen,
     drift,

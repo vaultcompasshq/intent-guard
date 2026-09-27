@@ -477,13 +477,17 @@ nothing, because a directory literally named `{a,b}` is rare; write two
 entries instead.
 
 A `protected_paths` or `allowed_paths` entry that silently matches nothing is
-a gate that silently protects nothing, so a value is rejected wherever a
-budget block can enter or leave a contract, in two tiers:
+a gate that silently protects nothing, so a value is checked wherever a
+budget block can enter or leave a contract: rejected at `import-spec` and
+`freeze`, warned about at `check` and `report` until 2.0.0, in two tiers:
 
-- **Contract-level** (`intent-guard import-spec`, `intent-guard freeze` -- the
-  last gate before a hand-edited draft is trusted -- and `intent-guard check`
-  / `intent-guard report`, which refuse to gate on an already-frozen contract
-  that still carries one): non-empty, no leading slash, no backslash, no
+- **Contract-level** (`intent-guard import-spec` and `intent-guard freeze` --
+  the last gate before a hand-edited draft is trusted -- refuse a NEW entry
+  with this shape, writing nothing. `intent-guard check` / `intent-guard
+  report` warn about one on an already-frozen contract in 1.7.0, naming the
+  entry and the reason and stating that it will block starting in `2.0.0`;
+  they do not refuse it yet, so an upgrade never starts blocking on its own):
+  non-empty, no leading slash, no backslash, no
   surrounding whitespace, no `..` segment, no stray `.` segment (anywhere but
   a leading `./`), not just `./` on its own (which normalizes to nothing),
   and no INTERNAL empty segment (`src//x`) -- a trailing one (`src//`) is
@@ -504,7 +508,11 @@ Absent `budget` means no budget enforcement, so existing contracts are
 unaffected. The
 dependency rule is intentionally coarse: a path cannot tell an add from a bump,
 so any manifest edit flags. Budget violations appear in `intent-guard check`
-reasons and in the `intent-guard report` "Change budget" section. See
+reasons and in the `intent-guard report` "Change budget" section. An invalid
+`protected_paths` or `allowed_paths` entry on an already-frozen contract
+appears instead in `intent-guard check`'s `warnings` (and its plain-text
+`warning:` lines) and in the `intent-guard report` "Gate warnings" section,
+neither of which affects the exit code in 1.7.0. See
 [examples/intent-contracts/retry-with-budget.yaml](../examples/intent-contracts/retry-with-budget.yaml).
 
 Notes:
