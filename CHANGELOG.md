@@ -7,7 +7,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **Four ways a change escaped the gate are closed.**
+  - `check --staged` and `check --base` (and `report`) now read git's changed
+    paths NUL-separated (`-z`). Git C-quotes a name containing a double quote,
+    backslash, tab or newline even with `core.quotePath=false`, so a new file
+    such as `secrets/a"b.txt` reached the budget as a quoted string that
+    matched no `secrets/**` glob and passed.
+  - The Stop lifecycle hook (`integrations/hooks/conductor-stop-check.sh`) now
+    judges untracked new files and work the agent committed during the
+    session, not only the working-tree diff. `conductor-session-start.sh`
+    records `HEAD` under the git directory and the Stop check diffs against
+    it. A git failure now blocks the stop with a reason on stderr instead of
+    producing an empty list, which passes. Non-ASCII and quoted names are read
+    with `-z`. A changed path containing a comma is refused, since `--paths`
+    splits on commas. With no session-start record it falls back to the
+    upstream branch, else `HEAD`, and says so on stderr.
+  - The hook runs `packages/skill/dist` only in intent-guard's own repository
+    (root `package.json` named `intent-guard`). Elsewhere it uses the installed
+    binary, because a gitignored `dist/` in any other repo is a file the agent
+    can plant and never shows in a diff.
+  - `--paths` entries with a `..` segment are refused with exit 2 (`check`,
+    `report`) instead of slipping past a protected glob as `src/../secrets/k`.
+
+### Removed
+
+- **`scripts/publish-beta.mjs` and the `publish:beta` and
+  `publish:beta:dry-run` scripts.** It published `--tag latest` by hand with
+  no test gate or provenance. Releases go through the CI trusted-publisher
+  pipeline only.
+
 ### Fixed
+
+- The `action.yml` input text and error message for the empty path set said the
+  gate "fails closed" on it. It passes on an empty set, which is exactly why a
+  push run with neither `base` nor `paths` is refused; the wording now says so.
 
 - **`validateBudgetGlob` rejected `./` but accepted `.//` and `.///`, even
   though all three normalize to a path that matches nothing.** (#112) The

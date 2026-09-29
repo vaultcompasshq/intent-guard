@@ -63,8 +63,8 @@ inputs:
       event the action passes `origin/$GITHUB_BASE_REF`. On any other event
       there is nothing to decide it, so `base` or `paths` has to be set and the
       action refuses the run otherwise. That refusal is deliberate: the gate
-      fails closed on an empty path set, so a push run with no paths would pass
-      every time, for the wrong reason.
+      PASSES on an empty path set (there is nothing to judge), so a push run
+      with no paths would pass every time, for the wrong reason.
 
       Setting this does NOT give the run a trust base. It decides which paths
       are judged, never where the rules are read from, and the action warns when
@@ -428,7 +428,7 @@ runs:
         fi
 
         # Off a pull request there is no ref for the action to fall back to,
-        # and the gate fails closed on an empty path set: a run that named
+        # and the gate passes on an empty path set: a run that named
         # neither would hand intent-guard nothing to judge, and nothing to
         # judge passes. Refused here rather than left to look like a clean
         # run. GITHUB_BASE_REF is the variable the run step actually falls
@@ -436,7 +436,7 @@ runs:
         # outside a pull request rather than leaving it unset.
         if [[ -z "${IG_BASE}" && -z "${IG_PATHS}" && -z "${GITHUB_BASE_REF:-}" ]]; then
           printf '::error::intent-guard: this run is not a pull_request event, so the action has no base ref to fall back to. Set the `base` input to a git ref, or the `paths` input to the paths to judge.\n'
-          printf '::error::The gate fails closed on an empty path set, so there is no safe default here: a run with no paths would pass every time.\n'
+          printf '::error::The gate passes on an empty path set, so there is no safe default here: a run with no paths would pass every time.\n'
           exit 1
         fi
 

@@ -114,3 +114,59 @@ planted `cursoragent@cursor.com` trailer, a `noreply@anthropic.com` trailer,
 and a `[bot]` trailer. A message with no trailer does not match. A comment
 that copies the strong pattern does not keep the check green if the
 executable line is weaker.
+
+## Changed paths are collected NUL-separated
+
+`packages/skill/src/changed-paths.ts:30` splits on NUL, and both git calls pass
+`-z` (`packages/skill/src/changed-paths.ts:65` for `--staged`,
+`packages/skill/src/changed-paths.ts:101` for `--base`). Without `-z`, git
+C-quotes a name holding a double quote, backslash, tab or newline even with
+`core.quotePath=false`, and the quoted string matches no protected glob. Pinned
+by `packages/skill/tests/base-ref.test.ts`, the `NUL-separated path collection`
+tests: `hard-blocks a double quote file name in a protected dir with --base`,
+`... with --staged`, and the backslash and tab pairs of the same names. The
+hook does the same, pinned by `passes a path with a double quote, a backslash,
+a tab and non-ASCII characters literally` in
+`examples/validate-integrations.test.ts`.
+
+## The Stop hook judges untracked and session-committed work, and fails closed
+
+`integrations/hooks/conductor-lib.sh:170` (`intent_guard_changed_paths_csv`)
+diffs the working tree and the index against the session baseline and adds
+`ls-files --others --exclude-standard` (`conductor-lib.sh:188`), all with `-z`.
+The baseline is recorded by `conductor-session-start.sh:15` through
+`intent_guard_record_session_start` (`conductor-lib.sh:96`) under the git
+directory, never the tracked tree. A git failure returns non-zero
+(`conductor-lib.sh:152`) and `conductor-stop-check.sh:33` turns that into exit 2
+rather than an empty list. A path containing a comma is refused
+(`conductor-lib.sh:198`), because `--paths` splits on commas. Pinned in
+`examples/validate-integrations.test.ts` by `judges an untracked new file`,
+`judges work committed since the session began`, `does not judge work
+committed before the session began`, `keeps the session baseline across a
+resume under the same contract`, `starts a fresh baseline when the contract id
+changes`, `fails closed with a clear message when git cannot list the changes`
+and `refuses a path containing a comma instead of splitting it`. Every non-zero
+gate status blocks the stop (`conductor-stop-check.sh`, the `-ne 0` test):
+`blocks the stop when the gate exits 2` and `... exits 127`.
+
+## The hook runs the in-repo dist only in intent-guard's own repository
+
+`integrations/hooks/conductor-lib.sh:24` (`intent_guard_is_own_repo`) requires
+the root `package.json` to name the package `intent-guard`, and
+`conductor-lib.sh:31` uses `packages/skill/dist` only then; every other
+repository resolves the binary on `PATH`. Pinned by `does not run an in-repo
+dist in a repository that is not intent-guard's own`, `does not run an in-repo
+dist when there is no package.json at all` and `runs the in-repo dist in
+intent-guard's own repository` in `examples/validate-integrations.test.ts`.
+The gitignored dist in the own repository is still trusted; the check narrows
+who gets it, it does not sign it.
+
+## A changed path with a `..` segment is refused
+
+`packages/skill/src/changed-paths.ts:125` exits 2 for any `--paths` entry with a
+`..` segment, before the budget sees it. It is refused, not normalized, because
+`src/../secrets/k` never matched `secrets/**` while naming a protected file.
+Pinned by `refuses a --paths entry with a .. segment instead of letting it slip
+past a protected glob` and `refuses a leading .. segment too, in report` in
+`packages/skill/tests/base-ref.test.ts`; `still accepts a name that merely
+contains dots` guards against over-refusing `a..b`.
