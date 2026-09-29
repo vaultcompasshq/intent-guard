@@ -7,6 +7,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-30
+
+Consumer-visible changes in this release, stated plainly:
+
+- If you wire the Stop lifecycle hook, wire the SessionStart hook too. Without
+  a session-start baseline (and no upstream branch) the Stop hook now fails
+  closed and blocks the stop; `INTENT_GUARD_NO_BASELINE_OK=1` is the operator
+  escape.
+- The Stop hook no longer loops on could-not-run conditions: it blocks once,
+  then lets the stop through with a loud message when the host reports
+  `stop_hook_active`. A finding (gate exit 1) always blocks.
+- Explicit `--paths` entries with a `..` segment, a stray `.` segment, an empty
+  segment, a leading `/`, or a backslash are refused with exit 2.
+- The hook runs `packages/skill/dist` only when the operator sets
+  `INTENT_GUARD_DEV_DIST=1`; otherwise it uses the installed binary.
+- `scripts/publish-beta.mjs` and the `publish:beta` scripts are removed.
+
 ### Security
 
 - **Several ways a change escaped the gate are narrowed.** The local lifecycle
