@@ -87,7 +87,9 @@ export function matchesGlob(rawPath: string, rawGlob: string): boolean {
       re += escapeRegExp(c);
     }
   }
-  return new RegExp(`^${re}$`).test(path);
+  // The `s` flag lets `.` (built from `**`) match a newline. A file name may
+  // contain one, and without the flag secrets/a\nb.txt matched no secrets/**.
+  return new RegExp(`^${re}$`, "s").test(path);
 }
 
 function matchesAny(path: string, globs: string[]): boolean {

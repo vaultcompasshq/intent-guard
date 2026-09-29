@@ -20,6 +20,15 @@ function withBudget(budget: IntentContract["budget"]): IntentContract {
   return { ...base, budget };
 }
 
+describe("matchesGlob and newlines", () => {
+  it("matches ** and * across a path containing a newline", () => {
+    expect(matchesGlob("secrets/a\nb.txt", "secrets/**")).toBe(true);
+    expect(matchesGlob("x/secrets/a\nb.txt", "**/secrets/**")).toBe(true);
+    expect(matchesGlob("secrets/a\nb.txt", "secrets/*.txt")).toBe(true);
+    expect(matchesGlob("secrets/a\nb.txt", "secrets/a?b.txt")).toBe(true);
+  });
+});
+
 describe("matchesGlob", () => {
   it("matches ** across directory segments", () => {
     expect(matchesGlob("packages/core/src/budget.ts", "packages/core/**")).toBe(true);

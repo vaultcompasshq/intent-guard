@@ -48,13 +48,37 @@ function gitFailureReason(error: unknown): string {
 }
 
 /**
+ * execFileSync defaults to a 1 MB output buffer, and a bigger name list throws
+ * ENOBUFS. That used to be swallowed into an empty list, which passes. 256 MB
+ * is far past any real change set.
+ */
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
+
+/**
  * Paths in the git index.
  *
- * The silent catch predates --base and is deliberately left alone in this
- * release: --staged is used from a pre-commit hook where an empty index and a
- * missing repo are both ordinary. --base does not copy this behavior.
+ * Only "not a git repository" yields an empty list: --staged is used from a
+ * pre-commit hook and a directory that is not a repository has nothing staged.
+ * Every other failure (a corrupt index, an oversized listing, a git that will
+ * not spawn) exits 2 like --base does, because an empty list makes the gate
+ * pass.
  */
 export function stagedPaths(projectRoot: string): string[] {
+  // Detected explicitly, up front: outside a repository `git diff --cached`
+  // does not say "not a git repository", it falls into --no-index mode and
+  // complains about the flag.
+  try {
+    execFileSync("git", ["rev-parse", "--git-dir"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const reason = gitFailureReason(error);
+    if (/not a git repository/i.test(reason)) return [];
+    console.error(`intent-guard: cannot list staged paths (--staged): ${reason}`);
+    process.exit(2);
+  }
   try {
     // core.quotePath=false keeps unicode/space paths literal instead of
     // octal-escaped and quoted, so budget globs match the real path.
@@ -63,12 +87,44 @@ export function stagedPaths(projectRoot: string): string[] {
     const out = execFileSync(
       "git",
       ["-c", "core.quotePath=false", "diff", "--cached", "--no-renames", "--name-only", "-z"],
-      { cwd: projectRoot, encoding: "utf8" },
+      {
+        cwd: projectRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: GIT_MAX_BUFFER,
+      },
     );
     return splitPaths(out);
-  } catch {
-    return [];
+  } catch (error) {
+    const reason = gitFailureReason(error);
+    if (/not a git repository/i.test(reason)) return [];
+    console.error(`intent-guard: cannot list staged paths (--staged): ${reason}`);
+    process.exit(2);
   }
+}
+
+/**
+ * Why an explicit --paths entry is refused, or null. The shapes mirror what
+ * validateBudgetGlob refuses in a glob: the budget matches the string it is
+ * given, so each of these can name a protected file the globs never match.
+ * A real git path has none of them, except that a backslash is a legal file
+ * name character; it is refused here only because the caller typed it, and
+ * paths that come from git (--staged, --base) are never subject to this.
+ * A single leading "./" and trailing slashes are accepted, as in a glob.
+ */
+function explicitPathIssue(path: string): string | null {
+  if (path.startsWith("/")) return "it starts with '/' (paths are project-relative)";
+  if (path.includes("\\")) return "it contains a backslash";
+  const withoutLead = path.replace(/^\.\//, "");
+  const trimmed = withoutLead.replace(/\/+$/, "");
+  if (trimmed === "") return "it names nothing (only './' or slashes)";
+  if (withoutLead.startsWith("/")) return "it contains an empty segment (consecutive '/')";
+  if (trimmed.includes("//")) return "it contains an empty segment (consecutive '/')";
+  for (const segment of trimmed.split("/")) {
+    if (segment === "..") return 'it contains a ".." segment';
+    if (segment === ".") return "it contains a '.' segment";
+  }
+  return null;
 }
 
 /**
@@ -101,7 +157,12 @@ export function basePaths(projectRoot: string, baseRef: string): string[] {
         "-z",
         `${baseRef}...HEAD`,
       ],
-      { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      {
+        cwd: projectRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: GIT_MAX_BUFFER,
+      },
     );
     return splitPaths(out);
   } catch (error) {
@@ -119,12 +180,14 @@ export function basePaths(projectRoot: string, baseRef: string): string[] {
 export function collectChangedPaths(options: ChangedPathOptions): string[] {
   // Refused, not normalized: the budget matches globs against the string it is
   // given, so `src/../secrets/k` never matched `secrets/**` while naming a
-  // protected file. A real git path never has a `..` segment, so a caller
-  // that sends one is either buggy or probing, and exit 2 says which.
+  // protected file, and neither did `././secrets/k`, `secrets//k` or
+  // `/secrets/k`. A real git path has none of these shapes, so a caller that
+  // sends one is either buggy or probing, and exit 2 says which.
   for (const path of options.paths) {
-    if (path.split("/").includes("..")) {
+    const issue = explicitPathIssue(path);
+    if (issue) {
       console.error(
-        `intent-guard: refusing changed path "${path}": a ".." segment can name a protected path the budget globs would not match. Pass the path relative to the project root, without "..".`,
+        `intent-guard: refusing changed path "${path}": ${issue}, so the budget globs may not match the file it names. Pass the path relative to the project root in its plain form.`,
       );
       process.exit(2);
     }
