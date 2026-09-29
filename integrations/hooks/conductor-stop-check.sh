@@ -28,8 +28,10 @@ fi
 # - Claude Code: only exit 2 prevents the stop. Exit 1 is non-blocking (the
 #   turn still ends), and stdout on exit 0 goes to the debug log only.
 # - Codex: exit 2 continues the agent with the stderr reason. Plain text on
-#   stdout at exit 0 is invalid for this event, so stdout stays empty on every
-#   path and the check's own output goes to stderr.
+#   stdout at exit 0 is invalid for this event, so the check's own output goes
+#   to stderr, and stdout stays empty on a pass and on a block. The one
+#   exception is could_not_run below, which on the loop-breaking exit 0 writes a
+#   single JSON object with a `systemMessage` to stdout (JSON, not plain text).
 # Git pre-commit uses intent-guard-check directly (exit 1).
 lifecycle_block() {
   exit 2

@@ -45,10 +45,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   - The hook runs `packages/skill/dist` only when the operator sets
     `INTENT_GUARD_DEV_DIST=1`; otherwise it uses the installed binary, because a
     gitignored `dist/` is a file the agent can plant and never shows in a diff.
-  - Explicit `--paths` entries with a `..` segment, a `.` segment after a
-    leading `./`, an empty segment, a leading `/`, or a backslash are refused
-    with exit 2 (`check`, `report`) instead of slipping past a protected glob
-    as `src/../secrets/k`. Paths read from git are not subject to this.
+  - Explicit `--paths` entries with a `..` segment, a `.` segment anywhere
+    other than one leading `./`, an empty segment, a leading `/`, or a
+    backslash are refused with exit 2 (`check`, `report`) instead of slipping
+    past a protected glob as `src/../secrets/k`. intent-guard's own git reads
+    (`--staged`, `--base`) are not subject to this. Callers that forward paths
+    through `--paths` must read git with `-z` and never forward git's C-quoted
+    form.
 
 ### Removed
 

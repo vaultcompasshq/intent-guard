@@ -156,7 +156,8 @@ outside a git repository, as before` and `exits 2 on any other git failure`.
 diffs the working tree and the index against the session baseline and adds
 `ls-files --others --exclude-standard` (`conductor-lib.sh:218`), all with `-z`.
 A git failure returns non-zero (`conductor-lib.sh:182`) and
-`conductor-stop-check.sh:33` turns that into exit 2 rather than an empty list.
+`conductor-stop-check.sh:78` routes that to `could_not_run` (see the loop policy
+below) rather than an empty list.
 A path containing a comma is refused (`conductor-lib.sh:228`), because `--paths`
 splits on commas. Each path is passed as `./<path>` (`conductor-lib.sh:234`) so a
 leading `-` is not read as a flag. Pinned in `examples/validate-integrations.test.ts`
@@ -165,9 +166,26 @@ began`, `does not judge work committed before the session began`, `fails closed
 with a clear message when git cannot list the changes`, `refuses a path
 containing a comma instead of splitting it`, `adds a leading ./ to every path so
 a name starting with a dash is not read as a flag` and `does not block the stop
-on a dash-prefixed name with the real gate`. Every non-zero gate status blocks
-the stop (`conductor-stop-check.sh`, the `-ne 0` test): `blocks the stop when the
-gate exits 2` and `... exits 127`.
+on a dash-prefixed name with the real gate`.
+
+Stop hook loop policy, exactly. The gate's exit status is split at
+`conductor-stop-check.sh:101`: status 1 is a finding and always blocks
+(`lifecycle_block`, exit 2), regardless of `stop_hook_active`; any other non-zero
+status is could-not-run (`conductor-stop-check.sh:106`). Every could-not-run
+condition (gate exit 2 or 127, no binary at `:70`, path collection failure at
+`:83`) calls `could_not_run` (`:57`): with `stop_hook_active` not true (read at
+`:17` through `:22`, absent or unparseable counts as not true) it blocks with
+exit 2, and with it true it exits 0 (`:65`) after writing the cause and "CI
+`--base` is the enforcement boundary" to stderr and a `systemMessage` JSON object
+to stdout. Stdout is empty on a pass and on every block. Pinned by, for the
+existing stub tests, `blocks the stop when the gate exits 2` and `blocks the stop
+when the gate exits 127` (no `stop_hook_active`, so they block); and by the
+`stop hook loop policy` group, per class: `blocks on <class> when
+stop_hook_active is false`, `blocks on <class> when the field is absent or
+unparseable`, `allows the stop with a loud message on <class> when
+stop_hook_active is true`, with `still blocks a finding when stop_hook_active is
+true (stub gate exits 1)` and `still blocks a real budget hard_block when
+stop_hook_active is true` for findings.
 
 The session baseline is written by `conductor-session-start.sh:27` through
 `intent_guard_record_session_start` (`conductor-lib.sh:110`), which reads the
@@ -232,10 +250,13 @@ trusts a gitignored dist the agent may be able to write.
 
 `packages/skill/src/changed-paths.ts:187` calls `explicitPathIssue`
 (`changed-paths.ts:115`) on every `--paths` entry and exits 2 (`changed-paths.ts:192`)
-for a `..` segment, a `.` segment after the one accepted leading `./`, an empty
-segment (`a//b`, `.//x`), a leading `/`, or a backslash. They are refused, not
-normalized, because `src/../secrets/k` never matched `secrets/**` while naming a
-protected file. Paths that come from git are not subject to this. Pinned in
+for a `..` segment, a `.` segment anywhere other than the one accepted leading
+`./`, an empty segment (`a//b`, `.//x`), a leading `/`, or a backslash. They are
+refused, not normalized, because `src/../secrets/k` never matched `secrets/**`
+while naming a protected file. intent-guard's own git reads (`--staged`,
+`--base`) are not subject to this. A caller that forwards paths through `--paths`
+must read git with `-z` and never forward git's C-quoted form, which would
+otherwise reach the budget quoted and match no glob. Pinned in
 `packages/skill/tests/base-ref.test.ts` by `refuses a --paths entry with a ..
 segment instead of letting it slip past a protected glob`, `refuses a leading ..
 segment too, in report`, and the `explicit path shapes are refused like budget
