@@ -15,9 +15,12 @@ own `.claude/settings.json` and `.codex/hooks.json`, so renaming them would brea
 every project that already wired them up. The commands they invoke are the new
 `intent-guard-*` binaries.
 
-The scripts first look for this repo's built CLI files under
-`packages/skill/dist/`, then fall back to `intent-guard-resume` /
-`intent-guard-check` on `PATH`.
+Binary resolution: the scripts use the built CLI files under
+`packages/skill/dist/` only when the repository is Intent Guard's own (its root
+`package.json` names the package `intent-guard`). In every other repository
+they use `intent-guard-resume` / `intent-guard-check` from `PATH`. `dist/` is
+normally gitignored, so a file planted there never shows in a diff, and
+trusting it anywhere would let the agent run its own judge.
 
 ## Install
 
@@ -46,5 +49,21 @@ Then copy the relevant sample config from `integrations/codex/`,
   prints to stderr and leaves stdout empty on every path, pass or block. Git
   pre-commit still uses `intent-guard-check` directly, where exit 1 is the
   blocking code.
+- The Stop check judges everything that changed since the session began, not
+  only the working-tree diff: commits made during the session, staged and
+  unstaged edits, and untracked new files. `conductor-session-start.sh` records
+  `HEAD` (or the empty tree in a repository with no commit) in a file under the
+  git directory, never in the tracked tree. A second SessionStart, as on a
+  resume, keeps the earlier record while it is still an ancestor of `HEAD` and
+  was taken under the same `contract_id`; a new contract or rewritten history
+  starts a fresh one. With no record (SessionStart not wired), the check falls
+  back to the upstream branch if there is one, otherwise to `HEAD`, and says on
+  stderr that committed work cannot be seen. Wire SessionStart.
+- Paths are read NUL-separated with `core.quotePath=false`, so names with
+  quotes, backslashes, tabs or non-ASCII characters reach the budget literally.
+  A git failure blocks the stop (exit 2, reason on stderr) instead of yielding
+  an empty list, which would pass. `--paths` is comma-separated, so a changed
+  path containing a comma cannot be passed faithfully; the hook refuses it and
+  asks for a rename rather than guessing.
 - Cursor has no committed lifecycle hook config here; use the project rule plus
   the Git pre-commit hook for enforcement.

@@ -26,7 +26,14 @@ if [[ -z "$CHECK_CMD" ]]; then
   lifecycle_block
 fi
 
-PATHS="$(intent_guard_changed_paths_csv "$ROOT")"
+# Fail closed: a git failure or an unrepresentable path must block the stop with
+# the reason on stderr, never fall through as an empty path list (which passes).
+# The assignment sits in an `if` so set -e does not exit with the helper's own
+# status instead of the lifecycle block code.
+if ! PATHS="$(intent_guard_changed_paths_csv "$ROOT")"; then
+  echo "Intent Guard: could not collect the changed paths; blocking the stop." >&2
+  lifecycle_block
+fi
 
 set +e
 if [[ -n "$PATHS" ]]; then

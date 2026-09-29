@@ -7,6 +7,14 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/conductor-lib.sh"
 
 ROOT="$(intent_guard_git_root)"
+
+# Record where the session began so the Stop check can judge work the agent
+# commits during the turn. Done first, before any early exit below: a project
+# with no contract yet can freeze one mid-session. Best effort: without the
+# record the Stop check falls back and says so.
+intent_guard_record_session_start "$ROOT" \
+  || echo "Intent Guard: could not record the session start; the Stop check will fall back." >&2
+
 RESUME_CMD="$(intent_guard_bin "$ROOT" intent-guard-resume || true)"
 
 if [[ -z "$RESUME_CMD" ]]; then
