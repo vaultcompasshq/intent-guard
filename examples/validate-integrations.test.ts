@@ -219,20 +219,67 @@ function makeWorld(options: { gitInit?: boolean; stub?: boolean } = {}): HookWor
   return { work, bin, project, env: { ...process.env, PATH: path } };
 }
 
-function runHook(world: HookWorld, script: string) {
+function runHook(
+  world: HookWorld,
+  script: string,
+  options: { input?: string; env?: NodeJS.ProcessEnv } = {},
+) {
   const result = spawnSync("bash", [script], {
     cwd: world.project,
     encoding: "utf8",
-    env: world.env,
+    env: { ...world.env, ...options.env },
+    ...(options.input !== undefined ? { input: options.input } : {}),
   });
   return { code: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
 
-/** The paths the stub gate was handed, or null when it got no --paths flag. */
-function pathsSeen(stderr: string): string[] | null {
+/** SessionStart the way a host sends it: a JSON object with a `source`. */
+function startSession(world: HookWorld, source: string | null) {
+  return runHook(world, SESSION_START, {
+    input: source === null ? "" : JSON.stringify({ hook_event_name: "SessionStart", source }),
+  });
+}
+
+/** The raw paths the stub gate was handed, or null when it got no --paths flag. */
+function rawPathsSeen(stderr: string): string[] | null {
   const args = [...stderr.matchAll(/^ARG\[(.*)\]$/gm)].map((match) => match[1]);
   const at = args.indexOf("--paths");
   return at === -1 ? null : args[at + 1].split(",");
+}
+
+/** Same, with the leading "./" the hook adds removed. */
+function pathsSeen(stderr: string): string[] | null {
+  const raw = rawPathsSeen(stderr);
+  return raw === null ? null : raw.map((path) => path.replace(/^\.\//, ""));
+}
+
+const REAL_GATE_ASK =
+  "Update the readme usage docs. Do not change source. Done when one usage example is documented.";
+
+/**
+ * A world whose `intent-guard-check` is the real built gate, with a frozen
+ * contract protecting secrets/**, committed. For tests where what the budget
+ * DECIDES matters and a stub that echoes arguments is not enough.
+ */
+function makeRealGateWorld(): HookWorld {
+  const world = makeWorld({ stub: false });
+  const checkCli = join(ROOT, "packages/skill/dist/check-cli.js");
+  const wrapper = join(world.bin, "intent-guard-check");
+  writeFileSync(wrapper, `#!/usr/bin/env bash\nexec node "${checkCli}" "$@"\n`, "utf8");
+  chmodSync(wrapper, 0o755);
+  world.env = { ...world.env, PATH: `${world.bin}${delimiter}${world.env.PATH}` };
+  const dist = (cli: string) => join(ROOT, "packages/skill/dist", cli);
+  execFileSync("node", [dist("extract-cli.js"), "--project", world.project, "--text", REAL_GATE_ASK]);
+  execFileSync("node", [dist("freeze-cli.js"), "--project", world.project, "--approved-by", "tester"]);
+  const contract = join(world.project, ".intent-guard", "intent-contract.yaml");
+  writeFileSync(
+    contract,
+    readFileSync(contract, "utf8") + '\nbudget:\n  protected_paths:\n    - "secrets/**"\n',
+    "utf8",
+  );
+  git(world.project, "add", "--", ".intent-guard");
+  git(world.project, "commit", "-q", "-m", "freeze contract");
+  return world;
 }
 
 function write(world: HookWorld, relative: string, body = "x\n") {
@@ -285,16 +332,66 @@ describe("stop hook changed-path collection", () => {
     }
   });
 
-  it("keeps the session baseline across a resume under the same contract", () => {
+  for (const source of ["resume", "compact", null]) {
+    it(`keeps the session baseline when SessionStart fires again with source ${source ?? "absent"}`, () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        write(world, "secrets/kept.txt");
+        git(world.project, "add", "--", "secrets/kept.txt");
+        git(world.project, "commit", "-q", "-m", "agent commit");
+        startSession(world, source);
+        const result = runHook(world, STOP_CHECK);
+        expect(pathsSeen(result.stderr)).toEqual(["secrets/kept.txt"]);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+  }
+
+  // Session A stops clean, the human commits, session B starts. The human's
+  // commit is not session B's work and must not be judged against its contract.
+  for (const source of ["startup", "clear"]) {
+    it(`starts a fresh baseline on a new session (source ${source}), so a human commit between sessions is not judged`, () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        expect(runHook(world, STOP_CHECK).code).toBe(0);
+        write(world, "secrets/human.txt");
+        git(world.project, "add", "--", "secrets/human.txt");
+        git(world.project, "commit", "-q", "-m", "the human commits");
+        startSession(world, source);
+        write(world, "README.md", "session B edit\n");
+        const result = runHook(world, STOP_CHECK);
+        expect(result.code).toBe(0);
+        expect(pathsSeen(result.stderr)).toEqual(["README.md"]);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it("adds a leading ./ to every path so a name starting with a dash is not read as a flag", () => {
     const world = makeWorld();
     try {
-      runHook(world, SESSION_START);
-      write(world, "secrets/kept.txt");
-      git(world.project, "add", "--", "secrets/kept.txt");
-      git(world.project, "commit", "-q", "-m", "agent commit");
-      runHook(world, SESSION_START); // resume fires SessionStart again
+      startSession(world, "startup");
+      write(world, "--evil.txt");
+      write(world, "-rf");
       const result = runHook(world, STOP_CHECK);
-      expect(pathsSeen(result.stderr)).toEqual(["secrets/kept.txt"]);
+      expect([...(rawPathsSeen(result.stderr) ?? [])].sort()).toEqual(["./--evil.txt", "./-rf"]);
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("does not block the stop on a dash-prefixed name with the real gate", () => {
+    const world = makeRealGateWorld();
+    try {
+      startSession(world, "startup");
+      write(world, "--evil.txt");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.stderr).not.toContain("Usage:");
+      expect(result.code).toBe(0);
     } finally {
       rmSync(world.work, { recursive: true, force: true });
     }
@@ -321,14 +418,28 @@ describe("stop hook changed-path collection", () => {
     }
   });
 
-  it("with no session-start record, says so and still judges uncommitted and untracked work", () => {
+  it("fails closed with no session-start record and no upstream", () => {
+    const world = makeWorld();
+    try {
+      write(world, "secrets/new-key.txt");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("no session-start record and no upstream");
+      expect(result.stderr).toContain("INTENT_GUARD_NO_BASELINE_OK=1");
+      expect(result.stderr).not.toContain("ARG[");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("INTENT_GUARD_NO_BASELINE_OK=1 falls back to HEAD with a warning", () => {
     const world = makeWorld();
     try {
       write(world, "secrets/new-key.txt");
       write(world, "README.md", "changed\n");
-      const result = runHook(world, STOP_CHECK);
+      const result = runHook(world, STOP_CHECK, { env: { INTENT_GUARD_NO_BASELINE_OK: "1" } });
       expect(result.code).toBe(0);
-      expect(result.stderr).toContain("no session-start record");
+      expect(result.stderr).toContain("cannot be seen");
       expect([...(pathsSeen(result.stderr) ?? [])].sort()).toEqual([
         "README.md",
         "secrets/new-key.txt",
@@ -336,6 +447,108 @@ describe("stop hook changed-path collection", () => {
     } finally {
       rmSync(world.work, { recursive: true, force: true });
     }
+  });
+
+  it("with no record but an upstream branch, judges changes since the upstream", () => {
+    const world = makeWorld();
+    try {
+      git(world.project, "branch", "upstream-stand-in");
+      git(world.project, "branch", "--set-upstream-to=upstream-stand-in", "main");
+      write(world, "secrets/ahead.txt");
+      git(world.project, "add", "--", "secrets/ahead.txt");
+      git(world.project, "commit", "-q", "-m", "unpushed");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.code).toBe(0);
+      expect(result.stderr).toContain("since the upstream branch");
+      expect(pathsSeen(result.stderr)).toEqual(["secrets/ahead.txt"]);
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  describe("baseline record integrity", () => {
+    function baselineFile(world: HookWorld): string {
+      return join(world.project, ".git", "intent-guard-session-start");
+    }
+    function head(world: HookWorld, rev: string): string {
+      return execFileSync("git", ["rev-parse", rev], {
+        cwd: world.project,
+        encoding: "utf8",
+      }).trim();
+    }
+    function expectRefused(world: HookWorld) {
+      write(world, "secrets/new-key.txt");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("session baseline record");
+      expect(result.stderr).not.toContain("ARG[");
+    }
+
+    it("refuses a record that points at a tree, such as HEAD^{tree}", () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        writeFileSync(baselineFile(world), `${head(world, "HEAD^{tree}")}\nnone\n`, "utf8");
+        expectRefused(world);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses a record that is a name rather than an object id, such as HEAD", () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        writeFileSync(baselineFile(world), "HEAD\nnone\n", "utf8");
+        expectRefused(world);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses a record for a commit that is not an ancestor of HEAD", () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        const orphan = execFileSync(
+          "git",
+          ["commit-tree", head(world, "HEAD^{tree}"), "-m", "elsewhere"],
+          { cwd: world.project, encoding: "utf8" },
+        ).trim();
+        writeFileSync(baselineFile(world), `${orphan}\nnone\n`, "utf8");
+        expectRefused(world);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses a garbage record", () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        writeFileSync(baselineFile(world), "not a ref at all\n", "utf8");
+        expectRefused(world);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+
+    it("accepts the empty tree, the widest baseline", () => {
+      const world = makeWorld();
+      try {
+        startSession(world, "startup");
+        const emptyTree = execFileSync("git", ["hash-object", "-t", "tree", "/dev/null"], {
+          cwd: world.project,
+          encoding: "utf8",
+        }).trim();
+        writeFileSync(baselineFile(world), `${emptyTree}\nnone\n`, "utf8");
+        const result = runHook(world, STOP_CHECK);
+        expect(result.code).toBe(0);
+        expect(pathsSeen(result.stderr)).toEqual(["README.md"]);
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
   });
 
   it("passes a path with a double quote, a backslash, a tab and non-ASCII characters literally", () => {
@@ -394,9 +607,10 @@ describe("hook binary resolution", () => {
     }
   }
 
-  it("does not run an in-repo dist in a repository that is not intent-guard's own", () => {
+  it("does not run a planted in-repo dist by default", () => {
     const world = makeWorld();
     try {
+      startSession(world, "startup");
       plant(world, "someone-elses-app");
       const result = runHook(world, STOP_CHECK);
       expect(result.stderr).not.toContain("PLANTED-DIST-RAN");
@@ -407,9 +621,23 @@ describe("hook binary resolution", () => {
     }
   });
 
-  it("does not run an in-repo dist when there is no package.json at all", () => {
+  it("does not run a planted dist when package.json is renamed to intent-guard", () => {
     const world = makeWorld();
     try {
+      startSession(world, "startup");
+      plant(world, "intent-guard");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.stderr).not.toContain("PLANTED-DIST-RAN");
+      expect(result.stderr).toContain("ARG[--project]");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("does not run a planted dist when there is no package.json at all", () => {
+    const world = makeWorld();
+    try {
+      startSession(world, "startup");
       plant(world, null);
       const result = runHook(world, STOP_CHECK);
       expect(result.stderr).not.toContain("PLANTED-DIST-RAN");
@@ -419,13 +647,67 @@ describe("hook binary resolution", () => {
     }
   });
 
-  it("runs the in-repo dist in intent-guard's own repository", () => {
+  it("runs the in-repo dist only when the operator sets INTENT_GUARD_DEV_DIST=1", () => {
     const world = makeWorld();
     try {
-      plant(world, "intent-guard");
-      const result = runHook(world, STOP_CHECK);
+      startSession(world, "startup");
+      plant(world, null);
+      const result = runHook(world, STOP_CHECK, { env: { INTENT_GUARD_DEV_DIST: "1" } });
       expect(result.stderr).toContain("PLANTED-DIST-RAN");
       expect(result.stderr).not.toContain("ARG[--project]");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+});
+
+// The budget's glob regexp had no `s` flag, so a newline in a name kept ** from
+// matching. Through the hook the name travels NUL-separated and then inside
+// --paths, so this is the end-to-end check with the real gate.
+describe("stop hook and a newline in a file name", () => {
+  const NAME = "secrets/a\nb.txt";
+
+  it("blocks an untracked new file with a newline in its name under secrets/", () => {
+    const world = makeRealGateWorld();
+    try {
+      startSession(world, "startup");
+      write(world, NAME);
+      const result = runHook(world, STOP_CHECK);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("Budget hard_block");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks a staged rename of such a file out of secrets/", () => {
+    const world = makeRealGateWorld();
+    try {
+      write(world, NAME);
+      git(world.project, "add", "--", NAME);
+      git(world.project, "commit", "-q", "-m", "add before the session");
+      startSession(world, "startup");
+      git(world.project, "mv", NAME, "docs-moved.txt");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("Budget hard_block");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks a committed rename of such a file out of secrets/", () => {
+    const world = makeRealGateWorld();
+    try {
+      write(world, NAME);
+      git(world.project, "add", "--", NAME);
+      git(world.project, "commit", "-q", "-m", "add before the session");
+      startSession(world, "startup");
+      git(world.project, "mv", NAME, "docs-moved.txt");
+      git(world.project, "commit", "-q", "-m", "move it out");
+      const result = runHook(world, STOP_CHECK);
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("Budget hard_block");
     } finally {
       rmSync(world.work, { recursive: true, force: true });
     }
