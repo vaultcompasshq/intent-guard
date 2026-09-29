@@ -230,6 +230,76 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
   });
 });
 
+// Git C-quotes a path containing a double quote, a backslash, a tab or a newline
+// even with core.quotePath=false, so a line-split reader sees `"secrets/a\"b.txt"`
+// (leading quote, escaped inside) and no glob matches it. The fix is NUL-separated
+// output (-z), which git never quotes.
+const AWKWARD_NAMES: [string, string][] = [
+  ["double quote", 'secrets/a"b.txt'],
+  ["backslash", "secrets/a\\b.txt"],
+  ["tab", "secrets/a\tb.txt"],
+];
+
+describe("NUL-separated path collection", { timeout: 60_000 }, () => {
+  for (const [label, name] of AWKWARD_NAMES) {
+    it(`hard-blocks a ${label} file name in a protected dir with --base`, async () => {
+      const dir = repoWithBranch([name]);
+      await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+
+      const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+      expect(res.code).toBe(1);
+      const out = JSON.parse(res.stdout);
+      expect(out.budget.action).toBe("hard_block");
+      expect(out.budget.violations[0].matched).toContain(name);
+    });
+
+    it(`hard-blocks a ${label} file name in a protected dir with --staged`, async () => {
+      const dir = repoWithBranch(["README.md"]);
+      await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+      writeAt(dir, name, "key\n");
+      git(dir, ["add", "--", name]);
+
+      const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+      expect(res.code).toBe(1);
+      const out = JSON.parse(res.stdout);
+      expect(out.budget.action).toBe("hard_block");
+      expect(out.budget.violations[0].matched).toContain(name);
+    });
+  }
+});
+
+describe("dot-dot path refusal", { timeout: 60_000 }, () => {
+  it("refuses a --paths entry with a .. segment instead of letting it slip past a protected glob", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--paths", "src/../secrets/k",
+      "--json",
+    ]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("src/../secrets/k");
+    expect(res.stderr).toContain("..");
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+
+  it("refuses a leading .. segment too, in report", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    const res = await run("report-cli.js", ["--project", dir, "--paths", "../outside.txt", "--json"]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("../outside.txt");
+  });
+
+  it("still accepts a name that merely contains dots", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    const res = await run("check-cli.js", ["--project", dir, "--paths", "docs/a..b.md,notes/..hidden", "--json"]);
+    expect(res.code).toBe(0);
+  });
+});
+
 describe("intent-guard report --base", { timeout: 60_000 }, () => {
   it("reports the same path set the gate saw", async () => {
     const dir = repoWithBranch(["README.md", "docs/usage.md"]);

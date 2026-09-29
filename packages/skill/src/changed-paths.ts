@@ -19,11 +19,15 @@ export interface ChangedPathOptions {
   base: string;
 }
 
+/**
+ * Split `git ... -z` output. NUL is the only separator git never quotes or
+ * escapes: without -z, git C-quotes any path holding a double quote, backslash,
+ * tab or newline (core.quotePath=false does not stop that), so a file named
+ * secrets/a"b.txt reached the budget as "secrets/a\"b.txt" and matched no glob.
+ * No trimming either: a trailing space is part of the name.
+ */
 function splitPaths(output: string): string[] {
-  return output
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  return output.split("\0").filter((entry) => entry.length > 0);
 }
 
 /**
@@ -58,7 +62,7 @@ export function stagedPaths(projectRoot: string): string[] {
     // protected directory still names the protected path. See basePaths.
     const out = execFileSync(
       "git",
-      ["-c", "core.quotePath=false", "diff", "--cached", "--no-renames", "--name-only"],
+      ["-c", "core.quotePath=false", "diff", "--cached", "--no-renames", "--name-only", "-z"],
       { cwd: projectRoot, encoding: "utf8" },
     );
     return splitPaths(out);
@@ -94,6 +98,7 @@ export function basePaths(projectRoot: string, baseRef: string): string[] {
         "diff",
         "--no-renames",
         "--name-only",
+        "-z",
         `${baseRef}...HEAD`,
       ],
       { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
@@ -112,6 +117,19 @@ export function basePaths(projectRoot: string, baseRef: string): string[] {
  * first-seen order: explicit paths, then the index, then the base ref.
  */
 export function collectChangedPaths(options: ChangedPathOptions): string[] {
+  // Refused, not normalized: the budget matches globs against the string it is
+  // given, so `src/../secrets/k` never matched `secrets/**` while naming a
+  // protected file. A real git path never has a `..` segment, so a caller
+  // that sends one is either buggy or probing, and exit 2 says which.
+  for (const path of options.paths) {
+    if (path.split("/").includes("..")) {
+      console.error(
+        `intent-guard: refusing changed path "${path}": a ".." segment can name a protected path the budget globs would not match. Pass the path relative to the project root, without "..".`,
+      );
+      process.exit(2);
+    }
+  }
+
   const collected = [...options.paths];
   if (options.staged) collected.push(...stagedPaths(options.projectRoot));
   if (options.base) collected.push(...basePaths(options.projectRoot, options.base));
