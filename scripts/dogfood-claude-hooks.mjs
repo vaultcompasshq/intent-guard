@@ -192,6 +192,17 @@ try {
   if (r.status !== 0) fail(`seed commit: ${r.stderr || r.stdout}`);
   ok("seed commit");
 
+  // The seed commit is setup, not session work. Start the session again, the
+  // way a new Claude Code session does, so the Stop check's baseline is the
+  // seeded HEAD and not the empty repository the first SessionStart saw.
+  r = run("bash", [sessionStart], {
+    input: JSON.stringify({ source: "startup" }),
+  });
+  if (r.status !== 0) {
+    fail(`second SessionStart failed: ${r.stderr || r.stdout}`);
+  }
+  ok("SessionStart records a fresh baseline after the seed commit");
+
   const stopCheck = join(
     work,
     "integrations",

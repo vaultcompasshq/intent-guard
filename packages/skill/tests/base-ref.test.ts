@@ -230,6 +230,196 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
   });
 });
 
+// Git C-quotes a path containing a double quote, a backslash, a tab or a newline
+// even with core.quotePath=false, so a line-split reader sees `"secrets/a\"b.txt"`
+// (leading quote, escaped inside) and no glob matches it. The fix is NUL-separated
+// output (-z), which git never quotes.
+const AWKWARD_NAMES: [string, string][] = [
+  ["double quote", 'secrets/a"b.txt'],
+  ["backslash", "secrets/a\\b.txt"],
+  ["tab", "secrets/a\tb.txt"],
+];
+
+describe("NUL-separated path collection", { timeout: 60_000 }, () => {
+  for (const [label, name] of AWKWARD_NAMES) {
+    it(`hard-blocks a ${label} file name in a protected dir with --base`, async () => {
+      const dir = repoWithBranch([name]);
+      await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+
+      const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+      expect(res.code).toBe(1);
+      const out = JSON.parse(res.stdout);
+      expect(out.budget.action).toBe("hard_block");
+      expect(out.budget.violations[0].matched).toContain(name);
+    });
+
+    it(`hard-blocks a ${label} file name in a protected dir with --staged`, async () => {
+      const dir = repoWithBranch(["README.md"]);
+      await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+      writeAt(dir, name, "key\n");
+      git(dir, ["add", "--", name]);
+
+      const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+      expect(res.code).toBe(1);
+      const out = JSON.parse(res.stdout);
+      expect(out.budget.action).toBe("hard_block");
+      expect(out.budget.violations[0].matched).toContain(name);
+    });
+  }
+});
+
+// The glob regexp had no `s` flag, so the `.*` built from `**` stopped at a
+// newline and a name like secrets/a\nb.txt matched no protected glob.
+describe("newline in a file name", { timeout: 60_000 }, () => {
+  const NEWLINE_NAME = "secrets/a\nb.txt";
+  const BUDGET = '\nbudget:\n  protected_paths:\n    - "secrets/**"\n';
+
+  it("hard-blocks --base", async () => {
+    const dir = repoWithBranch([NEWLINE_NAME]);
+    await freezeWithBudget(dir, BUDGET);
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).budget.action).toBe("hard_block");
+  });
+
+  it("hard-blocks --staged", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, BUDGET);
+    writeAt(dir, NEWLINE_NAME, "key\n");
+    git(dir, ["add", "--", NEWLINE_NAME]);
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).budget.action).toBe("hard_block");
+  });
+
+  it("hard-blocks --paths", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, BUDGET);
+    const res = await run("check-cli.js", ["--project", dir, "--paths", NEWLINE_NAME, "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).budget.action).toBe("hard_block");
+  });
+
+  it("hard-blocks a staged rename of such a file out of secrets/", async () => {
+    const dir = repoWithRename(NEWLINE_NAME, "docs/moved.txt", false);
+    await freezeWithBudget(dir, BUDGET);
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).budget.action).toBe("hard_block");
+  });
+
+  it("hard-blocks a committed rename of such a file out of secrets/ with --base", async () => {
+    const dir = repoWithRename(NEWLINE_NAME, "docs/moved.txt", true);
+    await freezeWithBudget(dir, BUDGET);
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).budget.action).toBe("hard_block");
+  });
+});
+
+describe("staged path listing does not swallow errors", { timeout: 120_000 }, () => {
+  it("still blocks when the staged name list is larger than 1 MB", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "**/secrets/**"\n');
+    // About 1.3 MB of names, a real list rather than an injected buffer size.
+    // execFileSync's default maxBuffer is 1 MB, which threw ENOBUFS, and the
+    // catch-all turned that into an empty list, which passes.
+    const pad = "p".repeat(80);
+    for (let i = 0; i < 14000; i++) {
+      writeAt(dir, `bulk/${pad}${String(i).padStart(6, "0")}.txt`, "x\n");
+    }
+    writeAt(dir, "zzz/secrets/key.txt", "key\n");
+    git(dir, ["add", "--", "bulk", "zzz"]);
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).budget.action).toBe("hard_block");
+  });
+
+  it("passes quietly outside a git repository, as before", async () => {
+    const dir = tmpDir();
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--no-require-frozen", "--json"]);
+    expect(res.code).toBe(0);
+  });
+
+  it("exits 2 on any other git failure", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    // A corrupt index makes git diff --cached fail for a reason that is not
+    // "not a git repository".
+    writeFileSync(join(dir, ".git", "index"), "this is not an index", "utf8");
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+    expect(res.code).toBe(2);
+    expect(res.stdout).not.toContain('"status":"ok"');
+    expect(res.stderr).toContain("--staged");
+  });
+});
+
+describe("explicit path shapes are refused like budget globs", { timeout: 60_000 }, () => {
+  const REFUSED: [string, string][] = [
+    ["a leading ./ followed by another . segment", "././secrets/k"],
+    ["an empty segment after ./", ".//secrets/k"],
+    ["an internal empty segment", "secrets//k"],
+    ["a leading slash", "/secrets/k"],
+    ["a backslash", "secrets\\k"],
+  ];
+  for (const [label, value] of REFUSED) {
+    it(`refuses ${label}`, async () => {
+      const dir = repoWithBranch(["README.md"]);
+      await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+      const res = await run("check-cli.js", ["--project", dir, "--paths", value, "--json"]);
+      expect(res.code).toBe(2);
+      expect(res.stderr).toContain(value);
+      expect(res.stdout).not.toContain('"status":"ok"');
+    });
+  }
+
+  it("still accepts a single leading ./ and a trailing slash", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    const res = await run("check-cli.js", ["--project", dir, "--paths", "./README.md,docs/", "--json"]);
+    expect(res.code).toBe(0);
+  });
+
+  it("treats ./secrets/k as the protected path it is", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+    const res = await run("check-cli.js", ["--project", dir, "--paths", "./secrets/k", "--json"]);
+    expect(res.code).toBe(1);
+  });
+});
+
+describe("dot-dot path refusal", { timeout: 60_000 }, () => {
+  it("refuses a --paths entry with a .. segment instead of letting it slip past a protected glob", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--paths", "src/../secrets/k",
+      "--json",
+    ]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("src/../secrets/k");
+    expect(res.stderr).toContain("..");
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+
+  it("refuses a leading .. segment too, in report", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    const res = await run("report-cli.js", ["--project", dir, "--paths", "../outside.txt", "--json"]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("../outside.txt");
+  });
+
+  it("still accepts a name that merely contains dots", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    const res = await run("check-cli.js", ["--project", dir, "--paths", "docs/a..b.md,notes/..hidden", "--json"]);
+    expect(res.code).toBe(0);
+  });
+});
+
 describe("intent-guard report --base", { timeout: 60_000 }, () => {
   it("reports the same path set the gate saw", async () => {
     const dir = repoWithBranch(["README.md", "docs/usage.md"]);

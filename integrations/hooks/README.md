@@ -15,9 +15,20 @@ own `.claude/settings.json` and `.codex/hooks.json`, so renaming them would brea
 every project that already wired them up. The commands they invoke are the new
 `intent-guard-*` binaries.
 
-The scripts first look for this repo's built CLI files under
-`packages/skill/dist/`, then fall back to `intent-guard-resume` /
-`intent-guard-check` on `PATH`.
+Binary resolution: the scripts use `intent-guard-resume` / `intent-guard-check`
+from `PATH`, and nothing else, unless the operator sets `INTENT_GUARD_DEV_DIST=1`
+in the hook's environment; then they use the built CLI files under
+`packages/skill/dist/`, which is what developing Intent Guard itself needs.
+Nothing inside the repository can turn that on. `dist/` is normally gitignored,
+so a file planted there never shows in a diff, and any in-repo signal (a
+`package.json` name, say) is one edit away for the agent, so only an environment
+variable set by whoever launches the host is trusted.
+
+**These hooks are a tripwire, not a boundary.** They run on the machine the
+agent controls and the session baseline lives in a file the agent can write.
+The enforcement boundary is CI running `intent-guard check --base <ref>
+--trust-base <ref>` on the pull request. Use the hooks to stop honest mistakes
+early, not to contain a hostile agent.
 
 ## Install
 
@@ -46,5 +57,48 @@ Then copy the relevant sample config from `integrations/codex/`,
   prints to stderr and leaves stdout empty on every path, pass or block. Git
   pre-commit still uses `intent-guard-check` directly, where exit 1 is the
   blocking code.
+- Loop policy. A FINDING (the gate exits 1: a budget violation or hard block)
+  always blocks, including when the host's stdin JSON says `stop_hook_active` is
+  true, because the agent can fix it. A COULD-NOT-RUN condition is one the agent
+  cannot fix: no gate binary, no baseline and no upstream, an invalid baseline
+  record, a git failure while collecting paths, a path with a comma or a
+  backslash, or the gate itself exiting 2 or 127. It blocks the first time. When
+  `stop_hook_active` is true it lets the stop through (exit 0) instead of looping
+  forever, and says loudly that nothing was judged, why, that a human must fix
+  it, and that CI `intent-guard check --base` is the enforcement boundary. The
+  message goes to stderr and to stdout as `{"systemMessage": "..."}`, the Claude
+  Code JSON field that shows the user a warning on a non-blocking exit; on a pass
+  or a block stdout stays empty. Codex rendering of `systemMessage` is not
+  confirmed, so stderr carries the same text. An absent, unparseable or false
+  `stop_hook_active` means block.
+- The Stop check judges everything that changed since the session began, not
+  only the working-tree diff: commits made during the session, staged and
+  unstaged edits, and untracked new files. `conductor-session-start.sh` records
+  `HEAD` (or the empty tree in a repository with no commit) in a file under the
+  git directory, never in the tracked tree. The `source` field of the JSON the
+  host sends on stdin decides what a SessionStart does: `startup` and `clear`
+  always record a fresh baseline (so a commit the human made between sessions is
+  not judged against the next session), while `resume` and `compact` keep the
+  existing one if it is still valid and was taken under the same `contract_id`.
+  An absent or unknown `source` is treated as a continuation, which can only
+  over-judge. The recorded value must be a full object id that is the empty
+  tree or a commit that is an ancestor of `HEAD`; anything else (a tree, a name
+  such as `HEAD`, an unrelated commit) blocks the stop with a message. With no
+  record (SessionStart not wired) the check uses the upstream branch if there
+  is one; with neither it fails closed with exit 2. The operator can set
+  `INTENT_GUARD_NO_BASELINE_OK=1` to accept judging only uncommitted and
+  untracked changes, with a warning that committed work cannot be seen. Wire
+  SessionStart instead.
+- Paths are read NUL-separated with `core.quotePath=false`, so names with
+  quotes, backslashes, tabs or non-ASCII characters reach the budget literally.
+  A git failure blocks the stop (exit 2, reason on stderr) instead of yielding
+  an empty list, which would pass. `--paths` is comma-separated, so a changed
+  path containing a comma cannot be passed faithfully; the hook refuses it and
+  asks for a rename rather than guessing. Each path is passed as `./<path>` so a
+  name starting with `-` is not read as a flag. A changed file whose name
+  contains a backslash is refused by the CLI's explicit-path check (`--paths`
+  refuses a backslash, a leading `/`, and `..`, `.` or empty segments) and so
+  blocks the stop; rename it. `--staged` and `--base` read from git directly and
+  accept such names.
 - Cursor has no committed lifecycle hook config here; use the project rule plus
   the Git pre-commit hook for enforcement.

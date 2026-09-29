@@ -1023,7 +1023,7 @@ describe("action.yml validates its inputs before a shell sees them", () => {
   });
 
   it("refuses a push run that named neither base nor paths", () => {
-    // The gate fails closed on an empty path set, so there is nothing
+    // The gate passes on an empty path set, so there is nothing
     // sensible to default to off a pull request: a run with no paths would
     // pass every push for the wrong reason.
     const refused = runValidate({}, PUSH_EVENT);

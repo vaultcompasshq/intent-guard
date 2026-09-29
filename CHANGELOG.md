@@ -7,7 +7,64 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- **Several ways a change escaped the gate are narrowed.** The local lifecycle
+  hook is a tripwire that runs on the machine the agent controls; CI running
+  `check --base` (with `--trust-base`) is the enforcement boundary.
+  - `check --staged` and `check --base` (and `report`) now read git's changed
+    paths NUL-separated (`-z`). Git C-quotes a name containing a double quote,
+    backslash, tab or newline even with `core.quotePath=false`, so a new file
+    such as `secrets/a"b.txt` reached the budget as a quoted string that
+    matched no `secrets/**` glob and passed.
+  - A newline in a file name no longer defeats `**`: the glob regexp gains the
+    `s` flag, so `secrets/a` plus a newline plus `b.txt` matches `secrets/**`.
+  - `check --staged` no longer passes when git's listing fails. A staged name
+    list over 1 MB threw ENOBUFS, which was swallowed into an empty list; the
+    buffer is now 256 MB, and only "not a git repository" yields an empty list.
+    Any other failure exits 2, as `--base` already did.
+  - The Stop lifecycle hook (`integrations/hooks/conductor-stop-check.sh`) now
+    judges untracked new files and work the agent committed during the
+    session, not only the working-tree diff. `conductor-session-start.sh`
+    records `HEAD` under the git directory and the Stop check diffs against
+    it. `startup` and `clear` sessions always take a fresh baseline; `resume`
+    and `compact` keep the existing one. A recorded baseline must be an
+    ancestor commit of `HEAD` (or the empty tree) or the stop is blocked. A git
+    failure blocks the stop with a reason on stderr instead of producing an
+    empty list, which passes. With no session-start record and no upstream
+    branch it fails closed; `INTENT_GUARD_NO_BASELINE_OK=1` is the operator
+    escape. A changed path containing a comma is refused, since `--paths`
+    splits on commas, and every path is passed as `./<path>` so a name that
+    starts with `-` is not read as a flag.
+  - The Stop hook no longer loops on failures the agent cannot fix. A finding
+    (gate exit 1) always blocks. A could-not-run condition (no binary, no
+    baseline, git failure, comma or backslash path, gate exit 2 or 127) blocks
+    once, then, when the host reports `stop_hook_active`, lets the stop through
+    with a loud message that nothing was judged and that CI `--base` is the
+    boundary.
+  - The hook runs `packages/skill/dist` only when the operator sets
+    `INTENT_GUARD_DEV_DIST=1`; otherwise it uses the installed binary, because a
+    gitignored `dist/` is a file the agent can plant and never shows in a diff.
+  - Explicit `--paths` entries with a `..` segment, a `.` segment anywhere
+    other than one leading `./`, an empty segment, a leading `/`, or a
+    backslash are refused with exit 2 (`check`, `report`) instead of slipping
+    past a protected glob as `src/../secrets/k`. intent-guard's own git reads
+    (`--staged`, `--base`) are not subject to this. Callers that forward paths
+    through `--paths` must read git with `-z` and never forward git's C-quoted
+    form.
+
+### Removed
+
+- **`scripts/publish-beta.mjs` and the `publish:beta` and
+  `publish:beta:dry-run` scripts.** It published `--tag latest` by hand with
+  no test gate or provenance. Releases go through the CI trusted-publisher
+  pipeline only.
+
 ### Fixed
+
+- The `action.yml` input text and error message for the empty path set said the
+  gate "fails closed" on it. It passes on an empty set, which is exactly why a
+  push run with neither `base` nor `paths` is refused; the wording now says so.
 
 - **`validateBudgetGlob` rejected `./` but accepted `.//` and `.///`, even
   though all three normalize to a path that matches nothing.** (#112) The

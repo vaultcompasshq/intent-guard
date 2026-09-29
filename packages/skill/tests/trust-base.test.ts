@@ -754,6 +754,46 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
     expect(out.budget.action).toBe("hard_block");
   });
 
+  // A genuine re-freeze rewrites approved_at and may rewrite frozen_by, and
+  // docs/cli-reference.md documents that it trips self-approval. Each field is
+  // pinned alone, so dropping either from approvalOf turns exactly one red.
+  it("refuses a head that changes only approved_at", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: {
+        [CONTRACT]: BASE_CONTRACT.replace(
+          'approved_at: "2026-09-05T00:00:00.000Z"',
+          'approved_at: "2026-09-07T00:00:00.000Z"',
+        ),
+      },
+    });
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.selfApproval).toBe(true);
+    expect(
+      (out.reasons as string[]).some((reason) => reason.startsWith("Self-approval refused:")),
+    ).toBe(true);
+  });
+
+  it("refuses a head that changes only frozen_by", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: { [CONTRACT]: BASE_CONTRACT.replace("frozen_by: user", "frozen_by: agent") },
+    });
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.selfApproval).toBe(true);
+    expect(
+      (out.reasons as string[]).some((reason) => reason.startsWith("Self-approval refused:")),
+    ).toBe(true);
+  });
+
   it("names the contract change as a proposal rather than obeying it", async () => {
     const dir = repo({
       base: { [CONTRACT]: BASE_CONTRACT },
