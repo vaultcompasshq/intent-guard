@@ -194,7 +194,9 @@ interface HookWorld {
   env: NodeJS.ProcessEnv;
 }
 
-function makeWorld(options: { gitInit?: boolean; stub?: boolean } = {}): HookWorld {
+function makeWorld(
+  options: { gitInit?: boolean; stub?: boolean; gateExit?: number } = {},
+): HookWorld {
   const work = mkdtempSync(join(tmpdir(), "intent-guard-hook-world-"));
   const bin = join(work, "bin");
   const project = join(work, "project");
@@ -212,7 +214,7 @@ function makeWorld(options: { gitInit?: boolean; stub?: boolean } = {}): HookWor
   let path = pathWithoutCheckBinary();
   if (options.stub !== false) {
     const stubPath = join(bin, "intent-guard-check");
-    writeFileSync(stubPath, argEchoStub(0), "utf8");
+    writeFileSync(stubPath, argEchoStub(options.gateExit ?? 0), "utf8");
     chmodSync(stubPath, 0o755);
     path = `${bin}${delimiter}${path}`;
   }
@@ -655,6 +657,156 @@ describe("hook binary resolution", () => {
       const result = runHook(world, STOP_CHECK, { env: { INTENT_GUARD_DEV_DIST: "1" } });
       expect(result.stderr).toContain("PLANTED-DIST-RAN");
       expect(result.stderr).not.toContain("ARG[--project]");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+});
+
+// Loop policy. A finding blocks every time. A could-not-run condition blocks the
+// first time and, once the host says the stop is already a continuation
+// (stop_hook_active), lets it through with a loud message, because the agent
+// cannot fix it and blocking again only loops.
+describe("stop hook loop policy", () => {
+  const ACTIVE = JSON.stringify({ hook_event_name: "Stop", stop_hook_active: true });
+  const INACTIVE = JSON.stringify({ hook_event_name: "Stop", stop_hook_active: false });
+
+  interface Scenario {
+    label: string;
+    setup: () => HookWorld;
+  }
+
+  const scenarios: Scenario[] = [
+    {
+      label: "no baseline and no upstream",
+      setup: () => makeWorld(),
+    },
+    {
+      label: "an invalid baseline record",
+      setup: () => {
+        const world = makeWorld();
+        startSession(world, "startup");
+        writeFileSync(join(world.project, ".git", "intent-guard-session-start"), "HEAD\nnone\n");
+        return world;
+      },
+    },
+    {
+      label: "a git failure during collection",
+      setup: () => makeWorld({ gitInit: false }),
+    },
+    {
+      label: "a comma in a path",
+      setup: () => {
+        const world = makeWorld();
+        startSession(world, "startup");
+        write(world, "docs/a,b.txt");
+        return world;
+      },
+    },
+    {
+      label: "a backslash in a path (the gate refuses it with exit 2)",
+      setup: () => {
+        const world = makeRealGateWorld();
+        startSession(world, "startup");
+        write(world, "docs/a\\b.txt");
+        return world;
+      },
+    },
+    {
+      label: "the gate exiting 2",
+      setup: () => {
+        const world = makeWorld({ gateExit: 2 });
+        startSession(world, "startup");
+        return world;
+      },
+    },
+    {
+      label: "the gate exiting 127",
+      setup: () => {
+        const world = makeWorld({ gateExit: 127 });
+        startSession(world, "startup");
+        return world;
+      },
+    },
+    {
+      label: "no gate binary",
+      setup: () => makeWorld({ stub: false }),
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    it(`blocks on ${scenario.label} when stop_hook_active is false`, () => {
+      const world = scenario.setup();
+      try {
+        const result = runHook(world, STOP_CHECK, { input: INACTIVE });
+        expect(result.code).toBe(2);
+        expect(result.stdout).toBe("");
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+
+    it(`blocks on ${scenario.label} when the field is absent or unparseable`, () => {
+      const world = scenario.setup();
+      try {
+        for (const input of ["", "{}", "not json at all"]) {
+          expect(runHook(world, STOP_CHECK, { input }).code).toBe(2);
+        }
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+
+    it(`allows the stop with a loud message on ${scenario.label} when stop_hook_active is true`, () => {
+      const world = scenario.setup();
+      try {
+        const result = runHook(world, STOP_CHECK, { input: ACTIVE });
+        expect(result.code).toBe(0);
+        expect(result.stderr).toContain("COULD NOT RUN");
+        expect(result.stderr).toContain("NOT judged");
+        expect(result.stderr).toContain("CI running intent-guard check --base");
+        const shown = JSON.parse(result.stdout);
+        expect(shown.systemMessage).toContain("COULD NOT RUN");
+        expect(shown.systemMessage).toContain("intent-guard check --base");
+      } finally {
+        rmSync(world.work, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it("still blocks a finding when stop_hook_active is true (stub gate exits 1)", () => {
+    const world = makeWorld({ gateExit: 1 });
+    try {
+      startSession(world, "startup");
+      const result = runHook(world, STOP_CHECK, { input: ACTIVE });
+      expect(result.code).toBe(2);
+      expect(result.stdout).toBe("");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("still blocks a real budget hard_block when stop_hook_active is true", () => {
+    const world = makeRealGateWorld();
+    try {
+      startSession(world, "startup");
+      write(world, "secrets/new-key.txt");
+      const result = runHook(world, STOP_CHECK, { input: ACTIVE });
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain("Budget hard_block");
+      expect(result.stdout).toBe("");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("passes a clean run with stop_hook_active true and prints nothing on stdout", () => {
+    const world = makeWorld();
+    try {
+      startSession(world, "startup");
+      const result = runHook(world, STOP_CHECK, { input: ACTIVE });
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe("");
     } finally {
       rmSync(world.work, { recursive: true, force: true });
     }

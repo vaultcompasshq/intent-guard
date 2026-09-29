@@ -133,6 +133,23 @@ describe("evaluateBudget", () => {
     expect(v?.matched).toContain("package.json");
   });
 
+  it("still sees a manifest inside a directory whose name contains a newline", () => {
+    const result = evaluateBudget(
+      withBudget({ allow_new_dependencies: false }),
+      ["odd\ndir/package.json", "odd\ndir/sub\nfolder/pnpm-lock.yaml"],
+    );
+    const v = result.violations.find((x) => x.rule === "allow_new_dependencies");
+    expect(v?.matched).toEqual(["odd\ndir/package.json", "odd\ndir/sub\nfolder/pnpm-lock.yaml"]);
+  });
+
+  it("does not treat a file named like a manifest with a newline prefix as one", () => {
+    // "x\npackage.json" is a different file from package.json, not a way to hide one.
+    const result = evaluateBudget(withBudget({ allow_new_dependencies: false }), [
+      "x\npackage.json",
+    ]);
+    expect(result.violations.find((x) => x.rule === "allow_new_dependencies")).toBeUndefined();
+  });
+
   it("ignores manifest edits when allow_new_dependencies is true", () => {
     const result = evaluateBudget(
       withBudget({ allow_new_dependencies: true }),
