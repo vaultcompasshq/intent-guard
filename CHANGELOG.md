@@ -36,6 +36,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
     escape. A changed path containing a comma is refused, since `--paths`
     splits on commas, and every path is passed as `./<path>` so a name that
     starts with `-` is not read as a flag.
+  - The Stop hook no longer loops on failures the agent cannot fix. A finding
+    (gate exit 1) always blocks. A could-not-run condition (no binary, no
+    baseline, git failure, comma or backslash path, gate exit 2 or 127) blocks
+    once, then, when the host reports `stop_hook_active`, lets the stop through
+    with a loud message that nothing was judged and that CI `--base` is the
+    boundary.
   - The hook runs `packages/skill/dist` only when the operator sets
     `INTENT_GUARD_DEV_DIST=1`; otherwise it uses the installed binary, because a
     gitignored `dist/` is a file the agent can plant and never shows in a diff.

@@ -57,6 +57,20 @@ Then copy the relevant sample config from `integrations/codex/`,
   prints to stderr and leaves stdout empty on every path, pass or block. Git
   pre-commit still uses `intent-guard-check` directly, where exit 1 is the
   blocking code.
+- Loop policy. A FINDING (the gate exits 1: a budget violation or hard block)
+  always blocks, including when the host's stdin JSON says `stop_hook_active` is
+  true, because the agent can fix it. A COULD-NOT-RUN condition is one the agent
+  cannot fix: no gate binary, no baseline and no upstream, an invalid baseline
+  record, a git failure while collecting paths, a path with a comma or a
+  backslash, or the gate itself exiting 2 or 127. It blocks the first time. When
+  `stop_hook_active` is true it lets the stop through (exit 0) instead of looping
+  forever, and says loudly that nothing was judged, why, that a human must fix
+  it, and that CI `intent-guard check --base` is the enforcement boundary. The
+  message goes to stderr and to stdout as `{"systemMessage": "..."}`, the Claude
+  Code JSON field that shows the user a warning on a non-blocking exit; on a pass
+  or a block stdout stays empty. Codex rendering of `systemMessage` is not
+  confirmed, so stderr carries the same text. An absent, unparseable or false
+  `stop_hook_active` means block.
 - The Stop check judges everything that changed since the session began, not
   only the working-tree diff: commits made during the session, staged and
   unstaged edits, and untracked new files. `conductor-session-start.sh` records

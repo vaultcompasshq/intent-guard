@@ -191,6 +191,26 @@ record and no upstream`), with the operator escape `INTENT_GUARD_NO_BASELINE_OK=
 upstream stand-in (`with no record but an upstream branch, judges changes since
 the upstream`).
 
+The Stop hook does not loop on what the agent cannot fix. `conductor-stop-check.sh`
+reads `stop_hook_active` from stdin (absent or unparseable means false), and
+`could_not_run` blocks unless it is true, when it exits 0 with a message on
+stderr and a `systemMessage` on stdout; a gate exit of exactly 1 always blocks
+(the `status -eq 1` branch), so a finding is never let through. Pinned in
+`examples/validate-integrations.test.ts`, group `stop hook loop policy`, once per
+class (no baseline and no upstream, an invalid baseline record, a git failure
+during collection, a comma in a path, a backslash in a path, the gate exiting 2,
+the gate exiting 127, no gate binary): `blocks on <class> when stop_hook_active
+is false`, `blocks on <class> when the field is absent or unparseable`, `allows
+the stop with a loud message on <class> when stop_hook_active is true`; and
+findings: `still blocks a finding when stop_hook_active is true (stub gate exits
+1)`, `still blocks a real budget hard_block when stop_hook_active is true`.
+
+`allow_new_dependencies` sees manifests under directories with a newline in
+their name and does not mistake `x` NEWLINE `package.json` for one. Pinned by
+`still sees a manifest inside a directory whose name contains a newline` and
+`does not treat a file named like a manifest with a newline prefix as one` in
+`packages/core/tests/budget.test.ts`.
+
 These hooks are a tripwire, not a boundary: the baseline file is writable by the
 agent, and re-pointing it at a newer ancestor commit is not detectable. CI with
 `--base` and `--trust-base` is the enforcement boundary.
