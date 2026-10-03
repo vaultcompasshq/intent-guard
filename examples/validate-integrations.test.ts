@@ -1373,6 +1373,24 @@ describe("stop hook and repository git settings", () => {
     git(checkout, "commit", "-q", "-am", "v2");
   }
 
+  function revParse(cwd: string, rev: string): string {
+    return execFileSync("git", ["rev-parse", rev], { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  }
+
+  /**
+   * Stage the moved pointer with update-index rather than git add: newer git
+   * releases make git add skip a submodule whose .gitmodules entry says
+   * ignore = all, so the fixture would silently stage nothing. The check
+   * makes such a no-op fail here instead of reaching the hook.
+   */
+  function stagePointer(world: HookWorld): void {
+    const checkout = join(world.project, "secrets", "vendor");
+    const moved = revParse(checkout, "HEAD");
+    expect(moved).not.toBe(revParse(world.project, "HEAD:secrets/vendor"));
+    git(world.project, "update-index", "--cacheinfo", `160000,${moved},secrets/vendor`);
+    expect(revParse(world.project, ":secrets/vendor")).toBe(moved);
+  }
+
   function expectHardBlock(world: HookWorld): void {
     const result = runHook(world, STOP_CHECK, { input: ACTIVE });
     expect(result.code).toBe(2);
@@ -1385,7 +1403,7 @@ describe("stop hook and repository git settings", () => {
     try {
       startSession(world, "startup");
       bump(world);
-      git(world.project, "add", "--", "secrets/vendor");
+      stagePointer(world);
       git(world.project, "commit", "-q", "-m", "bump");
       expectHardBlock(world);
     } finally {
@@ -1398,7 +1416,7 @@ describe("stop hook and repository git settings", () => {
     try {
       startSession(world, "startup");
       bump(world);
-      git(world.project, "add", "--", "secrets/vendor");
+      stagePointer(world);
       expectHardBlock(world);
     } finally {
       rmSync(world.work, { recursive: true, force: true });
@@ -1435,9 +1453,10 @@ describe("stop hook and repository git settings", () => {
       git(world.project, "commit", "-q", "-m", "drop ignore");
       startSession(world, "startup");
       bump(world);
-      git(world.project, "add", "--", "secrets/vendor");
+      stagePointer(world);
       git(world.project, "commit", "-q", "-m", "bump");
-      // Set after the commit: git add itself honours this setting.
+      // Set after the commit, so the fixture never depends on whether git
+      // add honours it.
       git(world.project, "config", "diff.ignoreSubmodules", "all");
       expectHardBlock(world);
     } finally {

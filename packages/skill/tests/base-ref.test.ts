@@ -316,14 +316,30 @@ function ignoreAllInGitmodules(dir: string): void {
   git(dir, ["add", "--", ".gitmodules"]);
 }
 
-/** Commit inside the submodule checkout and stage the moved pointer. */
+function gitOut(cwd: string, args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+}
+
+/**
+ * Commit inside the submodule checkout and stage the moved pointer.
+ *
+ * The pointer is written straight into the index with update-index rather
+ * than git add: newer git releases make git add skip a submodule whose
+ * .gitmodules entry says ignore = all, so the fixture would silently stage
+ * nothing and every assertion after it would be about an unchanged repo.
+ * The check at the end makes such a no-op fail loudly here instead.
+ */
 function bumpSubmodule(dir: string): void {
   const checkout = join(dir, "secrets", "vendor");
   git(checkout, ["config", "user.email", "tester@example.com"]);
   git(checkout, ["config", "user.name", "tester"]);
+  const before = gitOut(dir, ["rev-parse", ":secrets/vendor"]);
   writeAt(checkout, "lib.txt", "v2\n");
   git(checkout, ["commit", "-am", "v2"]);
-  git(dir, ["add", "--", "secrets/vendor"]);
+  const moved = gitOut(checkout, ["rev-parse", "HEAD"]);
+  git(dir, ["update-index", "--cacheinfo", `160000,${moved},secrets/vendor`]);
+  expect(moved).not.toBe(before);
+  expect(gitOut(dir, ["rev-parse", ":secrets/vendor"])).toBe(moved);
 }
 
 describe("a moved submodule pointer is always listed", { timeout: 60_000 }, () => {
