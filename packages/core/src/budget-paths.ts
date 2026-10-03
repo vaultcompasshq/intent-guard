@@ -73,6 +73,14 @@ export function validateBudgetGlob(value: string): string | null {
   if (value.replace(/\/+$/, "").includes("//")) {
     return "must not contain an empty path segment (consecutive '/')";
   }
+  // The trailing-slash strip above is for a glob with NO wildcard only. A
+  // glob with '*' or '?' is compiled as written, so `secrets/**/` becomes a
+  // pattern that only a path ending in '/' could match, and a git path never
+  // ends in one. Refused rather than quietly normalized: an entry that starts
+  // protecting files in a patch release would turn green runs red.
+  if (/[*?]/.test(value) && value.endsWith("/")) {
+    return "must not end in '/' when it contains '*' or '?' (no git path ends in '/', so the entry currently matches no file: as a protected path it protects nothing, as an allowed path it allows nothing; drop the trailing '/')";
+  }
   const segments = value.split("/");
   for (let i = 0; i < segments.length; i++) {
     if (segments[i] === "..") {

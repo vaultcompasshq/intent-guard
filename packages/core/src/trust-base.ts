@@ -88,6 +88,25 @@ const CONTROL_DIRS = [STATE_DIR, LEGACY_STATE_DIR] as const;
 const CONTRACTS_SUBDIR = "contracts";
 
 /**
+ * Refuse a ref that starts with a dash, before git sees it.
+ *
+ * Git reads such a value as an option, not a revision: `git show -Sxyz:./x`
+ * exits 0 with no output, which reads as an empty file. Every function in this
+ * file that hands a ref to git calls this first, so the refusal does not
+ * depend on each caller having checked. `--end-of-options` is not used
+ * instead, because `git rev-parse` only learned it in git 2.30 and an older
+ * git would then fail every trust-base run.
+ */
+function refuseDashRef(ref: string): void {
+  if (ref.startsWith("-")) {
+    throw new TrustBaseError(
+      `intent-guard: refusing ref "${ref}": it starts with a dash, so git would ` +
+        "read it as an option rather than a revision. Nothing was checked.",
+    );
+  }
+}
+
+/**
  * What a rev resolves to, or null when it does not resolve here.
  *
  * `--quiet` suppresses git's own explanation, so there is nothing worth
@@ -97,6 +116,7 @@ const CONTRACTS_SUBDIR = "contracts";
  * Null, and the caller writes the sentence.
  */
 function resolve(projectRoot: string, rev: string, kind: "commit" | "tree"): string | null {
+  refuseDashRef(rev);
   try {
     return execFileSync("git", ["rev-parse", "--verify", "--quiet", `${rev}^{${kind}}`], {
       cwd: projectRoot,
@@ -207,14 +227,21 @@ export function assertTrustBaseResolvable(projectRoot: string, ref: string): voi
  * working directory rather than to the repository root, so a project root
  * that is a subdirectory of the repository reads its own state directory
  * instead of one that happens to sit at the top of the repository.
+ *
+ * So is the trailing `--`. Without it git reads `REF:./PATH` as either a
+ * revision or a file name, and a file of that exact name in the working tree
+ * (a directory called `main:.`, say, which a pull request can add) makes git
+ * refuse with "ambiguous argument". That refusal used to read as "no such
+ * file", and a trusted control input became the empty string.
  */
 export function readFileAtRef(
   projectRoot: string,
   ref: string,
   relativePath: string,
 ): string | null {
+  refuseDashRef(ref);
   try {
-    return execFileSync("git", ["show", `${ref}:./${relativePath}`], {
+    return execFileSync("git", ["show", `${ref}:./${relativePath}`, "--"], {
       cwd: projectRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -257,12 +284,18 @@ export function isRegularFileMode(mode: string): boolean {
  * ls-tree rather than `git show` alone, because `git show ref:path` on a
  * symlink prints the link target and says nothing about the entry being a
  * link. The mode is the only place that fact lives.
+ *
+ * Only a listing that SUCCEEDS and names nothing means absent. ls-tree exiting
+ * non-zero (a tree it cannot read, say) is a read this run cannot make, and
+ * reading it as "absent" would turn the base config into the defaults and the
+ * base contract into none.
  */
 function treeEntry(
   projectRoot: string,
   ref: string,
   relativePath: string,
 ): { mode: string; type: string } | null {
+  refuseDashRef(ref);
   let out: string;
   try {
     out = execFileSync("git", ["ls-tree", ref, "--", `./${relativePath}`], {
@@ -271,7 +304,10 @@ function treeEntry(
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch {
-    return null;
+    throw new TrustBaseError(
+      `intent-guard: cannot list ${relativePath} at "${ref}": git ls-tree failed. ` +
+        "Nothing was checked.",
+    );
   }
   const line = out.split("\n").find((candidate) => candidate.trim().length > 0);
   if (line === undefined) return null;
@@ -303,10 +339,29 @@ export function readControlFileAtRef(
     // A non-blob (a directory, a submodule) has no contents to read, and the
     // empty string keeps it distinguishable from a missing entry while the
     // mode carries what it actually is.
-    const text = entry.type === "blob" ? (readFileAtRef(projectRoot, ref, path) ?? "") : "";
+    const text = entry.type === "blob" ? readListedBlob(projectRoot, ref, path) : "";
     return { path, text, mode: entry.mode, type: entry.type };
   }
   return null;
+}
+
+/**
+ * The contents of a blob that ls-tree has already listed at this ref.
+ *
+ * ls-tree saying the file is there and git show failing to read it is not
+ * "absent" and it is not "empty": it is a read this run cannot make, so it is
+ * could-not-run. Coercing it to the empty string turned an unreadable base
+ * config into the defaults and an unreadable base contract into no contract.
+ */
+function readListedBlob(projectRoot: string, ref: string, path: string): string {
+  const text = readFileAtRef(projectRoot, ref, path);
+  if (text === null) {
+    throw new TrustBaseError(
+      `intent-guard: cannot read ${path} at "${ref}": git lists it but would not ` +
+        "return its contents. Nothing was checked.",
+    );
+  }
+  return text;
 }
 
 /**
@@ -586,12 +641,12 @@ export function readArchivedContractAtRef(
   contractId: string,
 ): IntentContract | null {
   for (const dir of CONTROL_DIRS) {
-    const text = readFileAtRef(
-      projectRoot,
-      ref,
-      `${dir}/${CONTRACTS_SUBDIR}/${contractId}.yaml`,
-    );
-    if (text === null) continue;
+    const path = `${dir}/${CONTRACTS_SUBDIR}/${contractId}.yaml`;
+    const entry = treeEntry(projectRoot, ref, path);
+    if (entry === null) continue;
+    // Same rule as a control file: listed but unreadable is could-not-run,
+    // never "no archived contract", which would quietly drop the comparison.
+    const text = entry.type === "blob" ? readListedBlob(projectRoot, ref, path) : "";
     return assertValidIntentContract(parse(text));
   }
   return null;

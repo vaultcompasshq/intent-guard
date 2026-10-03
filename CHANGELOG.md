@@ -7,6 +7,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+Consumer-visible changes, stated plainly:
+
+- The Stop hook now sends committed work to the gate through `--base` and
+  staged work through `--staged`; only unstaged edits and untracked files go
+  on the command line as `--paths`. An unstaged or untracked path that cannot
+  be passed there (a comma or a backslash in its name, an untracked directory
+  holding its own git repository, or more paths than fit) blocks every stop,
+  like a finding, and the rest of the change is still judged. When the session
+  began before the repository's first commit, every changed path goes through
+  `--paths`; there such a path blocks once and is then reported as not judged,
+  and a new session after the first commit restores full judging.
+- A session baseline record that exists is never rewritten on a continuation
+  (`resume`, `compact`, or no `source`), whether it is valid or not, and a
+  changed contract id no longer resets it. Start a new session to record a
+  fresh one. With an invalid record, or none and no upstream, the Stop hook
+  still judges staged, unstaged and untracked changes, and a finding there
+  blocks every time; only when that passes does it report that committed work
+  was not judged.
+- `check --base` and `check --staged` list a moved submodule pointer even when
+  `ignore = all` is set for it, and so does the Stop hook.
+- `--base` and `--trust-base` values that start with a dash are refused with
+  exit 2.
+- `freeze` and `import-spec` refuse a wildcard budget glob that ends in `/`,
+  such as `secrets/**/`, which matches no file; `check` and `report` warn on
+  one in a frozen contract.
+
+### Security
+
+- A trust-base run reads the base ref's control files correctly when the pull
+  request adds a file named like `REF:./PATH`, and a control file the base
+  ref lists but git cannot read, or a base tree git cannot list, stops the
+  run with exit 2 instead of being read as empty or absent.
+- The action refuses a `json-output` path that reaches `.github/` under
+  another spelling or through a symlink in the checkout.
+
 ## [1.8.0] - 2026-09-30
 
 Consumer-visible changes in this release, stated plainly:

@@ -194,6 +194,19 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
     expect(JSON.stringify(out.budget.violations)).toContain("src/legacy/keeper.ts");
   });
 
+  it("judges a branch that adds a file named like the range it is diffed with", async () => {
+    // "git diff main...HEAD" with a file of that exact name in the tree is
+    // ambiguous to git unless the revisions are ended with "--".
+    const dir = repoWithBranch(["main...HEAD", "src/legacy/error-format.ts"]);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "**/legacy/**"\n');
+
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.budget.action).toBe("hard_block");
+    expect(JSON.stringify(out.budget.violations)).toContain("src/legacy/error-format.ts");
+  });
+
   it("fails closed with exit 2 on an unknown base ref", async () => {
     const dir = repoWithBranch(["README.md"]);
     await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
@@ -227,6 +240,153 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
     const res = await run("check-cli.js", ["--project", dir, "--base", "--json"]);
     expect(res.code).toBe(1);
     expect(res.stderr).toContain("Usage: intent-guard check");
+  });
+
+  // Git reads a revision that starts with a dash as an option: "-Sxyz...HEAD"
+  // is a pickaxe search, which lists nothing, and an empty list passes. -R
+  // reverses the diff but lists the same names, so the assertion is on the
+  // refusal message, not on the exit code alone.
+  for (const ref of ["-Sxyz", "-Gnomatch", "-O/dev/null", "-p", "-R"]) {
+    it(`refuses a --base value that starts with a dash (${ref}) as could-not-run`, async () => {
+      const dir = repoWithBranch(["src/legacy/error-format.ts"]);
+      await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "**/legacy/**"\n');
+
+      const res = await run("check-cli.js", ["--project", dir, "--base", ref, "--json"]);
+      expect(res.code).toBe(2);
+      expect(res.stderr).toContain("starts with a dash");
+      expect(res.stdout).not.toContain('"status":"ok"');
+    });
+  }
+
+  it("refuses a dash-leading ref inside basePaths itself, not only in the caller", async () => {
+    const dir = repoWithBranch(["src/legacy/error-format.ts"]);
+    const module = join(DIST, "changed-paths.js");
+    const script =
+      `import { basePaths } from ${JSON.stringify(module)};\n` +
+      `const out = basePaths(${JSON.stringify(dir)}, "-Sxyz");\n` +
+      `console.log("RETURNED " + JSON.stringify(out));\n`;
+    let code = 0;
+    let stdout = "";
+    let stderr = "";
+    try {
+      const res = await execFileAsync("node", ["--input-type=module", "-e", script], {
+        encoding: "utf8",
+      });
+      stdout = String(res.stdout);
+    } catch (err) {
+      const e = err as { code?: number; stdout?: string; stderr?: string };
+      code = typeof e.code === "number" ? e.code : 1;
+      stdout = e.stdout ?? "";
+      stderr = e.stderr ?? "";
+    }
+    expect(stdout).not.toContain("RETURNED");
+    expect(code).toBe(2);
+    expect(stderr).toContain("starts with a dash");
+  });
+});
+
+/**
+ * A repo whose main branch registers a submodule at secrets/vendor. `ignore`
+ * in .gitmodules, or diff.ignoreSubmodules in config, makes a plain git diff
+ * leave a moved submodule pointer out of its listing.
+ */
+function repoWithSubmodule(): string {
+  const sub = tmpDir();
+  git(sub, ["init", "-b", "main"]);
+  git(sub, ["config", "user.email", "tester@example.com"]);
+  git(sub, ["config", "user.name", "tester"]);
+  writeAt(sub, "lib.txt", "v1\n");
+  git(sub, ["add", "--", "lib.txt"]);
+  git(sub, ["commit", "-m", "v1"]);
+
+  const dir = tmpDir();
+  git(dir, ["init", "-b", "main"]);
+  git(dir, ["config", "user.email", "tester@example.com"]);
+  git(dir, ["config", "user.name", "tester"]);
+  writeAt(dir, "README.md", "# Project\n");
+  git(dir, ["add", "--", "README.md"]);
+  git(dir, ["commit", "-m", "initial"]);
+  git(dir, ["-c", "protocol.file.allow=always", "submodule", "add", sub, "secrets/vendor"]);
+  git(dir, ["commit", "-m", "add submodule"]);
+  return dir;
+}
+
+function ignoreAllInGitmodules(dir: string): void {
+  git(dir, ["config", "-f", ".gitmodules", "submodule.secrets/vendor.ignore", "all"]);
+  git(dir, ["add", "--", ".gitmodules"]);
+}
+
+function gitOut(cwd: string, args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+}
+
+/**
+ * Commit inside the submodule checkout and stage the moved pointer.
+ *
+ * The pointer is written straight into the index with update-index rather
+ * than git add: newer git releases make git add skip a submodule whose
+ * .gitmodules entry says ignore = all, so the fixture would silently stage
+ * nothing and every assertion after it would be about an unchanged repo.
+ * The check at the end makes such a no-op fail loudly here instead.
+ */
+function bumpSubmodule(dir: string): void {
+  const checkout = join(dir, "secrets", "vendor");
+  git(checkout, ["config", "user.email", "tester@example.com"]);
+  git(checkout, ["config", "user.name", "tester"]);
+  const before = gitOut(dir, ["rev-parse", ":secrets/vendor"]);
+  writeAt(checkout, "lib.txt", "v2\n");
+  git(checkout, ["commit", "-am", "v2"]);
+  const moved = gitOut(checkout, ["rev-parse", "HEAD"]);
+  git(dir, ["update-index", "--cacheinfo", `160000,${moved},secrets/vendor`]);
+  expect(moved).not.toBe(before);
+  expect(gitOut(dir, ["rev-parse", ":secrets/vendor"])).toBe(moved);
+}
+
+describe("a moved submodule pointer is always listed", { timeout: 60_000 }, () => {
+  const PROTECT = '\nbudget:\n  protected_paths:\n    - "secrets/**"\n';
+
+  async function expectBlocked(dir: string, mode: string[]): Promise<void> {
+    const res = await run("check-cli.js", ["--project", dir, ...mode, "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.stringify(JSON.parse(res.stdout).budget.violations)).toContain("secrets/vendor");
+  }
+
+  it("--base, when the branch sets ignore = all and moves the pointer", async () => {
+    const dir = repoWithSubmodule();
+    git(dir, ["checkout", "-b", "feature"]);
+    ignoreAllInGitmodules(dir);
+    bumpSubmodule(dir);
+    git(dir, ["commit", "-m", "bump"]);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--base", "main"]);
+  });
+
+  it("--base, when the base already has ignore = all and the branch only moves the pointer", async () => {
+    const dir = repoWithSubmodule();
+    ignoreAllInGitmodules(dir);
+    git(dir, ["commit", "-m", "ignore all"]);
+    git(dir, ["checkout", "-b", "feature"]);
+    bumpSubmodule(dir);
+    git(dir, ["commit", "-m", "bump"]);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--base", "main"]);
+  });
+
+  it("--staged, with ignore = all in .gitmodules", async () => {
+    const dir = repoWithSubmodule();
+    ignoreAllInGitmodules(dir);
+    git(dir, ["commit", "-m", "ignore all"]);
+    bumpSubmodule(dir);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--staged"]);
+  });
+
+  it("--staged, with diff.ignoreSubmodules = all in the repository config", async () => {
+    const dir = repoWithSubmodule();
+    git(dir, ["config", "diff.ignoreSubmodules", "all"]);
+    bumpSubmodule(dir);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--staged"]);
   });
 });
 
@@ -479,5 +639,14 @@ describe("intent-guard report --base", { timeout: 60_000 }, () => {
     const res = await run("report-cli.js", ["--project", dir, "--base"]);
     expect(res.code).toBe(1);
     expect(res.stderr).toContain("Usage: intent-guard report");
+  });
+
+  it("refuses a --base value that starts with a dash as could-not-run", async () => {
+    const dir = repoWithBranch(["src/legacy/error-format.ts"]);
+    await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "**/legacy/**"\n');
+
+    const res = await run("report-cli.js", ["--project", dir, "--base", "-Sxyz", "--json"]);
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("starts with a dash");
   });
 });

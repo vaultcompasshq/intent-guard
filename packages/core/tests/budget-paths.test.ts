@@ -106,6 +106,18 @@ describe("validateBudgetGlob (contract-level)", () => {
     // src/. Only an INTERNAL empty segment (src//x, above) can never match.
     expect(validateBudgetGlob("src//")).toBeNull();
   });
+
+  it("rejects a wildcard glob that ends in '/', which no git path can match", () => {
+    for (const value of ["secrets/**/", "src/*/", "a?/", "secrets/**//"]) {
+      const reason = validateBudgetGlob(value);
+      expect([value, reason]).toEqual([value, expect.stringContaining("protects nothing")]);
+    }
+  });
+
+  it("still accepts a trailing '/' on a glob with no wildcard, which the matcher strips", () => {
+    expect(validateBudgetGlob("src/")).toBeNull();
+    expect(validateBudgetGlob("secrets/**")).toBeNull();
+  });
 });
 
 // Flag-level rules: extract --protected-path only. A superset of the

@@ -37,6 +37,15 @@ describe("freezeContract budget path validation", () => {
     ).toThrow(/\.\.\/x/);
   });
 
+  it("refuses to freeze a contract whose protected_paths carries a wildcard glob ending in '/'", () => {
+    expect(() =>
+      freezeContract(draftContract({ protected_paths: ["secrets/**/"] }), {
+        approvedBy: "tester",
+        method: "explicit-flag",
+      }),
+    ).toThrow(/secrets\/\*\*\//);
+  });
+
   it("freezes a contract whose protected_paths carries a brace group, a character class, and a leading '-'", () => {
     // Contract-level accepts these: they are literal characters to the
     // matcher, and real git paths (app/[slug]/** is a Next.js/SvelteKit
