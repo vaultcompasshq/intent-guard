@@ -83,10 +83,20 @@ export function stagedPaths(projectRoot: string): string[] {
     // core.quotePath=false keeps unicode/space paths literal instead of
     // octal-escaped and quoted, so budget globs match the real path.
     // --no-renames lists both sides of a rename, so moving a file out of a
-    // protected directory still names the protected path. See basePaths.
+    // protected directory still names the protected path. See basePaths, also
+    // for --ignore-submodules=none.
     const out = execFileSync(
       "git",
-      ["-c", "core.quotePath=false", "diff", "--cached", "--no-renames", "--name-only", "-z"],
+      [
+        "-c",
+        "core.quotePath=false",
+        "diff",
+        "--cached",
+        "--no-renames",
+        "--ignore-submodules=none",
+        "--name-only",
+        "-z",
+      ],
       {
         cwd: projectRoot,
         encoding: "utf8",
@@ -139,12 +149,27 @@ function explicitPathIssue(path: string): string | null {
  * protected path, and the budget it was meant to trip would pass. Both sides
  * are listed instead, which is why a rename counts as two paths.
  *
+ * --ignore-submodules=none because `ignore = all` for a submodule, set in
+ * .gitmodules (which the change itself can edit) or in git config, leaves a
+ * moved submodule pointer out of a plain diff. The command-line value
+ * overrides both.
+ *
  * Fail-closed. An unknown ref, a missing repository, a shallow clone with no
  * merge base, or a git that will not spawn all exit 2 rather than yielding an
  * empty set, because an empty set makes the gate pass and this gate exists to
  * block.
  */
 export function basePaths(projectRoot: string, baseRef: string): string[] {
+  // Refused here, inside the function that calls git, so no caller can skip
+  // it. Git reads "-Sxyz...HEAD" as a pickaxe option rather than a range and
+  // lists nothing, and an empty list passes. Exit 2, could-not-run, like an
+  // unknown ref. Not --end-of-options: older gits do not all accept it.
+  if (baseRef.startsWith("-")) {
+    console.error(
+      `intent-guard: refusing base ref "${baseRef}": it starts with a dash, so git would read it as an option rather than a revision. Nothing was checked.`,
+    );
+    process.exit(2);
+  }
   try {
     const out = execFileSync(
       "git",
@@ -153,9 +178,13 @@ export function basePaths(projectRoot: string, baseRef: string): string[] {
         "core.quotePath=false",
         "diff",
         "--no-renames",
+        "--ignore-submodules=none",
         "--name-only",
         "-z",
         `${baseRef}...HEAD`,
+        // Ends the revisions. Without it a file named exactly like the range
+        // makes git refuse with "ambiguous argument", and the run exits 2.
+        "--",
       ],
       {
         cwd: projectRoot,

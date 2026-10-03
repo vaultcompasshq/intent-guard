@@ -223,7 +223,13 @@ correct --promote` (which records `source: user-correction`) can block.
 | `--json` / `--log` | JSON output / append to `drift-log.jsonl` |
 
 Exit 0 = ok, 1 = blocked, 2 = could not run: `--base` or `--trust-base` would
-not resolve, or `config.yaml` was refused by the schema.
+not resolve or starts with a dash (git would read it as an option), a control
+file the trust base lists could not be read, or `config.yaml` was refused by
+the schema.
+
+`--staged` and `--base` list a moved submodule pointer even when `.gitmodules`
+or git config sets `ignore = all` for that submodule: both pass
+`--ignore-submodules=none` to git.
 
 ### Checking a pull request with `--base`
 
@@ -493,7 +499,9 @@ budget block can enter or leave a contract: rejected at `import-spec` and
   trailing slashes (`.//`, `.///`), all of which normalize to nothing, and no
   INTERNAL empty segment (`src//x`) -- a trailing one (`src//`) is accepted,
   because the matcher strips trailing slashes before comparing a no-wildcard
-  glob, the same as it does for a single trailing slash (`src/`).
+  glob, the same as it does for a single trailing slash (`src/`). A glob WITH
+  a `*` or `?` must not end in `/` (`secrets/**/`): it is matched as written,
+  no git path ends in `/`, and so the entry matches no file at all.
   A brace group, a character class, and a leading `-` are all accepted here,
   because a real git path can contain any of them.
 - **Flag-level** (`intent-guard extract --protected-path` only): every

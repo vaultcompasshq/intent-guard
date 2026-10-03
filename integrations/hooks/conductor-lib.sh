@@ -9,6 +9,36 @@
 
 set -euo pipefail
 
+# Replace objects (refs/replace/*) let anyone with write access to the
+# repository make one commit stand in for another, so a commit made during the
+# session could be shown to git as the baseline itself and every diff against
+# the baseline would come back empty. Exported, so it holds for every git call
+# the hooks make AND for the gate they run, whose own --base and --staged
+# listings carry the session's committed and staged work. It is the
+# environment form of git's --no-replace-objects.
+export GIT_NO_REPLACE_OBJECTS=1
+
+# Repository config (core.useReplaceRefs=true) would turn replace refs back on
+# over that variable. Config passed through the environment the way `git -c`
+# passes it sits above repository config, so it is added here, after any
+# entries the host's environment already carries rather than over them.
+intent_guard_config_index="${GIT_CONFIG_COUNT:-0}"
+if [[ ! "$intent_guard_config_index" =~ ^[0-9]+$ ]]; then
+  intent_guard_config_index=0
+fi
+export "GIT_CONFIG_KEY_${intent_guard_config_index}=core.useReplaceRefs"
+export "GIT_CONFIG_VALUE_${intent_guard_config_index}=false"
+export GIT_CONFIG_COUNT=$((intent_guard_config_index + 1))
+unset intent_guard_config_index
+
+# Text made safe to sit inside a JSON string literal. Every control character
+# (0x01 to 0x1F) becomes a space, because JSON forbids them raw and the text is
+# for a human; then backslash, then the double quote, are escaped. A NUL never
+# reaches a shell variable. Under LC_ALL=C so tr works on bytes.
+intent_guard_json_escape() {
+  printf '%s' "$1" | LC_ALL=C tr '\001-\037' ' ' | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
 intent_guard_git_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
@@ -102,43 +132,76 @@ intent_guard_baseline_valid() {
 #
 # startup and clear begin a NEW session, so they always record a fresh baseline:
 # keeping an old one would judge the human's commits between sessions against
-# this session's contract. resume and compact continue a session, and resetting
-# there would let an agent commit, compact, and have the commit forgotten, so
-# they keep the existing baseline while it is still valid and was taken under
-# the same contract id. An absent or unrecognised source is treated as a
-# continuation, the cautious reading: it can over-judge, never under-judge.
+# this session's contract. Every other source (resume, compact, absent or
+# unrecognised) is treated as a continuation, and a continuation never touches
+# a record that exists: resetting there would let an agent commit, compact, and
+# have the commit forgotten. That holds for an INVALID record too, which the
+# Stop check then reports rather than having it quietly replaced by HEAD, and
+# it holds when the contract id has changed, so the session is judged from
+# where it began. Only when there is no record at all is one written, since
+# otherwise a host that never sends startup could never get a baseline.
+#
+# Line 2 (the contract id) is still written for older readers of the record;
+# nothing here compares it any more.
 intent_guard_record_session_start() {
   local root="$1"
   local source="${2:-}"
-  local file head cid old_ref old_cid
+  local file head cid
 
   file="$(intent_guard_baseline_file "$root")" || return 1
+
+  case "$source" in
+    startup | clear)
+      # Something other than a regular file at the record path (a directory, a
+      # link) cannot be written over, and would leave every later stop without
+      # a record. A new session removes it first.
+      if [[ -L "$file" || (-e "$file" && ! -f "$file") ]]; then
+        rm -rf -- "$file" || return 1
+      fi
+      ;;
+    *)
+      if [[ -f "$file" ]]; then
+        if ! intent_guard_baseline_valid "$root" "$(sed -n '1p' "$file")"; then
+          echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree), so it was left as it is. Until a new session starts, the Stop check judges staged, unstaged and untracked changes but cannot judge work committed during this session; start a new session to record a fresh baseline." >&2
+        fi
+        return 0
+      fi
+      ;;
+  esac
+
   if head="$(git -C "$root" rev-parse --verify --quiet 'HEAD^{commit}')"; then
     :
   else
     head="$(intent_guard_empty_tree "$root")" || return 1
   fi
   cid="$(intent_guard_contract_id "$root")"
-
-  case "$source" in
-    startup | clear) ;;
-    *)
-      if [[ -f "$file" ]]; then
-        old_ref="$(sed -n '1p' "$file")"
-        old_cid="$(sed -n '2p' "$file")"
-        if [[ "$old_cid" == "$cid" ]] && intent_guard_baseline_valid "$root" "$old_ref"; then
-          return 0
-        fi
-      fi
-      ;;
-  esac
-
   printf '%s\n%s\n' "$head" "$cid" >"$file"
 }
 
-# Prints the ref to diff against. Fails closed (non-zero, reason on stderr) when
-# the recorded baseline is unusable, and when there is no record and nothing to
-# stand in for one, unless the operator sets INTENT_GUARD_NO_BASELINE_OK=1.
+# What the change can still be judged against when the session baseline cannot
+# be used: the upstream branch when there is one, else HEAD, else (no commit
+# yet) the empty tree. Staged, unstaged and untracked work is all visible from
+# any of them; only work committed during the session may not be.
+intent_guard_fallback_ref() {
+  local root="$1"
+  local ref
+  if ref="$(git -C "$root" rev-parse --verify --quiet '@{upstream}^{commit}' 2>/dev/null)"; then
+    printf '%s' "$ref"
+  elif ref="$(git -C "$root" rev-parse --verify --quiet 'HEAD^{commit}')"; then
+    printf '%s' "$ref"
+  else
+    intent_guard_empty_tree "$root"
+  fi
+}
+
+# Prints the ref to diff against, and returns:
+#   0  the session baseline (or a full stand-in for it), judged as is;
+#   3  a FALLBACK ref (intent_guard_fallback_ref), reason on stderr: the
+#      recorded baseline is unusable, or there is no record and nothing to
+#      stand in for it. The Stop check still judges everything the fallback
+#      can see, and a finding there blocks; only if that passes does it report
+#      that the committed part could not be judged;
+#   1  nothing usable at all, reason on stderr.
 intent_guard_baseline_ref() {
   local root="$1"
   local file ref
@@ -149,8 +212,9 @@ intent_guard_baseline_ref() {
       printf '%s' "$ref"
       return 0
     fi
-    echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree); it was altered or history was rewritten. Refusing to judge against it. Delete it and start a new session." >&2
-    return 1
+    echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree); it was altered or history was rewritten. Refusing to judge against it, so work committed during this session is not judged; staged, unstaged and untracked changes still are. Delete it and start a new session." >&2
+    intent_guard_fallback_ref "$root" || return 1
+    return 3
   fi
 
   # No record (SessionStart was not wired, or did not run). A repository with no
@@ -162,7 +226,7 @@ intent_guard_baseline_ref() {
 
   # The upstream branch stands in for it when there is one, so commits not yet
   # pushed are still judged.
-  if ref="$(git -C "$root" rev-parse --verify --quiet '@{upstream}^{commit}')"; then
+  if ref="$(git -C "$root" rev-parse --verify --quiet '@{upstream}^{commit}' 2>/dev/null)"; then
     echo "Intent Guard: no session-start record; judging changes since the upstream branch." >&2
     printf '%s' "$ref"
     return 0
@@ -174,8 +238,9 @@ intent_guard_baseline_ref() {
     return 0
   fi
 
-  echo "Intent Guard: no session-start record and no upstream branch, so work committed during this session cannot be seen. Wire conductor-session-start.sh as the SessionStart hook, or set INTENT_GUARD_NO_BASELINE_OK=1 to judge only uncommitted and untracked changes." >&2
-  return 1
+  echo "Intent Guard: no session-start record and no upstream branch, so work committed during this session cannot be seen; staged, unstaged and untracked changes are still judged. Wire conductor-session-start.sh as the SessionStart hook and start a new session, or set INTENT_GUARD_NO_BASELINE_OK=1 to judge only uncommitted and untracked changes." >&2
+  intent_guard_fallback_ref "$root" || return 1
+  return 3
 }
 
 # Appends the NUL-separated output of one git command to a file, or fails.
@@ -189,56 +254,254 @@ intent_guard_collect() {
   fi
 }
 
-# Prints the changed paths as a comma-separated list, for --paths.
+# ---------------------------------------------------------------------------
+# What the Stop check hands the gate
 #
-# Everything changed since the session began: commits since the baseline,
-# staged and unstaged edits, and untracked files. Paths are read NUL-separated
-# (-z) because git C-quotes any name with a quote, backslash, tab or newline
-# otherwise. A git failure returns non-zero with a message rather than an empty
-# list, because an empty list makes the gate pass. --paths splits on commas, so
-# a path containing one cannot be passed faithfully and is refused instead.
-intent_guard_changed_paths_csv() {
-  local root="$1"
-  local base tmp path
-  local -a paths=()
+# Three channels, so that as little as possible crosses the command line:
+# - committed work since the baseline goes through the gate's own --base, and
+# - staged work through its own --staged. The gate reads both from git with -z,
+#   so no file name, and no number of them, can stop them reaching it.
+# - Only what git cannot hand the gate itself, edits not yet staged and
+#   untracked files, goes on the command line as --paths.
+#
+# A --paths entry that cannot be passed faithfully is not dropped and is not a
+# reason to stop judging: it is reported back, the rest is judged, and the Stop
+# check blocks on it every time. The agent can always clear it, because
+# "git add" moves the file to the --staged channel.
 
-  base="$(intent_guard_baseline_ref "$root")" || {
-    echo "Intent Guard: cannot determine the session baseline." >&2
-    return 1
-  }
-
-  tmp="$(mktemp)" || {
-    echo "Intent Guard: cannot create a temp file to list changed paths." >&2
-    return 1
-  }
-
-  if ! {
-    intent_guard_collect "$tmp" "$root" diff --no-renames --name-only -z "$base" &&
-      intent_guard_collect "$tmp" "$root" diff --cached --no-renames --name-only -z "$base" &&
-      intent_guard_collect "$tmp" "$root" ls-files --others --exclude-standard -z
-  }; then
-    rm -f "$tmp"
-    return 1
+# Why a path cannot go into --paths, printed, or a non-zero return when it can.
+#
+# Classified under LC_ALL=C, byte by byte. In a Shift-JIS locale bash reads the
+# byte pair 0x95 0x5C as one character and misses the backslash, while the
+# gate (node, which decodes its arguments as UTF-8) sees a backslash and
+# refuses the whole run.
+#
+# Sets INTENT_GUARD_PATH_REASON rather than printing, so the per-path loop
+# below needs no subshell; intent_guard_path_issue is the printing form.
+intent_guard_path_reason() {
+  local LC_ALL=C
+  local path="$1"
+  INTENT_GUARD_PATH_REASON=""
+  if [[ "$path" == */ ]]; then
+    INTENT_GUARD_PATH_REASON='it is an untracked directory that holds its own git repository, so git lists the directory and none of the files inside it'
+  elif [[ "$path" == *,* ]]; then
+    INTENT_GUARD_PATH_REASON='it contains a comma, and --paths is comma-separated'
+  elif [[ "$path" == *\\* ]]; then
+    INTENT_GUARD_PATH_REASON='it contains a backslash, which intent-guard-check refuses in --paths'
   fi
+  [[ -n "$INTENT_GUARD_PATH_REASON" ]]
+}
 
+intent_guard_path_issue() {
+  intent_guard_path_reason "$1" || return 1
+  printf '%s' "$INTENT_GUARD_PATH_REASON"
+}
+
+# Reads the NUL-separated paths on stdin. Writes each one that cannot be passed
+# to $1 as "path NUL reason NUL" and each one that can, as "./path", to $2.
+# Sets INTENT_GUARD_PASSABLE_COUNT and INTENT_GUARD_PASSABLE_BYTES (the length
+# the comma-joined list will have). Under LC_ALL=C so lengths are in bytes.
+intent_guard_classify_paths() {
+  local LC_ALL=C
+  local issues_out="$1"
+  local passable_out="$2"
+  local path
+  INTENT_GUARD_PASSABLE_COUNT=0
+  INTENT_GUARD_PASSABLE_BYTES=0
   while IFS= read -r -d '' path; do
     [[ -n "$path" ]] || continue
-    if [[ "$path" == *,* ]]; then
-      rm -f "$tmp"
-      printf 'Intent Guard: cannot judge the path "%s": --paths is comma-separated and this path contains a comma. Rename it and stop again.\n' "$path" >&2
-      return 1
+    if intent_guard_path_reason "$path"; then
+      printf '%s\0%s\0' "$path" "$INTENT_GUARD_PATH_REASON" >>"$issues_out"
+      continue
     fi
     # "./" keeps a name that starts with "-" from being read as a flag by the
     # CLI's argument parser (which would block every stop with a usage screen);
     # the budget matcher strips one leading "./".
-    paths+=("./$path")
-  done < <(LC_ALL=C sort -zu "$tmp")
-  rm -f "$tmp"
+    printf '%s\0' "./$path" >>"$passable_out"
+    INTENT_GUARD_PASSABLE_COUNT=$((INTENT_GUARD_PASSABLE_COUNT + 1))
+    INTENT_GUARD_PASSABLE_BYTES=$((INTENT_GUARD_PASSABLE_BYTES + ${#path} + 3))
+  done
+}
 
-  if [[ "${#paths[@]}" -eq 0 ]]; then
-    return 0
+# Appends "--paths LIST" to $2 for the NUL-separated entries in $1, as many
+# times as needed to keep each LIST under INTENT_GUARD_PATHS_CHUNK_BYTES.
+intent_guard_write_paths_args() {
+  local LC_ALL=C
+  local passable="$1"
+  local args_out="$2"
+  local entry chunk="" chunk_bytes=0
+  while IFS= read -r -d '' entry; do
+    if [[ -n "$chunk" ]] && ((chunk_bytes + 1 + ${#entry} > INTENT_GUARD_PATHS_CHUNK_BYTES)); then
+      printf '%s\0' --paths "$chunk" >>"$args_out"
+      chunk=""
+      chunk_bytes=0
+    fi
+    if [[ -z "$chunk" ]]; then
+      chunk="$entry"
+      chunk_bytes=${#entry}
+    else
+      chunk="$chunk,$entry"
+      chunk_bytes=$((chunk_bytes + 1 + ${#entry}))
+    fi
+  done <"$passable"
+  if [[ -n "$chunk" ]]; then
+    printf '%s\0' --paths "$chunk" >>"$args_out"
+  fi
+}
+
+# Prints the NUL-separated sorted list in $1 minus the one in $2. Both files
+# must come from "LC_ALL=C sort -zu"; the comparison here is in the same byte
+# order. A merge walk rather than a lookup table, because bash 3.2 (the macOS
+# system bash) has no associative arrays.
+intent_guard_subtract_sorted() {
+  local LC_ALL=C
+  local a b more_b=1
+  {
+    IFS= read -r -d '' -u 3 b || more_b=0
+    while IFS= read -r -d '' a; do
+      while [[ "$more_b" -eq 1 && "$b" < "$a" ]]; do
+        IFS= read -r -d '' -u 3 b || more_b=0
+      done
+      if [[ "$more_b" -eq 1 && "$b" == "$a" ]]; then
+        continue
+      fi
+      printf '%s\0' "$a"
+    done <"$1"
+  } 3<"$2"
+}
+
+# One --paths argument stays under this many bytes. Linux caps a SINGLE
+# argument at 128 KiB (MAX_ARG_STRLEN), whatever the total limit is.
+INTENT_GUARD_PATHS_CHUNK_BYTES=98304
+
+# The whole --paths list stays under this many bytes, and under half of what
+# the system leaves for arguments after the environment, whichever is smaller.
+INTENT_GUARD_PATHS_TOTAL_BYTES=262144
+
+intent_guard_paths_budget() {
+  local budget="$INTENT_GUARD_PATHS_TOTAL_BYTES"
+  local arg_max env_bytes room
+  arg_max="$(getconf ARG_MAX 2>/dev/null || true)"
+  if [[ "$arg_max" =~ ^[0-9]+$ ]]; then
+    env_bytes="$(env | wc -c | tr -d ' ')"
+    room=$(((arg_max - env_bytes) / 2))
+    if ((room < budget)); then
+      budget="$room"
+    fi
+  fi
+  printf '%s' "$budget"
+}
+
+# Writes the gate's arguments for this stop to $2 and every path that cannot be
+# passed to $3, both NUL-separated; $3 holds "path NUL reason NUL" records, and
+# an empty path stands for the whole list being too long. Returns 1, with the
+# reason on stderr, when the change cannot be collected at all; an empty list
+# is never the answer to a git failure, because an empty list passes. Returns 3
+# when everything was collected against a fallback ref (see
+# intent_guard_baseline_ref), so work committed during the session may not be.
+intent_guard_gate_args() {
+  local root="$1"
+  local args_out="$2"
+  local issues_out="$3"
+  local base empty candidates covered sorted_candidates sorted_covered passable
+  local result=0
+  # 1 when every changed path, committed and staged ones included, goes
+  # through --paths (the empty-tree baseline). Read by the Stop check, because
+  # there a path that cannot be passed is not one git add can move elsewhere.
+  INTENT_GUARD_ALL_IN_PATHS=0
+
+  if base="$(intent_guard_baseline_ref "$root")"; then
+    :
+  else
+    result=$?
+    if [[ "$result" -ne 3 ]]; then
+      echo "Intent Guard: cannot determine the session baseline." >&2
+      return 1
+    fi
+  fi
+  empty="$(intent_guard_empty_tree "$root")" || return 1
+
+  candidates="$(mktemp)" || {
+    echo "Intent Guard: cannot create a temp file to list changed paths." >&2
+    return 1
+  }
+  covered="$(mktemp)" || {
+    rm -f "$candidates"
+    echo "Intent Guard: cannot create a temp file to list changed paths." >&2
+    return 1
+  }
+
+  # The trailing "--" ends the revisions: without it a file named exactly like
+  # the baseline commit id makes git refuse with "ambiguous argument".
+  #
+  # --ignore-submodules: `ignore = all` for a submodule, in .gitmodules or in
+  # git config, hides a moved submodule pointer from a plain diff, and the
+  # command-line value overrides both. "none" for every comparison of commits
+  # and the index. "untracked" for the work tree, which still lists a moved
+  # pointer and an edit to a tracked file inside a submodule's checkout, but
+  # not untracked build output in there, which would otherwise block every
+  # stop for as long as it exists.
+  if [[ "$base" == "$empty" ]]; then
+    # The gate's --base takes a three-dot range, which git refuses for the
+    # empty tree ("Invalid symmetric difference expression"). With nothing
+    # committed to compare against, every path goes through --paths.
+    INTENT_GUARD_ALL_IN_PATHS=1
+    if ! {
+      intent_guard_collect "$candidates" "$root" diff --no-renames --ignore-submodules=untracked --name-only -z "$base" -- &&
+        intent_guard_collect "$candidates" "$root" diff --cached --no-renames --ignore-submodules=none --name-only -z "$base" -- &&
+        intent_guard_collect "$candidates" "$root" ls-files --others --exclude-standard -z
+    }; then
+      rm -f "$candidates" "$covered"
+      return 1
+    fi
+  else
+    printf '%s\0' --base "$base" --staged >>"$args_out"
+    # What --base and --staged will already carry, so it is not counted twice
+    # against max_files. The same two listings the gate makes.
+    if ! {
+      intent_guard_collect "$covered" "$root" diff --no-renames --ignore-submodules=none --name-only -z "$base...HEAD" -- &&
+        intent_guard_collect "$covered" "$root" diff --cached --no-renames --ignore-submodules=none --name-only -z -- &&
+        intent_guard_collect "$candidates" "$root" diff --no-renames --ignore-submodules=untracked --name-only -z -- &&
+        intent_guard_collect "$candidates" "$root" ls-files --others --exclude-standard -z
+    }; then
+      rm -f "$candidates" "$covered"
+      return 1
+    fi
   fi
 
-  local IFS=,
-  printf '%s' "${paths[*]}"
+  sorted_candidates=""
+  sorted_covered=""
+  if ! { sorted_candidates="$(mktemp)" && sorted_covered="$(mktemp)" && passable="$(mktemp)"; }; then
+    rm -f "$candidates" "$covered" "$sorted_candidates" "$sorted_covered"
+    echo "Intent Guard: cannot create a temp file to list changed paths." >&2
+    return 1
+  fi
+  # Checked: a sort that fails leaves an empty list, and an empty list passes.
+  if ! {
+    LC_ALL=C sort -zu "$candidates" >"$sorted_candidates" &&
+      LC_ALL=C sort -zu "$covered" >"$sorted_covered"
+  }; then
+    rm -f "$candidates" "$covered" "$sorted_candidates" "$sorted_covered" "$passable"
+    echo "Intent Guard: sort failed while listing changed paths; refusing to treat the change as empty." >&2
+    return 1
+  fi
+  rm -f "$candidates" "$covered"
+
+  intent_guard_classify_paths "$issues_out" "$passable" \
+    < <(intent_guard_subtract_sorted "$sorted_candidates" "$sorted_covered")
+  rm -f "$sorted_candidates" "$sorted_covered"
+
+  if ((INTENT_GUARD_PASSABLE_BYTES > $(intent_guard_paths_budget))); then
+    local kind="unstaged and untracked"
+    if [[ "$INTENT_GUARD_ALL_IN_PATHS" -eq 1 ]]; then
+      kind="changed"
+    fi
+    printf '%s\0%s\0' "" "the $INTENT_GUARD_PASSABLE_COUNT $kind paths ($INTENT_GUARD_PASSABLE_BYTES bytes) are too many to pass to the gate on the command line" >>"$issues_out"
+    rm -f "$passable"
+    return "$result"
+  fi
+
+  intent_guard_write_paths_args "$passable" "$args_out"
+  rm -f "$passable"
+  return "$result"
 }

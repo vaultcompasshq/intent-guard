@@ -1084,6 +1084,22 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
     expect(res.stderr).toContain("main:.intent-guard/config.yaml");
   });
 
+  it("refuses a --trust-base value that starts with a dash, by name", async () => {
+    const dir = repo({ base: { [CONTRACT]: BASE_CONTRACT }, head: { "docs/usage.md": "x\n" } });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--base", "main",
+      "--trust-base", "-Sxyz",
+      "--json",
+    ]);
+
+    // Explicit, not an accident of rev-parse failing to resolve the value.
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("starts with a dash");
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+
   it("treats --trust-base with no ref value as a usage error", async () => {
     const dir = repo({ base: { [CONTRACT]: BASE_CONTRACT }, head: { "docs/usage.md": "x\n" } });
     const res = await run("check-cli.js", ["--project", dir, "--trust-base"]);
@@ -1135,6 +1151,151 @@ describe("intent-guard check --trust-base", { timeout: 60_000 }, () => {
     // this comparison, this assertion would see the head's lenient result.
     expect(out.crossSessionDrift.previous.categories.constraint_violation).toBe(0);
     expect(out.crossSessionDrift.previous.action).toBe("proceed");
+  });
+});
+
+/**
+ * A path in the tree that is spelled like "REF:./PATH" must not change what a
+ * trusted read returns. Git reads "git show main:./x" as either a revision or
+ * a file name, and when a file of that exact name exists it refuses with
+ * "ambiguous argument". Every revision-taking git call here therefore ends
+ * its revisions with "--", and a control file that ls-tree lists but that
+ * cannot be read is could-not-run, never empty text.
+ */
+describe("a file named like a revision does not change a trusted read", { timeout: 60_000 }, () => {
+  it("reads the base config, not the defaults, when the head adds a file named after it", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: MEDIUM_CONSTRAINT_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: {
+        "main:./.intent-guard/config.yaml": "junk\n",
+        [OUT_OF_SCOPE_FILE]: "export const x = 1;\n",
+      },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    // The base bands hard-block at 4 and the change scores 12; the defaults
+    // would call the same 12 "proceed".
+    expect(out.drift.action).toBe("hard_block");
+    expect(out.trustBase.configChanged).toBe(false);
+    expect(out.trustBase.proposals).toEqual([]);
+  });
+
+  it("reads the base contract when the head adds a file named after it", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT },
+      head: {
+        "main:./.intent-guard/intent-contract.yaml": "junk\n",
+        [OUT_OF_SCOPE_FILE]: "export const x = 1;\n",
+      },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.contractChanged).toBe(false);
+    expect(out.trustBase.selfApproval).toBe(false);
+    expect(out.trustBase.proposals).toEqual([]);
+    expect(out.budget.action).toBe("hard_block");
+    expect(JSON.stringify(out.budget)).toContain(OUT_OF_SCOPE_FILE);
+  });
+
+  it("reads the head control files when the head adds files named after them", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: BASE_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: {
+        "HEAD:./.intent-guard/intent-contract.yaml": "junk\n",
+        "HEAD:./.intent-guard/config.yaml": "junk\n",
+        "docs/usage.md": "usage\n",
+      },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.trustBase.contractChanged).toBe(false);
+    expect(out.trustBase.configChanged).toBe(false);
+    expect(out.trustBase.selfApproval).toBe(false);
+    expect(out.trustBase.proposals).toEqual([]);
+  });
+
+  it("reads an archived contract at the base when the head adds a file named after it", async () => {
+    const archived = `.intent-guard/contracts/${TRUST_PREVIOUS_CONTRACT_ID}.yaml`;
+    const dir = repo({
+      base: {
+        [CONTRACT]: TRUST_CURRENT_CONTRACT,
+        [CONFIG]: STRICT_COVERAGE_BASE_CONFIG,
+        [archived]: TRUST_PREVIOUS_CONTRACT,
+      },
+      head: { [`main:./${archived}`]: "junk\n" },
+    });
+
+    const res = await run("check-cli.js", [
+      "--project", dir,
+      "--trust-base", "main",
+      "--paths", "src/billing/export.ts",
+      "--previous-contract", TRUST_PREVIOUS_CONTRACT_ID,
+      "--json",
+    ]);
+
+    const out = JSON.parse(res.stdout);
+    expect(out.crossSessionDrift).not.toBeNull();
+    expect(out.crossSessionDrift.previous_contract_id).toBe(TRUST_PREVIOUS_CONTRACT_ID);
+  });
+
+  it("is could-not-run when a control file is listed at the base but cannot be read", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: MEDIUM_CONSTRAINT_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: { [OUT_OF_SCOPE_FILE]: "export const x = 1;\n" },
+    });
+    // The tree still names the blob, so ls-tree lists it, but the object is
+    // gone, so the read fails. Empty text here would mean the defaults.
+    const blob = execFileSync("git", ["rev-parse", `main:${CONFIG}`], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
+    unlinkSync(join(dir, ".git", "objects", blob.slice(0, 2), blob.slice(2)));
+
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain(CONFIG);
+    expect(res.stderr).toContain("Nothing was checked");
+    expect(res.stdout).not.toContain('"status":"ok"');
+  });
+
+  it("is could-not-run when the base tree cannot be listed at all", async () => {
+    const dir = repo({
+      base: { [CONTRACT]: MEDIUM_CONSTRAINT_CONTRACT, [CONFIG]: STRICT_BASE_CONFIG },
+      head: { [OUT_OF_SCOPE_FILE]: "export const x = 1;\n" },
+    });
+    // The base commit still resolves, but its root tree is gone, so ls-tree
+    // fails. That is not "the base carries no config".
+    const tree = execFileSync("git", ["rev-parse", "main^{tree}"], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
+    unlinkSync(join(dir, ".git", "objects", tree.slice(0, 2), tree.slice(2)));
+
+    const res = await run("check-cli.js", [
+      "--project", dir, "--trust-base", "main", "--paths", OUT_OF_SCOPE_FILE, "--json",
+    ]);
+
+    expect(res.code).toBe(2);
+    expect(res.stderr).toContain("Nothing was checked");
+    expect(res.stdout).not.toContain('"status"');
   });
 });
 

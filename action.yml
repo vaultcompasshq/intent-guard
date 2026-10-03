@@ -367,7 +367,28 @@ runs:
           # decide how this gate runs and who is allowed to change it. A
           # result written there is one upload, commit or artifact step away
           # from landing inside the path a reviewer is protecting.
-          if [[ "${IG_JSON_OUTPUT}" == ".github" || "${IG_JSON_OUTPUT}" == ".github/"* ]]; then
+          #
+          # Compared on the first real segment, not on the spelling: `./`
+          # segments and doubled slashes are dropped first, and the comparison
+          # ignores case, because `./.github/x` and `.GITHUB/x` name the same
+          # directory (the second on a case-insensitive filesystem). `..` is
+          # already refused above. Lower-cased with tr, not ${,,}, which the
+          # bash 3.2 on macOS runners does not have. The run step separately
+          # refuses a symlink anywhere on the way, which a spelling cannot show.
+          first_segment=""
+          IFS='/' read -r -a json_output_segments <<< "${IG_JSON_OUTPUT}"
+          for segment in "${json_output_segments[@]}"; do
+            if [[ -n "${segment}" && "${segment}" != "." ]]; then
+              first_segment="${segment}"
+              break
+            fi
+          done
+          # Trailing dots and spaces come off too: Windows drops them from a
+          # path segment, so `.github.` names `.github` on a Windows runner.
+          while [[ "${first_segment}" == *. || "${first_segment}" == *" " ]]; do
+            first_segment="${first_segment%?}"
+          done
+          if [[ "$(printf '%s' "${first_segment}" | tr '[:upper:]' '[:lower:]')" == ".github" ]]; then
             printf '::error::intent-guard: `json-output` must not write under .github/: %q\n' "${IG_JSON_OUTPUT}"
             printf '::error::That directory holds the workflow file and the CODEOWNERS entry that decide how this gate runs. Write the result somewhere else and read it from there.\n'
             exit 1
@@ -704,6 +725,25 @@ runs:
 
         if [[ -n "${IG_JSON_OUTPUT}" ]]; then
           OUT="${ROOT}/${IG_JSON_OUTPUT}"
+          # The workspace is the head's checkout, so a link the pull request
+          # committed (`out -> .github`, or the target file itself pointing at
+          # a workflow) would carry this write, or the mkdir below, somewhere
+          # the validate step's check on the spelling never saw. Every prefix
+          # that already exists is checked before mkdir -p can follow one, and
+          # then the target itself.
+          json_output_prefix="${ROOT}"
+          IFS='/' read -r -a json_output_segments <<< "${IG_JSON_OUTPUT}"
+          for segment in "${json_output_segments[@]}"; do
+            if [[ -z "${segment}" || "${segment}" == "." ]]; then
+              continue
+            fi
+            json_output_prefix="${json_output_prefix}/${segment}"
+            if [[ -L "${json_output_prefix}" ]]; then
+              printf '::error::intent-guard: `json-output` passes through a symlink in the checkout: %q\n' "${IG_JSON_OUTPUT}"
+              printf '::error::A link the pull request carries could point the result into .github/ or over another file. Write the result to a path with no symlink on it.\n'
+              exit 1
+            fi
+          done
           mkdir -p "$(dirname "${OUT}")"
           ARGS+=(--json)
         fi

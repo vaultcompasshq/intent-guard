@@ -120,6 +120,29 @@ describe("checkGate change budget", () => {
     expect(result.reasons).toEqual([]);
   });
 
+  it("warns without blocking when a frozen contract carries a wildcard glob ending in '/', and says it protects nothing", () => {
+    const dir = setupHandFrozenWithInvalidBudget(
+      'budget:\n  protected_paths:\n    - "secrets/**/"\n',
+    );
+    // The premise: the entry matches no git path, which never ends in '/'.
+    const touched = checkGate(dir, { signals: { changedPaths: ["secrets/k.txt"] } });
+    expect(touched.budget?.ok).toBe(true);
+
+    const result = checkGate(dir, {});
+    expect(result.status).toBe("ok");
+    expect(result.exitCode).toBe(0);
+    expect(
+      result.warnings.some(
+        (w) =>
+          w.includes("protected_paths") &&
+          w.includes("secrets/**/") &&
+          w.includes("protects nothing") &&
+          w.includes("2.0.0"),
+      ),
+    ).toBe(true);
+    expect(result.reasons).toEqual([]);
+  });
+
   it("does not block on a protected_paths entry with a brace group, a character class, or a leading '-'", () => {
     // Contract-level accepts these: they are literal characters to the
     // matcher, and real git paths can contain them (app/[slug]/** is a

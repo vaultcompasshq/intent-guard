@@ -30,6 +30,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -858,6 +859,35 @@ describe("action.yml runs the installed binary and nothing else", () => {
     expect(run.outputs).toMatch(/result_file=.*out\/result\.json/);
   });
 
+  it("refuses to write through a symlinked directory the checkout carries", () => {
+    // The checkout is the head's tree, so a committed `out -> .github` link
+    // would turn an innocent json-output into a write inside .github/.
+    const harness = makeHarness({ "json-output": "out/result.json" });
+    mkdirSync(join(harness.workspace, ".github", "workflows"), { recursive: true });
+    symlinkSync(".github", join(harness.workspace, "out"));
+    runInstall(harness);
+    const run = runGate(harness);
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toMatch(/::error::.*`json-output`.*symlink/);
+    expect(existsSync(join(harness.workspace, ".github", "result.json"))).toBe(false);
+    expect(run.argv).toEqual([]);
+  });
+
+  it("refuses to write through a symlink at the target path itself", () => {
+    const harness = makeHarness({ "json-output": "out/result.json" });
+    mkdirSync(join(harness.workspace, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(harness.workspace, ".github", "workflows", "ci.yml"), "keep\n", "utf8");
+    mkdirSync(join(harness.workspace, "out"));
+    symlinkSync("../.github/workflows/ci.yml", join(harness.workspace, "out", "result.json"));
+    runInstall(harness);
+    const run = runGate(harness);
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toMatch(/::error::.*`json-output`.*symlink/);
+    expect(readFileSync(join(harness.workspace, ".github", "workflows", "ci.yml"), "utf8")).toBe(
+      "keep\n",
+    );
+  });
+
   it("publishes no result file when the gate died before writing one", () => {
     // Exit 2 in JSON mode leaves the redirect target created and empty. A
     // `result-file` output pointing at an empty file is worse than none: the
@@ -991,6 +1021,32 @@ describe("action.yml validates its inputs before a shell sees them", () => {
     expect(refused.status).toBe(1);
     expect(refused.stdout).toMatch(/::error::.*`json-output`/);
     expect(refused.stdout).toMatch(/\.github/);
+  });
+
+  it("refuses the same directory spelled another way", () => {
+    // A leading ./, a doubled slash, or another letter case all name the same
+    // directory to the filesystem (case on a case-insensitive one).
+    for (const spelling of [
+      "./.github/intent.json",
+      "././.github/intent.json",
+      ".//.github/intent.json",
+      ".GITHUB/intent.json",
+      "./.GitHub",
+      // Windows drops trailing dots from a path segment, so these name the
+      // same directory there.
+      ".github./intent.json",
+      ".github../intent.json",
+      "./.GitHub./intent.json",
+    ]) {
+      const refused = runValidate({ "json-output": spelling });
+      expect([spelling, refused.status]).toEqual([spelling, 1]);
+      expect(refused.stdout).toMatch(/::error::.*`json-output`/);
+    }
+  });
+
+  it("still accepts a path that only starts with the same letters", () => {
+    expect(runValidate({ "json-output": ".github-results/intent.json" }).status).toBe(0);
+    expect(runValidate({ "json-output": "out/.github.json" }).status).toBe(0);
   });
 
   it("refuses a paths value whose second line climbs out of the workspace", () => {
