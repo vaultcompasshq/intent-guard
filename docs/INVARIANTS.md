@@ -184,14 +184,17 @@ value and answers with the usage text and exit 1, like any usage error.
 
 ## Every git call the TypeScript code makes runs with replace refs disabled
 
-`gitSpawnEnv` (`packages/core/src/git-env.ts:21`) returns the environment for
+`gitSpawnEnv` (`packages/core/src/git-env.ts:22`) returns the environment for
 every git child process the packages spawn: `GIT_NO_REPLACE_OBJECTS=1`, and
 `core.useReplaceRefs=false` appended to the caller's `GIT_CONFIG_COUNT`
 entries, so repository config cannot turn replace refs back on. No git
 argument changes. It is passed as `env` at every `git` spawn in
 `packages/skill/src/changed-paths.ts`, `packages/skill/src/freeze-cli.ts`,
 `packages/core/src/trust-base.ts` and `packages/core/src/hook.ts`. A git older
-than 2.31 ignores `GIT_CONFIG_COUNT`; the first variable still applies there.
+than 2.31 ignores `GIT_CONFIG_COUNT`. On git 2.31 or newer, replace refs are
+disabled for every git call the tool makes; on an older git only the first
+variable applies, which repository configuration can override, so git 2.31 or
+newer is required for that protection.
 Pinned in `packages/skill/tests/base-ref.test.ts`, group `replace refs do not
 change what the gate lists`: `--staged still lists a staged file when a
 replace ref makes the cached diff empty`, `--staged still lists it when

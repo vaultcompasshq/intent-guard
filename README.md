@@ -150,14 +150,14 @@ wire the sample hooks
 or a CI step from a source checkout.
 
 The agent lifecycle hooks in [integrations/hooks/](./integrations/hooks) need
-`intent-guard-check` 1.8.1 or newer on `PATH`: from 1.8.1 the Stop hook sends
-committed and staged work through the gate's own `--base` and `--staged`
-listings. The hook does not check the gate's version, so install both from
-the same release. The Stop hook also needs git 2.31 or newer for its full
-replace-ref protection: on an older git, replace refs are still disabled by
-`GIT_NO_REPLACE_OBJECTS`, but repository config that sets
-`core.useReplaceRefs=true` turns them back on. The CLI itself needs no newer
-git than before. See the [hook README](./integrations/hooks/README.md).
+`intent-guard-check` 1.8.1 or newer on `PATH` (confirm with
+`intent-guard-check --version`). The hook does not check the gate's version,
+and with an older gate its result is not valid, because it leaves committed
+and staged changes to the gate's own listing and an older gate lists fewer
+kinds of change. On git 2.31 or newer, replace refs are disabled for every git
+call the hook and the CLI make; on an older git only the environment variable
+applies, which repository configuration can override, so git 2.31 or newer is
+required for that protection. See the [hook README](./integrations/hooks/README.md).
 
 ## Quickstart
 

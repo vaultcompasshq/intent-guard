@@ -237,7 +237,10 @@ or git config sets `ignore = all` for that submodule: both pass
 `--ignore-submodules=none` to git. Every git call the CLI makes runs with
 replace refs disabled (`GIT_NO_REPLACE_OBJECTS=1`, plus
 `core.useReplaceRefs=false` through `GIT_CONFIG_COUNT`, which git reads from
-2.31), so a local replace ref does not change what is listed or read.
+2.31). On git 2.31 or newer, replace refs are disabled for every git call the
+tool makes; on an older git only the environment variable applies, which
+repository configuration can override, so git 2.31 or newer is required for
+that protection.
 
 ### Checking a pull request with `--base`
 

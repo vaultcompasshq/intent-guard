@@ -28,8 +28,15 @@ What can newly block you, and how to clear it:
   or fetch the base ref.
 - **The action refuses a `json-output` path that reaches `.github/`** under
   another spelling or through a symlink. Write the JSON somewhere else.
-- **Upgrade the gate with the hooks.** The 1.8.1 hooks need
-  `intent-guard-check` 1.8.1 or newer on `PATH`.
+- **On a pull request the action refuses a `version` input older than the
+  version its own tag ships.** A workflow that moves to the v1.8.1 tag while
+  keeping `version: 1.8.0` fails in validation with a message saying to
+  remove the `version` input. Push runs, and workflows still on the v1.8.0
+  tag, are unaffected.
+- **A `--base` or `--trust-base` value beginning with a single dash is
+  refused with exit 2.** It used to be handed to git.
+- **Use the gate at 1.8.1 or newer with the hooks.** The 1.8.1 hook scripts
+  must be used with `intent-guard-check` 1.8.1 or newer on `PATH`.
 
 All consumer-visible changes, stated plainly:
 
@@ -45,18 +52,19 @@ All consumer-visible changes, stated plainly:
   no path at all can be passed on that route (the whole list is too long, or
   every path is unpassable), the gate is handed nothing: the stop blocks once
   and the loud pass then says that nothing in the change was judged.
-- The 1.8.1 hooks need `intent-guard-check` 1.8.1 or newer on `PATH`, because
-  they send committed and staged work through the gate's own `--base` and
-  `--staged` listings. The hook does not check the gate's version; install
-  the hooks and the gate from the same release.
+- The 1.8.1 hook scripts must be used with `intent-guard-check` 1.8.1 or
+  newer on `PATH`; confirm with `intent-guard-check --version`. The hook does
+  not check the gate's version. It leaves committed and staged changes to the
+  gate's own listing, and an older gate lists fewer kinds of change, so with
+  an older gate the hook's result is not valid.
 - Replace refs (`refs/replace/*`) are disabled for every git call the Stop
   hook makes and, new in this release, for every git call the CLI makes: the
   `--staged` and `--base` listings and the trusted base reads. A local replace
   ref can no longer make a listing come back empty. Both set
   `GIT_NO_REPLACE_OBJECTS=1` and pass `core.useReplaceRefs=false` through
-  `GIT_CONFIG_COUNT`, which git reads from 2.31; on an older git the first
-  still applies, but repository config that turns replace refs on takes
-  effect.
+  `GIT_CONFIG_COUNT`, which git reads from 2.31; on an older git only the
+  first applies, and repository config can override it, so git 2.31 or newer
+  is required for that protection.
 - `check --base` judges a branch that contains a file named exactly like the
   range it diffs (`main...HEAD`, say). It used to exit 2 there.
 - The shipped GitHub Actions samples run `check --base` against the fetched

@@ -14,8 +14,9 @@
  * - core.useReplaceRefs=false passed through GIT_CONFIG_COUNT, because
  *   repository config setting core.useReplaceRefs=true would otherwise turn
  *   replace refs back on over that variable. Config passed this way sits above
- *   repository config. It is appended after any entries the caller's
- *   environment already carries. A git older than 2.31 ignores these
+ *   repository config. When the caller's GIT_CONFIG_COUNT is a plain
+ *   non-negative integer, the entry is appended after the entries that count
+ *   covers; otherwise the helper starts from index zero. A git older than 2.31 ignores these
  *   variables, and the first part still applies there.
  */
 export function gitSpawnEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

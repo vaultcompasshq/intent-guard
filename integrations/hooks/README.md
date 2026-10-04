@@ -44,21 +44,20 @@ Then copy the relevant sample config from `integrations/codex/`,
 
 Requirements:
 
-- `intent-guard-check` 1.8.1 or newer on `PATH`. From 1.8.1 the Stop hook
-  sends committed and staged work through the gate's own `--base` and
-  `--staged` listings rather than on the command line, and relies on how
-  those listings read git in 1.8.1 (submodule pointers always listed,
-  revisions ended with `--`, replace refs disabled). An older gate is not
-  detected by the hook; keep the hook scripts and the installed gate at the
-  same release.
+- The 1.8.1 hook scripts must be used with `intent-guard-check` 1.8.1 or
+  newer on `PATH`. The hook does not check the gate's version. From 1.8.1 it
+  leaves committed and staged changes to the gate's own `--base` and
+  `--staged` listings, and an older gate lists fewer kinds of change, so with
+  an older gate the hook's result is not valid. Confirm the version with
+  `intent-guard-check --version`.
 - git 2.31 or newer for the Stop hook's full replace-ref protection. The hook
   turns replace refs off with `GIT_NO_REPLACE_OBJECTS=1`, and also passes
   `core.useReplaceRefs=false` through `GIT_CONFIG_COUNT` so that repository
   config cannot turn them back on. `GIT_CONFIG_COUNT` arrived in git 2.31; an
   older git ignores it, so there the variable still disables replace refs but
   repository config setting `core.useReplaceRefs=true` takes effect over it.
-  The CLI needs no newer git than before; it sets the same two variables for
-  its own git calls, with the same effect on an older git.
+  The CLI sets the same two variables for its own git calls, so the same
+  holds there.
 
 ## Behavior
 
