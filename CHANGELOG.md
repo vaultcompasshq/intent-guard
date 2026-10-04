@@ -7,7 +7,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Consumer-visible changes, stated plainly:
+## [1.8.1] - 2026-10-03
+
+What can newly block you, and how to clear it:
+
+- **The Stop hook blocks every stop on an unstaged or untracked path it
+  cannot put on the command line**: a comma or a backslash in the name, an
+  untracked directory that holds its own git repository, or more paths than
+  fit. Stage the file with `git add` (staged files reach the gate through
+  `--staged`), rename it, or add generated output to `.gitignore`.
+- **A moved submodule pointer is now listed** by `check --base`, `check
+  --staged` and the Stop hook even under `ignore = all`, so it can hit a
+  protected path or `max_files`. Clear it like any other budget finding.
+- **A change that a local replace ref used to hide is now judged**, by the
+  hook and by the CLI.
+- **`freeze` and `import-spec` refuse a wildcard budget glob ending in `/`**
+  (`secrets/**/`). Drop the trailing slash.
+- **A trust-base run exits 2** when the base ref lists a control file or an
+  archived contract that git cannot read, or its tree cannot be listed. Fix
+  or fetch the base ref.
+- **The action refuses a `json-output` path that reaches `.github/`** under
+  another spelling or through a symlink. Write the JSON somewhere else.
+- **Upgrade the gate with the hooks.** The 1.8.1 hooks need
+  `intent-guard-check` 1.8.1 or newer on `PATH`.
+
+All consumer-visible changes, stated plainly:
 
 - The Stop hook now sends committed work to the gate through `--base` and
   staged work through `--staged`; only unstaged edits and untracked files go

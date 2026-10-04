@@ -38,7 +38,7 @@ inputs:
       narrowest one that names a release. Run a candidate through the CLI
       directly.
     required: false
-    default: 1.8.0
+    default: 1.8.1
   project:
     description: |
       Path to the Intent Guard project root, relative to the workspace root.
@@ -218,19 +218,19 @@ runs:
         # workflow file from the HEAD, so the `version:` input is written by
         # the pull request being judged. The shape check above proves the
         # input names a version and says nothing about WHICH one: every
-        # published version clears it, and eleven are published, 1.2.0
-        # through 1.8.0, so ten of them sit below the tag this action ships
+        # published version clears it, and twelve are published, 1.2.0
+        # through 1.8.1, so eleven of them sit below the tag this action ships
         # and are already refused by it, but only by coincidence -- nothing
         # before this block made that a rule.
         #
         # The day a 1.9.0 gate ships with new checks, a pull request could pin
-        # back to 1.8.0, which is well-formed and today's default, and be
+        # back to 1.8.1, which is well-formed and today's default, and be
         # judged by the older rule set it chose for itself.
         #
         # This is the same class of hole as `trust-base: off`, refused by name
         # a few checks above for exactly this reason. The difference is what a
         # reviewer sees: deleting a security step reads as deleting a security
-        # step, while `version: 1.8.0` reads as ordinary version management.
+        # step, while `version: 1.8.1` reads as ordinary version management.
         #
         # FORWARD STAYS ALLOWED, ON AN ASSUMPTION THIS RULE DOES NOT ENFORCE.
         # The rule assumes a newer gate is at least as strict as the one this
@@ -243,7 +243,7 @@ runs:
         #
         # COMPARED AGAINST A HARDCODED CONSTANT, never against anything
         # derived from an input. `inputs.version` looks identical whether the
-        # consumer wrote 1.8.0 or the default supplied it, so the step cannot
+        # consumer wrote 1.8.1 or the default supplied it, so the step cannot
         # tell a pin from a default and the constant is the only source of
         # truth. It is safe to trust because action.yml comes from the ref the
         # consumer's workflow names, not from the pull request's tree.
@@ -256,7 +256,7 @@ runs:
         # repository are the usual reason to reference it that way.
         IG_TAG_SCANNER_MAJOR=1
         IG_TAG_SCANNER_MINOR=8
-        IG_TAG_SCANNER_PATCH=0
+        IG_TAG_SCANNER_PATCH=1
         IG_TAG_SCANNER="${IG_TAG_SCANNER_MAJOR}.${IG_TAG_SCANNER_MINOR}.${IG_TAG_SCANNER_PATCH}"
 
         # GITHUB_BASE_REF being non-empty IS the pull-request test, and it is
