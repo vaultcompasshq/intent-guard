@@ -622,7 +622,7 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
       "install",
       "-g",
       "--ignore-scripts",
-      "@vaultcompass/intent-guard@1.8.0",
+      "@vaultcompass/intent-guard@1.8.1",
     ]);
   });
 
@@ -961,7 +961,7 @@ describe("action.yml validates its inputs before a shell sees them", () => {
     // the run, a value beginning with a dot or ending in .tgz is read by npm
     // as a PATH, and a leading-zero string is invalid semver so npm reads it
     // as a dist-tag too.
-    expect(runValidate({ version: "1.8.0" }).status).toBe(0);
+    expect(runValidate({ version: "1.8.1" }).status).toBe(0);
     for (const rejected of [
       ".",
       "..",
@@ -1107,24 +1107,28 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   // The same validate script, with the tag constant advanced by one minor
   // version: the action as it will be the day a 1.9.0 gate ships and this tag
   // starts shipping it. NOT here because the rule is invisible on the shipped
-  // file -- it is visible, every published version below 1.8.0 is refused
+  // file -- it is visible, every published version below 1.8.1 is refused
   // there already -- but because this exercises the comparison at a boundary
   // the published set cannot reach today, where the minor leg of the
   // comparison does the work rather than the major leg.
   function scriptWithFutureTag(): string {
-    const future = validateScript.replace(
-      /IG_TAG_SCANNER_MINOR=([0-9]+)/,
-      (_all, digits) => `IG_TAG_SCANNER_MINOR=${Number(digits) + 1}`,
-    );
+    // A minor release resets the patch leg, so the future tag is X.(Y+1).0
+    // whatever patch the shipped tag carries.
+    const future = validateScript
+      .replace(
+        /IG_TAG_SCANNER_MINOR=([0-9]+)/,
+        (_all, digits) => `IG_TAG_SCANNER_MINOR=${Number(digits) + 1}`,
+      )
+      .replace(/IG_TAG_SCANNER_PATCH=([0-9]+)/, "IG_TAG_SCANNER_PATCH=0");
     expect(future).not.toBe(validateScript);
     return future;
   }
 
   // The same validate script, with the tag constant's PATCH leg raised by
-  // two: the shipped tag's patch is 0, so no published version sits below it
-  // at the same major.minor, and the same-minor-lower-patch arm of the
-  // comparison never runs against the real file. This exercises that arm
-  // without waiting for a patch release to make a real fixture possible.
+  // two: on the shipped file only 1.8.0 sits below the tag (1.8.1) at the
+  // same major.minor. This exercises the same-minor-lower-patch arm against a
+  // version that is not published, so the test does not depend on which
+  // versions happen to exist.
   function scriptWithPatchOverride(): string {
     const patched = validateScript.replace(
       /IG_TAG_SCANNER_PATCH=([0-9]+)/,
@@ -1151,13 +1155,13 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
 
   it("refuses a below-tag pin on a pull request, on the shipped file", () => {
     // 1.5.1 is a real published version, well-formed, and it clears the shape
-    // check. It sits below the tag this action ships (1.8.0) and is refused
+    // check. It sits below the tag this action ships (1.8.1) and is refused
     // here rather than several steps later at the gate itself.
     const refused = runValidate({ version: "1.5.1" }, PULL_REQUEST_EVENT);
     expect(refused.status).toBe(1);
     // Both numbers, for the same reason the npm floor names both.
     expect(refused.stdout).toContain("1.5.1");
-    expect(refused.stdout).toContain("1.8.0");
+    expect(refused.stdout).toContain("1.8.1");
     expect(refused.stdout).toMatch(/pull request/);
     expect(refused.stdout).toContain("REMOVE the `version` input");
 
@@ -1188,15 +1192,20 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   });
 
   it("refuses a pull request pinned to a lower patch at the same major.minor", () => {
-    // The shipped tag's patch is 0, so no real published version can exercise
-    // the same-minor-lower-patch arm of the comparison. Raising the tag's
-    // patch leg to 2 makes 1.8.1 (same major.minor, lower patch) a case that
-    // arm alone must catch.
+    // On the shipped file (tag 1.8.1), 1.8.0 is the one published version
+    // that only this arm refuses.
+    const shipped = runValidate({ version: "1.8.0" }, PULL_REQUEST_EVENT);
+    expect(shipped.status).toBe(1);
+    expect(shipped.stdout).toContain("1.8.0");
+    expect(shipped.stdout).toContain("1.8.1");
+    // Raising the tag's patch leg by two (to 3) makes 1.8.2 (same
+    // major.minor, lower patch, not published) a case that arm alone must
+    // catch, independent of which versions happen to exist.
     const patched = scriptWithPatchOverride();
-    const run = runValidateScript(patched, { version: "1.8.1" }, PULL_REQUEST_EVENT);
+    const run = runValidateScript(patched, { version: "1.8.2" }, PULL_REQUEST_EVENT);
     expect(run.status).toBe(1);
-    expect(run.stdout).toContain("1.8.1");
     expect(run.stdout).toContain("1.8.2");
+    expect(run.stdout).toContain("1.8.3");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
@@ -1234,7 +1243,7 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const shipped = `${tagPart("MAJOR")}.${tagPart("MINOR")}.${tagPart("PATCH")}`;
     expect(runValidate({ version: shipped }, PULL_REQUEST_EVENT).status).toBe(0);
     expect(runValidate({}, PULL_REQUEST_EVENT).status).toBe(0);
-    for (const ok of ["1.8.0", "1.8.1", "1.10.0", "2.0.0"]) {
+    for (const ok of ["1.8.1", "1.8.2", "1.10.0", "2.0.0"]) {
       expect([ok, runValidate({ version: ok }, PULL_REQUEST_EVENT).status]).toEqual([ok, 0]);
     }
   });

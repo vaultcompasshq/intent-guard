@@ -151,13 +151,28 @@ report_unpassable() {
 # A path that cannot be passed is a finding on the normal route, because
 # staging it always clears it. On the empty-tree route nothing clears it, so
 # there it is could-not-run: it blocks once, then the loud pass.
+#
+# On that route every path goes through --paths, so when no --paths argument
+# was written (the whole list too long, or no path passable at all) the gate
+# was handed nothing, passed an empty change, and judged NOTHING. The message
+# says which of the two cases this is, never more than was judged.
 unpassable_verdict() {
   if [[ "$UNPASSABLE" -ne 1 ]]; then
     return 0
   fi
   if [[ "${INTENT_GUARD_ALL_IN_PATHS:-0}" -eq 1 ]]; then
+    local gate_got_paths=0 arg
+    for arg in ${GATE_ARGS[@]+"${GATE_ARGS[@]}"}; do
+      if [[ "$arg" == "--paths" ]]; then
+        gate_got_paths=1
+      fi
+    done
+    if [[ "$gate_got_paths" -eq 1 ]]; then
+      could_not_run "${UNPASSABLE_DETAIL}${EMPTY_TREE_ROUTE_NOTE}" \
+        "the intent check COULD NOT RUN on all of this change: some changed paths could not be passed to the gate and were NOT judged; the gate judged and passed only the paths it was given."
+    fi
     could_not_run "${UNPASSABLE_DETAIL}${EMPTY_TREE_ROUTE_NOTE}" \
-      "the intent check COULD NOT RUN on all of this change: some changed paths could not be passed to the gate and were NOT judged; everything else was judged and passed."
+      "the intent check COULD NOT RUN on this change: no changed path could be passed to the gate, so NOTHING in this change was judged. To get it judged, make a first commit if there is none and start a new session: its baseline is then a commit, and committed and staged work reaches the gate through the gate's own --base and --staged listings. In that session, stage files with \"git add\" so they reach the gate through --staged."
   fi
   lifecycle_block
 }
@@ -203,7 +218,7 @@ unpassable_verdict
 
 if [[ -n "$PARTIAL" ]]; then
   could_not_run "${PARTIAL}" \
-    "the intent check COULD NOT RUN on all of this change: staged, unstaged and untracked changes were judged and passed, but work committed during this session was NOT judged."
+    "the intent check COULD NOT RUN on all of this change: staged, unstaged and untracked changes were judged and passed, but work committed during this session could not be judged against the session's start, so some or all of it was NOT judged."
 fi
 
 exit 0

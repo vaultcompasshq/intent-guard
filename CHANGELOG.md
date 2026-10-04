@@ -7,28 +7,81 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Consumer-visible changes, stated plainly:
+## [1.8.1] - 2026-10-03
+
+What can newly block you, and how to clear it:
+
+- **The Stop hook blocks every stop on an unstaged or untracked path it
+  cannot put on the command line**: a comma or a backslash in the name, an
+  untracked directory that holds its own git repository, or more paths than
+  fit. Stage the file with `git add` (staged files reach the gate through
+  `--staged`), rename it, or add generated output to `.gitignore`.
+- **A moved submodule pointer is now listed** by `check --base`, `check
+  --staged` and the Stop hook even under `ignore = all`, so it can hit a
+  protected path or `max_files`. Clear it like any other budget finding.
+- **A change that a local replace ref used to hide is now judged**, by the
+  hook and by the CLI.
+- **`freeze` and `import-spec` refuse a wildcard budget glob ending in `/`**
+  (`secrets/**/`). Drop the trailing slash.
+- **A trust-base run exits 2** when the base ref lists a control file or an
+  archived contract that git cannot read, or its tree cannot be listed. Fix
+  or fetch the base ref.
+- **The action refuses a `json-output` path that reaches `.github/`** under
+  another spelling or through a symlink. Write the JSON somewhere else.
+- **On a pull request the action refuses a `version` input older than the
+  version its own tag ships.** A workflow that moves to the v1.8.1 tag while
+  keeping `version: 1.8.0` fails in validation with a message saying to
+  remove the `version` input. Push runs, and workflows still on the v1.8.0
+  tag, are unaffected.
+- **A `--base` or `--trust-base` value beginning with a single dash is
+  refused with exit 2.** It used to be handed to git.
+- **Use the gate at 1.8.1 or newer with the hooks.** The 1.8.1 hook scripts
+  must be used with `intent-guard-check` 1.8.1 or newer on `PATH`.
+
+All consumer-visible changes, stated plainly:
 
 - The Stop hook now sends committed work to the gate through `--base` and
   staged work through `--staged`; only unstaged edits and untracked files go
   on the command line as `--paths`. An unstaged or untracked path that cannot
   be passed there (a comma or a backslash in its name, an untracked directory
   holding its own git repository, or more paths than fit) blocks every stop,
-  like a finding, and the rest of the change is still judged. When the session
-  began before the repository's first commit, every changed path goes through
-  `--paths`; there such a path blocks once and is then reported as not judged,
-  and a new session after the first commit restores full judging.
+  like a finding, and whatever does reach the gate is still judged. When the
+  session began before the repository's first commit, every changed path goes
+  through `--paths`; there such a path blocks once and is then reported as not
+  judged, and a new session after the first commit restores full judging. If
+  no path at all can be passed on that route (the whole list is too long, or
+  every path is unpassable), the gate is handed nothing: the stop blocks once
+  and the loud pass then says that nothing in the change was judged.
+- The 1.8.1 hook scripts must be used with `intent-guard-check` 1.8.1 or
+  newer on `PATH`; confirm with `intent-guard-check --version`. The hook does
+  not check the gate's version. It leaves committed and staged changes to the
+  gate's own listing, and an older gate lists fewer kinds of change, so with
+  an older gate the hook's result is not valid.
+- Replace refs (`refs/replace/*`) are disabled for every git call the Stop
+  hook makes and, new in this release, for every git call the CLI makes: the
+  `--staged` and `--base` listings and the trusted base reads. A local replace
+  ref can no longer make a listing come back empty. Both set
+  `GIT_NO_REPLACE_OBJECTS=1` and pass `core.useReplaceRefs=false` through
+  `GIT_CONFIG_COUNT`, which git reads from 2.31; on an older git only the
+  first applies, and repository config can override it, so git 2.31 or newer
+  is required for that protection.
+- `check --base` judges a branch that contains a file named exactly like the
+  range it diffs (`main...HEAD`, say). It used to exit 2 there.
+- The shipped GitHub Actions samples run `check --base` against the fetched
+  base branch instead of building a `--paths` list in shell.
 - A session baseline record that exists is never rewritten on a continuation
   (`resume`, `compact`, or no `source`), whether it is valid or not, and a
   changed contract id no longer resets it. Start a new session to record a
   fresh one. With an invalid record, or none and no upstream, the Stop hook
   still judges staged, unstaged and untracked changes, and a finding there
   blocks every time; only when that passes does it report that committed work
-  was not judged.
+  could not be judged in full.
 - `check --base` and `check --staged` list a moved submodule pointer even when
   `ignore = all` is set for it, and so does the Stop hook.
-- `--base` and `--trust-base` values that start with a dash are refused with
-  exit 2.
+- A `--base` or `--trust-base` value that starts with a single dash (`-S`,
+  say) is refused with exit 2, could-not-run, because git would read it as an
+  option. A value that starts with `--` is read as a missing value: a usage
+  error, exit 1.
 - `freeze` and `import-spec` refuse a wildcard budget glob that ends in `/`,
   such as `secrets/**/`, which matches no file; `check` and `report` warn on
   one in a frozen contract.
@@ -38,7 +91,10 @@ Consumer-visible changes, stated plainly:
 - A trust-base run reads the base ref's control files correctly when the pull
   request adds a file named like `REF:./PATH`, and a control file the base
   ref lists but git cannot read, or a base tree git cannot list, stops the
-  run with exit 2 instead of being read as empty or absent.
+  run with exit 2 instead of being read as empty or absent. The same holds
+  for the archived contract named by `--previous-contract` under
+  `--trust-base`: listed at the base ref but unreadable is now could-not-run,
+  exit 2, where it used to be read as no archived contract.
 - The action refuses a `json-output` path that reaches `.github/` under
   another spelling or through a symlink in the checkout.
 

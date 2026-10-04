@@ -42,6 +42,23 @@ chmod +x integrations/hooks/*.sh
 Then copy the relevant sample config from `integrations/codex/`,
 `integrations/claude-code/`, or `integrations/cursor/`.
 
+Requirements:
+
+- The 1.8.1 hook scripts must be used with `intent-guard-check` 1.8.1 or
+  newer on `PATH`. The hook does not check the gate's version. From 1.8.1 it
+  leaves committed and staged changes to the gate's own `--base` and
+  `--staged` listings, and an older gate lists fewer kinds of change, so with
+  an older gate the hook's result is not valid. Confirm the version with
+  `intent-guard-check --version`.
+- git 2.31 or newer for the Stop hook's full replace-ref protection. The hook
+  turns replace refs off with `GIT_NO_REPLACE_OBJECTS=1`, and also passes
+  `core.useReplaceRefs=false` through `GIT_CONFIG_COUNT` so that repository
+  config cannot turn them back on. `GIT_CONFIG_COUNT` arrived in git 2.31; an
+  older git ignores it, so there the variable still disables replace refs but
+  repository config setting `core.useReplaceRefs=true` takes effect over it.
+  The CLI sets the same two variables for its own git calls, so the same
+  holds there.
+
 ## Behavior
 
 - Session-start hooks are best effort. They do not block if no active contract
@@ -92,7 +109,8 @@ Then copy the relevant sample config from `integrations/codex/`,
   is no record and no upstream branch, the check still judges staged, unstaged
   and untracked changes against the upstream branch or `HEAD`, and a finding
   there blocks every time; only when that passes does it report, as
-  could-not-run, that work committed during the session was not judged. With
+  could-not-run, that work committed during the session could not be judged
+  in full (commits since an upstream branch are still judged). With
   no record but an upstream branch, the upstream stands in for the baseline.
   The operator can set `INTENT_GUARD_NO_BASELINE_OK=1` to accept judging only
   uncommitted and untracked changes, with a warning that committed work cannot
@@ -107,8 +125,8 @@ Then copy the relevant sample config from `integrations/codex/`,
   way: one containing a comma (`--paths` is comma-separated) or a backslash
   (the CLI refuses one in `--paths`), an untracked directory holding its own
   git repository (git lists the directory, not the files in it), or more paths
-  than fit on a command line. Each is named on stderr, and the rest of the
-  change is still judged on that stop. Such an unstaged or untracked path
+  than fit on a command line. Each is named on stderr, and whatever does reach
+  the gate is still judged on that stop. Such an unstaged or untracked path
   blocks the stop every time; staged and committed files never take this
   route, since they reach the gate through `--staged` and `--base`. The comma
   and backslash test runs under `LC_ALL=C`, byte by byte, whatever the user's
@@ -119,15 +137,20 @@ Then copy the relevant sample config from `integrations/codex/`,
   what is passed still blocks every time. A path that cannot be passed is
   could-not-run on this route: it blocks the first time, and the message names
   the paths that were not judged and says that a new session started after
-  the first commit restores full judging. A git failure blocks the stop (exit
+  the first commit restores full judging. When no path at all can be passed
+  (the whole list is too long, or every path is one of the shapes above), the
+  gate is handed nothing, and the loud pass says that nothing in the change
+  was judged, rather than that the rest passed. A git failure blocks the stop (exit
   2, reason on stderr) instead of yielding an empty list, which would pass.
 - Submodules. Every diff the hook or the gate makes passes
   `--ignore-submodules=none` (the hook's work-tree diff passes `untracked`),
   so `ignore = all` for a submodule, in `.gitmodules` or in git config, does
   not hide a moved submodule pointer or an edit to a tracked file inside its
   checkout; untracked build output inside a submodule does not block. The
-  hooks also export `GIT_NO_REPLACE_OBJECTS=1` to their own git calls and to
-  the gate they run. Revisions are ended with `--`, so a file named like the
+  hooks also export `GIT_NO_REPLACE_OBJECTS=1` and `core.useReplaceRefs=false`
+  (through `GIT_CONFIG_COUNT`) to their own git calls and to the gate they
+  run, and the gate sets the same for every git call it makes (see
+  Requirements above for older git). Revisions are ended with `--`, so a file named like the
   baseline commit id is read as a file.
 - Cursor has no committed lifecycle hook config here; use the project rule plus
   the Git pre-commit hook for enforcement.
