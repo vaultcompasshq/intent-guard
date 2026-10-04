@@ -28,40 +28,25 @@ jobs:
       - name: Install Intent Guard
         run: pnpm dlx @vaultcompass/intent-guard@latest --version
 
-      - name: Collect changed paths
-        id: changed
-        shell: bash
-        # github.base_ref is attacker-influenced only in name, but a step
-        # output built from file names is not: pass both through env and read
-        # them as shell variables, never as ${{ }} inside the run body, so a
-        # branch or file named with a $(...) or backtick payload is data, not
-        # code, when bash sees it.
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          git fetch origin "$BASE_REF" --depth=1
-          paths="$(git -c core.quotePath=false diff --no-renames --ignore-submodules=none --name-only "origin/$BASE_REF...HEAD" -- | paste -sd, -)"
-          echo "paths=${paths}" >> "$GITHUB_OUTPUT"
-
       # `check` is the full gate: it scores drift AND enforces the contract's
       # change budget (allowed/protected paths, max files, dependency guard),
       # matching what the pre-commit hook runs. `drift` is score-only and does
       # not enforce the budget, so use `check` in CI.
+      #
+      # --base makes the gate list the pull request's changes itself, from
+      # the merge base with the base branch, reading git NUL-separated, so
+      # every file name reaches the budget exactly as it is. An unknown ref or
+      # a missing merge base exits 2 rather than judging an empty list.
+      # github.base_ref is passed through env and read as a shell variable,
+      # never as ${{ }} inside the run body, so a branch named with a $(...)
+      # or backtick payload is data, not code, when bash sees it.
       # Add `--no-require-frozen` if the branch may not carry a frozen contract.
       - name: Check intent + budget
         shell: bash
         env:
-          CHANGED: ${{ steps.changed.outputs.paths }}
-        # An empty diff leaves CHANGED empty. From 1.5.2 the gate reads
-        # `--paths ""` as the empty set and runs normally; 1.5.1 refused it
-        # and turned an empty diff into a red check. Running without the flag
-        # says the same thing here and works on every released version, the
-        # way the Stop hook already does, so the branch stays.
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          if [[ -n "$CHANGED" ]]; then
-            pnpm dlx @vaultcompass/intent-guard@latest check \
-              --project . \
-              --paths "$CHANGED"
-          else
-            pnpm dlx @vaultcompass/intent-guard@latest check --project .
-          fi
+          git fetch origin "$BASE_REF"
+          pnpm dlx @vaultcompass/intent-guard@latest check \
+            --project . \
+            --base "origin/$BASE_REF"

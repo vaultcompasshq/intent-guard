@@ -67,11 +67,19 @@ describe("integration hook samples", () => {
     // CI must run the full gate (`check`), which enforces the change budget,
     // not the score-only `drift` command.
     expect(workflow).toContain("check");
-    expect(workflow).toContain("--paths");
+    // The gate lists the change itself (--base reads git with -z). A list
+    // built in shell from git output without -z would reach the budget
+    // C-quoted for some names, which docs/INVARIANTS.md rules out.
+    expect(workflow).toContain('--base "origin/$BASE_REF"');
+    expect(workflow).not.toContain("--paths");
+    expect(workflow).not.toContain("--name-only");
 
     const pairedWorkflow = readText(
       "integrations/github-actions/conductor-vault-guard-ci.yml.sample",
     );
+    expect(pairedWorkflow).toContain('--base "origin/$BASE_REF"');
+    expect(pairedWorkflow).not.toContain("--paths");
+    expect(pairedWorkflow).not.toContain("--name-only");
     expect(pairedWorkflow).toContain("@vaultcompass/intent-guard@latest");
     expect(pairedWorkflow).toContain("@vaultcompass/vault-guard@latest");
     expect(pairedWorkflow).toContain("scan . --format text");
@@ -722,7 +730,12 @@ describe("stop hook changed-path collection", () => {
         const result = runHook(world, STOP_CHECK, { input: ACTIVE });
         expect(result.code).toBe(0);
         expect(result.stderr).toContain("COULD NOT RUN");
-        expect(JSON.parse(result.stdout).systemMessage).toContain("committed");
+        const message = JSON.parse(result.stdout).systemMessage as string;
+        expect(message).toContain("committed");
+        // A fallback to the upstream branch still judges commits since it, so
+        // the message may not claim that none of the committed work was judged.
+        expect(message).toContain("some or all of it was NOT judged");
+        expect(message).not.toContain("work committed during this session was NOT judged");
       } finally {
         rmSync(world.work, { recursive: true, force: true });
       }
@@ -1650,7 +1663,57 @@ describe("stop hook with an empty-tree baseline", () => {
       expect(result.stderr).toContain("new session");
       expect(result.stderr).not.toContain("git add");
       expect(result.stderr).not.toContain("unstaged and untracked");
-      expect(JSON.parse(result.stdout).systemMessage).toContain("COULD NOT RUN");
+      const message = JSON.parse(result.stdout).systemMessage as string;
+      expect(message).toContain("COULD NOT RUN");
+      // README.md and the contract were passed and judged; the comma file was not.
+      expect(message).toContain(
+        "some changed paths could not be passed to the gate and were NOT judged; the gate judged and passed only the paths it was given.",
+      );
+      expect(message).not.toContain("everything else was judged");
+      expect(message).not.toContain("NOTHING in this change was judged");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  // The whole list too long: nothing at all goes to the gate, which then passes
+  // an empty change. The loud pass must not say anything was judged.
+  it("says NOTHING was judged when no path at all could be passed, though a protected file is committed", () => {
+    const world = emptyTreeWorld();
+    try {
+      write(world, "secrets/k.txt");
+      commitAll(world, "secrets/k.txt");
+      const long = "d".repeat(200);
+      for (let i = 0; i < 1500; i++) write(world, `docs/${long}-${String(i).padStart(4, "0")}.md`);
+      expect(runHook(world, STOP_CHECK, { input: INACTIVE }).code).toBe(2);
+      const result = runHook(world, STOP_CHECK, { input: ACTIVE });
+      expect(result.code).toBe(0);
+      const message = JSON.parse(result.stdout).systemMessage as string;
+      expect(message).toContain("no changed path could be passed to the gate, so NOTHING in this change was judged.");
+      expect(message).toContain("make a first commit if there is none and start a new session");
+      expect(message).toContain("git add");
+      expect(message).not.toContain("everything else was judged");
+      expect(message).not.toContain("judged and passed");
+      expect(result.stderr).toContain("NOTHING in this change was judged");
+    } finally {
+      rmSync(world.work, { recursive: true, force: true });
+    }
+  });
+
+  it("hands the gate no path at all when the whole list is too long", () => {
+    const world = makeWorld();
+    try {
+      const emptyTree = execFileSync("git", ["hash-object", "-t", "tree", "/dev/null"], {
+        cwd: world.project,
+        encoding: "utf8",
+      }).trim();
+      writeFileSync(join(world.project, ".git", "intent-guard-session-start"), `${emptyTree}\nnone\n`, "utf8");
+      const long = "d".repeat(200);
+      for (let i = 0; i < 1500; i++) write(world, `docs/${long}-${String(i).padStart(4, "0")}.md`);
+      const result = runHook(world, STOP_CHECK, { input: ACTIVE });
+      expect(result.code).toBe(0);
+      expect(rawPathsSeen(result.stderr)).toBeNull();
+      expect(JSON.parse(result.stdout).systemMessage).toContain("NOTHING in this change was judged");
     } finally {
       rmSync(world.work, { recursive: true, force: true });
     }
@@ -1666,7 +1729,10 @@ describe("stop hook with an empty-tree baseline", () => {
       const result = runHook(world, STOP_CHECK, { input: ACTIVE });
       expect(result.code).toBe(0);
       expect(result.stderr).toContain("too many");
-      expect(result.stderr).not.toContain("git add");
+      // Staging does not help on this route, so the normal-route advice is
+      // absent; "git add" appears only as advice for the new session.
+      expect(result.stderr).not.toContain("Stage them with");
+      expect(result.stderr).toContain("In that session, stage files with \"git add\"");
       expect(result.stderr).not.toContain("unstaged and untracked");
     } finally {
       rmSync(world.work, { recursive: true, force: true });

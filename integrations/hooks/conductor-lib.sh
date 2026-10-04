@@ -162,7 +162,7 @@ intent_guard_record_session_start() {
     *)
       if [[ -f "$file" ]]; then
         if ! intent_guard_baseline_valid "$root" "$(sed -n '1p' "$file")"; then
-          echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree), so it was left as it is. Until a new session starts, the Stop check judges staged, unstaged and untracked changes but cannot judge work committed during this session; start a new session to record a fresh baseline." >&2
+          echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree), so it was left as it is. Until a new session starts, the Stop check still collects staged, unstaged and untracked changes for the gate but cannot judge work committed during this session in full; start a new session to record a fresh baseline." >&2
         fi
         return 0
       fi
@@ -212,7 +212,7 @@ intent_guard_baseline_ref() {
       printf '%s' "$ref"
       return 0
     fi
-    echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree); it was altered or history was rewritten. Refusing to judge against it, so work committed during this session is not judged; staged, unstaged and untracked changes still are. Delete it and start a new session." >&2
+    echo "Intent Guard: the session baseline record ($file) is not a commit that is an ancestor of HEAD (or the empty tree); it was altered or history was rewritten. Refusing to judge against it, so work committed during this session cannot be judged in full; staged, unstaged and untracked changes are still collected for the gate. Delete it and start a new session." >&2
     intent_guard_fallback_ref "$root" || return 1
     return 3
   fi
@@ -238,7 +238,7 @@ intent_guard_baseline_ref() {
     return 0
   fi
 
-  echo "Intent Guard: no session-start record and no upstream branch, so work committed during this session cannot be seen; staged, unstaged and untracked changes are still judged. Wire conductor-session-start.sh as the SessionStart hook and start a new session, or set INTENT_GUARD_NO_BASELINE_OK=1 to judge only uncommitted and untracked changes." >&2
+  echo "Intent Guard: no session-start record and no upstream branch, so work committed during this session cannot be seen; staged, unstaged and untracked changes are still collected for the gate. Wire conductor-session-start.sh as the SessionStart hook and start a new session, or set INTENT_GUARD_NO_BASELINE_OK=1 to judge only uncommitted and untracked changes." >&2
   intent_guard_fallback_ref "$root" || return 1
   return 3
 }
