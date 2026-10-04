@@ -4,6 +4,7 @@ import { createInterface } from "node:readline/promises";
 import {
   buildBrief,
   freezeContract,
+  gitSpawnEnv,
   isContractFrozen,
   readContract,
   writeContract,
@@ -67,6 +68,7 @@ function gitUser(projectRoot: string): string {
   try {
     return execFileSync("git", ["config", "user.name"], {
       cwd: projectRoot,
+      env: gitSpawnEnv(),
       encoding: "utf8",
     }).trim();
   } catch {

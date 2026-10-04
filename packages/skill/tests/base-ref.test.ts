@@ -390,6 +390,57 @@ describe("a moved submodule pointer is always listed", { timeout: 60_000 }, () =
   });
 });
 
+// A replace ref (refs/replace/*) makes git show one object in place of
+// another. Left honoured, a local one can make the gate's own listings come
+// back empty: HEAD shown as a commit whose tree already matches the index, or
+// the branch tip shown as the base itself. Every git call the gate makes runs
+// with replace refs disabled, so both listings still name the real change.
+describe("replace refs do not change what the gate lists", { timeout: 60_000 }, () => {
+  const PROTECT = '\nbudget:\n  protected_paths:\n    - "secrets/**"\n';
+
+  async function expectBlocked(dir: string, mode: string[]): Promise<void> {
+    const res = await run("check-cli.js", ["--project", dir, ...mode, "--json"]);
+    expect(res.code).toBe(1);
+    expect(JSON.stringify(JSON.parse(res.stdout).budget.violations)).toContain("secrets/k.txt");
+  }
+
+  /** Replace HEAD with a commit whose tree is the index, so the cached diff is empty. */
+  function replaceHeadWithIndex(dir: string): void {
+    const tree = gitOut(dir, ["write-tree"]);
+    const stand = gitOut(dir, ["commit-tree", tree, "-p", "HEAD", "-m", "stand-in"]);
+    git(dir, ["replace", gitOut(dir, ["rev-parse", "HEAD"]), stand]);
+    expect(gitOut(dir, ["diff", "--cached", "--name-only"])).toBe("");
+  }
+
+  it("--staged still lists a staged file when a replace ref makes the cached diff empty", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    writeAt(dir, "secrets/k.txt", "k\n");
+    git(dir, ["add", "--", "secrets/k.txt"]);
+    replaceHeadWithIndex(dir);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--staged"]);
+  });
+
+  it("--staged still lists it when repository config turns replace refs on", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    git(dir, ["config", "core.useReplaceRefs", "true"]);
+    writeAt(dir, "secrets/k.txt", "k\n");
+    git(dir, ["add", "--", "secrets/k.txt"]);
+    replaceHeadWithIndex(dir);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--staged"]);
+  });
+
+  it("--base still lists a committed file when a replace ref shows the tip as the base", async () => {
+    const dir = repoWithBranch(["secrets/k.txt"]);
+    const stand = gitOut(dir, ["commit-tree", "main^{tree}", "-p", "main", "-m", "stand-in"]);
+    git(dir, ["replace", gitOut(dir, ["rev-parse", "HEAD"]), stand]);
+    expect(gitOut(dir, ["diff", "--name-only", "main...HEAD", "--"])).toBe("");
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlocked(dir, ["--base", "main"]);
+  });
+});
+
 // Git C-quotes a path containing a double quote, a backslash, a tab or a newline
 // even with core.quotePath=false, so a line-split reader sees `"secrets/a\"b.txt"`
 // (leading quote, escaped inside) and no glob matches it. The fix is NUL-separated

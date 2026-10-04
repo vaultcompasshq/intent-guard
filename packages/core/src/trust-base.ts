@@ -45,6 +45,7 @@ import {
   type IntentContract,
 } from "@vaultcompass/intent-guard-schema";
 import { parseConfigText } from "./config.js";
+import { gitSpawnEnv } from "./git-env.js";
 import { DEFAULT_CONDUCTOR_CONFIG, type ConductorConfig } from "./config-types.js";
 import { LEGACY_STATE_DIR, STATE_DIR } from "./state-dir.js";
 import { CONFIG_FILE } from "./config.js";
@@ -120,6 +121,7 @@ function resolve(projectRoot: string, rev: string, kind: "commit" | "tree"): str
   try {
     return execFileSync("git", ["rev-parse", "--verify", "--quiet", `${rev}^{${kind}}`], {
       cwd: projectRoot,
+      env: gitSpawnEnv(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     }).trim();
@@ -243,6 +245,7 @@ export function readFileAtRef(
   try {
     return execFileSync("git", ["show", `${ref}:./${relativePath}`, "--"], {
       cwd: projectRoot,
+      env: gitSpawnEnv(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 32 * 1024 * 1024,
@@ -300,6 +303,7 @@ function treeEntry(
   try {
     out = execFileSync("git", ["ls-tree", ref, "--", `./${relativePath}`], {
       cwd: projectRoot,
+      env: gitSpawnEnv(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });

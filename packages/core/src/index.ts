@@ -85,6 +85,7 @@ export {
 } from "./drift-log.js";
 export { draftContract, generateContractId, type DraftContractInput } from "./extract.js";
 export { formatDriftMessage } from "./format-drift.js";
+export { gitSpawnEnv } from "./git-env.js";
 export {
   initConductor,
   INIT_GITIGNORE_HINT,

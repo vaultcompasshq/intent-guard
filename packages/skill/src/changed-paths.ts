@@ -8,6 +8,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { gitSpawnEnv } from "@vaultcompass/intent-guard-core";
 
 export interface ChangedPathOptions {
   projectRoot: string;
@@ -70,6 +71,7 @@ export function stagedPaths(projectRoot: string): string[] {
   try {
     execFileSync("git", ["rev-parse", "--git-dir"], {
       cwd: projectRoot,
+      env: gitSpawnEnv(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -99,6 +101,7 @@ export function stagedPaths(projectRoot: string): string[] {
       ],
       {
         cwd: projectRoot,
+        env: gitSpawnEnv(),
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: GIT_MAX_BUFFER,
@@ -188,6 +191,7 @@ export function basePaths(projectRoot: string, baseRef: string): string[] {
       ],
       {
         cwd: projectRoot,
+        env: gitSpawnEnv(),
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: GIT_MAX_BUFFER,

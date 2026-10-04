@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { gitSpawnEnv } from "./git-env.js";
 
 /**
  * Marker written into the generated hook so install can tell its own hook from
@@ -62,6 +63,7 @@ export function resolveGitHooksDir(projectRoot: string): ResolvedHooksDir {
   const defaultDir = join(projectRoot, ".git", "hooks");
   const inside = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
     cwd: projectRoot,
+    env: gitSpawnEnv(),
     encoding: "utf8",
   });
   if (inside.status !== 0) {
@@ -74,6 +76,7 @@ export function resolveGitHooksDir(projectRoot: string): ResolvedHooksDir {
 
   const result = spawnSync("git", ["config", "--get", "core.hooksPath"], {
     cwd: projectRoot,
+    env: gitSpawnEnv(),
     encoding: "utf8",
   });
   const hooksPath = result.stdout?.trim() || "";
@@ -231,7 +234,7 @@ export function installPreCommitHook(
   const insideWorkTree = spawnSync(
     "git",
     ["rev-parse", "--is-inside-work-tree"],
-    { cwd: projectRoot, encoding: "utf8" },
+    { cwd: projectRoot, env: gitSpawnEnv(), encoding: "utf8" },
   );
   const usableGit = insideWorkTree.status === 0;
 
@@ -252,7 +255,7 @@ export function installPreCommitHook(
     const localize = spawnSync(
       "git",
       ["config", "core.hooksPath", ".git/hooks"],
-      { cwd: projectRoot, encoding: "utf8" },
+      { cwd: projectRoot, env: gitSpawnEnv(), encoding: "utf8" },
     );
     if (localize.status !== 0) {
       return {
