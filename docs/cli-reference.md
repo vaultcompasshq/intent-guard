@@ -223,13 +223,21 @@ correct --promote` (which records `source: user-correction`) can block.
 | `--json` / `--log` | JSON output / append to `drift-log.jsonl` |
 
 Exit 0 = ok, 1 = blocked, 2 = could not run: `--base` or `--trust-base` would
-not resolve or starts with a dash (git would read it as an option), a control
-file the trust base lists could not be read, or `config.yaml` was refused by
-the schema.
+not resolve or its value starts with a single dash such as `-S` (git would read
+it as an option), a control file or an archived contract the trust base lists
+could not be read, or `config.yaml` was refused by the schema.
+
+A `--base` or `--trust-base` with no value, or whose value starts with `--`, is
+a usage error instead: the value is read as missing, the usage text is printed,
+and the exit code is 1, like any other usage error. Exit 1 therefore does not
+always mean blocked; the usage text on stderr tells the two apart.
 
 `--staged` and `--base` list a moved submodule pointer even when `.gitmodules`
 or git config sets `ignore = all` for that submodule: both pass
-`--ignore-submodules=none` to git.
+`--ignore-submodules=none` to git. Every git call the CLI makes runs with
+replace refs disabled (`GIT_NO_REPLACE_OBJECTS=1`, plus
+`core.useReplaceRefs=false` through `GIT_CONFIG_COUNT`, which git reads from
+2.31), so a local replace ref does not change what is listed or read.
 
 ### Checking a pull request with `--base`
 

@@ -53,8 +53,8 @@ else leaves `NPM_OK` at 0. The refusal text is `action.yml:570`: `npm 10.5.2
 or newer`. The remediation is `action.yml:571`: Node 20.13.0 and later, and
 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1.
 
-README states the same floor at `README.md:281` and the same Node bound at
-`README.md:284` through `README.md:285`. The drift check also pins the
+README states the same floor at `README.md:291` and the same Node bound at
+`README.md:294` through `README.md:295`. The drift check also pins the
 remediation printf at `action.yml:571` as a whole `run:` line.
 
 The drift check pins the four comparison lines (five comparisons) and the
@@ -84,13 +84,13 @@ is written at `action.yml:596`.
 
 ## The action tag and the installed package can be different numbers
 
-They are not right now: `README.md:265` pins `vaultcompasshq/intent-guard@v1.8.0`,
-and `README.md:272` says that tag installs `@vaultcompass/intent-guard@1.8.0`,
+They are not right now: `README.md:275` pins `vaultcompasshq/intent-guard@v1.8.0`,
+and `README.md:282` says that tag installs `@vaultcompass/intent-guard@1.8.0`,
 because this release moved the action tag and the packages together. They
-diverged briefly at 1.5.3, an action-only tag documented at
-`CHANGELOG.md:237` that moved the workflow file without publishing new
-packages; `CHANGELOG.md:264` still records that history, naming
-`IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
+diverged briefly at 1.5.3, an action-only tag documented under the
+CHANGELOG heading `[1.5.3] - 2026-09-20` that moved the workflow file without
+publishing new packages; that same section still records that history,
+naming `IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
 version is the `version` input default at `action.yml:41`, the scanner
 constant at `action.yml:257` through `action.yml:260`, and the package
 version `1.8.0` in `package.json:4`, `packages/cli/package.json:3`,
@@ -123,9 +123,9 @@ executable line is weaker.
 
 ## Changed paths are collected NUL-separated
 
-`packages/skill/src/changed-paths.ts:30` splits on NUL, and both git calls pass
-`-z` (`packages/skill/src/changed-paths.ts:98` for `--staged`,
-`packages/skill/src/changed-paths.ts:183` for `--base`). Without `-z`, git
+`packages/skill/src/changed-paths.ts:31` splits on NUL, and both git calls pass
+`-z` (`packages/skill/src/changed-paths.ts:100` for `--staged`,
+`packages/skill/src/changed-paths.ts:186` for `--base`). Without `-z`, git
 C-quotes a name holding a double quote, backslash, tab or newline even with
 `core.quotePath=false`, and the quoted string matches no protected glob. Pinned
 by `packages/skill/tests/base-ref.test.ts`, the `NUL-separated path collection`
@@ -149,17 +149,17 @@ file out of secrets/` and `blocks a committed rename of such a file out of
 secrets/` in `examples/validate-integrations.test.ts`.
 
 `--staged` and `--base` never turn a git failure into an empty list.
-`packages/skill/src/changed-paths.ts:55` raises `maxBuffer` to 256 MB (the 1 MB
+`packages/skill/src/changed-paths.ts:56` raises `maxBuffer` to 256 MB (the 1 MB
 default threw ENOBUFS, which used to pass), and `stagedPaths` returns empty only
 when `git rev-parse --git-dir` says "not a git repository"
-(`changed-paths.ts:70` through `:80`); every other failure exits 2
-(`changed-paths.ts:112`). Pinned by `still blocks when the staged name list is
+(`changed-paths.ts:71` through `:82`); every other failure exits 2
+(`changed-paths.ts:115`). Pinned by `still blocks when the staged name list is
 larger than 1 MB` (a real 1.3 MB list, not an injected size), `passes quietly
 outside a git repository, as before` and `exits 2 on any other git failure`.
 
 `--staged` and `--base` list a moved submodule pointer whatever `ignore`
 setting the repository carries for it: both diffs pass
-`--ignore-submodules=none` (`changed-paths.ts:96` and `changed-paths.ts:181`),
+`--ignore-submodules=none` (`changed-paths.ts:98` and `changed-paths.ts:184`),
 which overrides `.gitmodules` and git config alike. Pinned by the `a moved
 submodule pointer is always listed` tests in
 `packages/skill/tests/base-ref.test.ts`: `--base, when the branch sets ignore =
@@ -168,36 +168,56 @@ the branch only moves the pointer`, `--staged, with ignore = all in
 .gitmodules` and `--staged, with diff.ignoreSubmodules = all in the repository
 config`.
 
-`--base` ends its revisions with `--` (`changed-paths.ts:187`), so a file named
+`--base` ends its revisions with `--` (`changed-paths.ts:190`), so a file named
 like the range is not read as one. Pinned by `judges a branch that adds a file
 named like the range it is diffed with`. `basePaths` refuses a ref that starts
-with a dash itself, exit 2 (`changed-paths.ts:167` through `:171`), because git
+with a dash itself, exit 2 (`changed-paths.ts:170` through `:174`), because git
 reads `-Sxyz...HEAD` as an option and lists nothing. Pinned by `refuses a --base
 value that starts with a dash (-Sxyz) as could-not-run` and its `-Gnomatch`,
 `-O/dev/null`, `-p` and `-R` twins, by `refuses a dash-leading ref inside
 basePaths itself, not only in the caller`, and for report by `refuses a --base
 value that starts with a dash as could-not-run`, all in
-`packages/skill/tests/base-ref.test.ts`.
+`packages/skill/tests/base-ref.test.ts`. That refusal is exit 2 only for a
+value with a single leading dash: the parser in `packages/skill/src/check-cli.ts`
+reads a `--base` or `--trust-base` value that starts with `--` as a missing
+value and answers with the usage text and exit 1, like any usage error.
+
+## Every git call the TypeScript code makes runs with replace refs disabled
+
+`gitSpawnEnv` (`packages/core/src/git-env.ts:21`) returns the environment for
+every git child process the packages spawn: `GIT_NO_REPLACE_OBJECTS=1`, and
+`core.useReplaceRefs=false` appended to the caller's `GIT_CONFIG_COUNT`
+entries, so repository config cannot turn replace refs back on. No git
+argument changes. It is passed as `env` at every `git` spawn in
+`packages/skill/src/changed-paths.ts`, `packages/skill/src/freeze-cli.ts`,
+`packages/core/src/trust-base.ts` and `packages/core/src/hook.ts`. A git older
+than 2.31 ignores `GIT_CONFIG_COUNT`; the first variable still applies there.
+Pinned in `packages/skill/tests/base-ref.test.ts`, group `replace refs do not
+change what the gate lists`: `--staged still lists a staged file when a
+replace ref makes the cached diff empty`, `--staged still lists it when
+repository config turns replace refs on` (red with only the first variable
+set) and `--base still lists a committed file when a replace ref shows the tip
+as the base`; all three go red with the environment removed from the helper.
 
 ## A trust-base read is never redirected by a dash or a file name
 
 Every git call in `packages/core/src/trust-base.ts` that takes a ref refuses
 one that starts with a dash before git sees it (`refuseDashRef` at
-`trust-base.ts:100`, called at `trust-base.ts:119` for rev-parse,
-`trust-base.ts:242` for show and `trust-base.ts:298` for ls-tree), with a
+`trust-base.ts:101`, called at `trust-base.ts:120` for rev-parse,
+`trust-base.ts:244` for show and `trust-base.ts:301` for ls-tree), with a
 `TrustBaseError`, which every CLI turns into exit 2. Pinned by the `trust-base
 git calls refuse a dash-leading ref` tests in
 `packages/core/tests/trust-base-refs.test.ts` and by `refuses a --trust-base
 value that starts with a dash, by name` in
 `packages/skill/tests/trust-base.test.ts`.
 
-`git show` ends its revision with `--` (`trust-base.ts:244`), so a file in the
+`git show` ends its revision with `--` (`trust-base.ts:246`), so a file in the
 tree named like `main:./.intent-guard/config.yaml` does not make the read fail.
 A control file or archived contract that `ls-tree` lists but `git show` cannot
-read is a `TrustBaseError` (`readListedBlob` at `trust-base.ts:356`, used at
-`trust-base.ts:342` and `trust-base.ts:649`), never empty text and never "no
-such file". So is an `ls-tree` that exits non-zero (`trust-base.ts:306`
-through `:310`); only a listing that succeeds and names nothing means the base
+read is a `TrustBaseError` (`readListedBlob` at `trust-base.ts:360`, used at
+`trust-base.ts:346` and `trust-base.ts:653`), never empty text and never "no
+such file". So is an `ls-tree` that exits non-zero (`trust-base.ts:310`
+through `:314`); only a listing that succeeds and names nothing means the base
 carries no such file. Pinned in `packages/skill/tests/trust-base.test.ts`,
 group `a file named like a revision does not change a trusted read`: `reads the
 base config, not the defaults, when the head adds a file named after it`,
@@ -248,8 +268,8 @@ the rest and names each one on stderr.
 
 On the normal route, where only unstaged and untracked paths cross the
 command line, such a path is a finding: the Stop check blocks
-(`conductor-stop-check.sh:187` through `:189`) whatever the gate said, and
-with no gate binary too (`conductor-stop-check.sh:169` and `:170`). Pinned in
+(`conductor-stop-check.sh:202` through `:204`) whatever the gate said, and
+with no gate binary too (`conductor-stop-check.sh:184` and `:185`). Pinned in
 the `stop hook loop policy` group by
 `still blocks on a comma in an untracked path when stop_hook_active is true`,
 `still blocks on a backslash in an untracked path, with the real gate when
@@ -269,16 +289,24 @@ locale is installed.
 
 On the empty-tree route (`INTENT_GUARD_ALL_IN_PATHS`, set at
 `conductor-lib.sh:448`), committed and staged paths cross the command line
-too, so such a path is could-not-run instead: after the gate has judged and
-passed everything else, `unpassable_verdict` (`conductor-stop-check.sh:154`,
-reached at `:202`) calls `could_not_run`, and the message says which paths
-were not judged and that a new session after the first commit restores full
-judging. A finding from the gate on this route still blocks every time
-(`conductor-stop-check.sh:192` through `:194`, before `:202`). Pinned in the
-`stop hook with an empty-tree baseline` group by `still blocks a finding every
-time when a comma file is committed beside it`, `blocks once on a committed
-comma file, then lets the active stop through loudly` and `blocks once on a
-list too long to pass, then lets the active stop through loudly`.
+too, so such a path is could-not-run instead: once the gate has passed what
+it was given, `unpassable_verdict` (`conductor-stop-check.sh:159`, reached at
+`:217`) calls `could_not_run`, and the message says which paths were not
+judged and that a new session after the first commit restores full judging.
+The loud pass claims no more than was judged: when a `--paths` argument
+reached the gate it says the gate judged and passed only the paths it was
+given (`:171`); when none did (the whole list too long, or no path passable)
+the gate was handed nothing, and it says that NOTHING in the change was
+judged and how to get it judged (`:174`). A finding from the gate on this
+route still blocks every time (`conductor-stop-check.sh:207` through `:209`,
+before `:217`). Pinned in the `stop hook with an empty-tree baseline` group by
+`still blocks a finding every time when a comma file is committed beside it`,
+`blocks once on a committed comma file, then lets the active stop through
+loudly` (which asserts the some-paths message), `blocks once on a list too
+long to pass, then lets the active stop through loudly`, `says NOTHING was
+judged when no path at all could be passed, though a protected file is
+committed` and `hands the gate no path at all when the whole list is too
+long`.
 
 Every diff the hook makes passes `--ignore-submodules=none`, except the
 work-tree diffs, which pass `untracked` (`conductor-lib.sh:450`, `:451`,
@@ -302,12 +330,12 @@ session baseline commit id`.
 
 Stop hook loop policy, exactly. On the normal route a path the hook cannot
 pass blocks first (above). Then the gate's exit status is split at
-`conductor-stop-check.sh:192`: status 1 is a finding and always blocks
+`conductor-stop-check.sh:207`: status 1 is a finding and always blocks
 (`lifecycle_block`, exit 2), regardless of `stop_hook_active`; any other
-non-zero status is could-not-run (`conductor-stop-check.sh:197`). Every
-could-not-run condition (gate exit 2 or 127, no binary at `:172`, path
+non-zero status is could-not-run (`conductor-stop-check.sh:212`). Every
+could-not-run condition (gate exit 2 or 127, no binary at `:187`, path
 collection failure at `:97`, an unpassable path on the empty-tree route at
-`:159`, an unusable baseline at `:205`) calls `could_not_run` (`:60`): with
+`:171` and `:174`, an unusable baseline at `:220`) calls `could_not_run` (`:60`): with
 `stop_hook_active` not true (read at `:17` through `:23`, absent or
 unparseable counts as not true) it blocks with exit 2, and with it true it
 exits 0 (`:69`) after writing the cause and "CI `--base` is the enforcement
@@ -399,15 +427,20 @@ trusts a gitignored dist the agent may be able to write.
 
 ## Explicit changed paths are refused when they could dodge a glob
 
-`packages/skill/src/changed-paths.ts:216` calls `explicitPathIssue`
-(`changed-paths.ts:125`) on every `--paths` entry and exits 2 (`changed-paths.ts:221`)
+`packages/skill/src/changed-paths.ts:220` calls `explicitPathIssue`
+(`changed-paths.ts:128`) on every `--paths` entry and exits 2 (`changed-paths.ts:225`)
 for a `..` segment, a `.` segment anywhere other than the one accepted leading
 `./`, an empty segment (`a//b`, `.//x`), a leading `/`, or a backslash. They are
 refused, not normalized, because `src/../secrets/k` never matched `secrets/**`
 while naming a protected file. intent-guard's own git reads (`--staged`,
 `--base`) are not subject to this. A caller that forwards paths through `--paths`
 must read git with `-z` and never forward git's C-quoted form, which would
-otherwise reach the budget quoted and match no glob. Pinned in
+otherwise reach the budget quoted and match no glob. The shipped GitHub
+Actions samples (`integrations/github-actions/*.yml.sample`) forward no
+`--paths` list: they pass `--base`, so the gate lists the change itself;
+`ships a GitHub Actions gate CI sample` in
+`examples/validate-integrations.test.ts` asserts both samples carry `--base`
+and neither `--paths` nor `--name-only`. Pinned in
 `packages/skill/tests/base-ref.test.ts` by `refuses a --paths entry with a ..
 segment instead of letting it slip past a protected glob`, `refuses a leading ..
 segment too, in report`, and the `explicit path shapes are refused like budget

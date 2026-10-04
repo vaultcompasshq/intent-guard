@@ -14,21 +14,42 @@ Consumer-visible changes, stated plainly:
   on the command line as `--paths`. An unstaged or untracked path that cannot
   be passed there (a comma or a backslash in its name, an untracked directory
   holding its own git repository, or more paths than fit) blocks every stop,
-  like a finding, and the rest of the change is still judged. When the session
-  began before the repository's first commit, every changed path goes through
-  `--paths`; there such a path blocks once and is then reported as not judged,
-  and a new session after the first commit restores full judging.
+  like a finding, and whatever does reach the gate is still judged. When the
+  session began before the repository's first commit, every changed path goes
+  through `--paths`; there such a path blocks once and is then reported as not
+  judged, and a new session after the first commit restores full judging. If
+  no path at all can be passed on that route (the whole list is too long, or
+  every path is unpassable), the gate is handed nothing: the stop blocks once
+  and the loud pass then says that nothing in the change was judged.
+- The 1.8.1 hooks need `intent-guard-check` 1.8.1 or newer on `PATH`, because
+  they send committed and staged work through the gate's own `--base` and
+  `--staged` listings. The hook does not check the gate's version; install
+  the hooks and the gate from the same release.
+- Replace refs (`refs/replace/*`) are disabled for every git call the Stop
+  hook makes and, new in this release, for every git call the CLI makes: the
+  `--staged` and `--base` listings and the trusted base reads. A local replace
+  ref can no longer make a listing come back empty. Both set
+  `GIT_NO_REPLACE_OBJECTS=1` and pass `core.useReplaceRefs=false` through
+  `GIT_CONFIG_COUNT`, which git reads from 2.31; on an older git the first
+  still applies, but repository config that turns replace refs on takes
+  effect.
+- `check --base` judges a branch that contains a file named exactly like the
+  range it diffs (`main...HEAD`, say). It used to exit 2 there.
+- The shipped GitHub Actions samples run `check --base` against the fetched
+  base branch instead of building a `--paths` list in shell.
 - A session baseline record that exists is never rewritten on a continuation
   (`resume`, `compact`, or no `source`), whether it is valid or not, and a
   changed contract id no longer resets it. Start a new session to record a
   fresh one. With an invalid record, or none and no upstream, the Stop hook
   still judges staged, unstaged and untracked changes, and a finding there
   blocks every time; only when that passes does it report that committed work
-  was not judged.
+  could not be judged in full.
 - `check --base` and `check --staged` list a moved submodule pointer even when
   `ignore = all` is set for it, and so does the Stop hook.
-- `--base` and `--trust-base` values that start with a dash are refused with
-  exit 2.
+- A `--base` or `--trust-base` value that starts with a single dash (`-S`,
+  say) is refused with exit 2, could-not-run, because git would read it as an
+  option. A value that starts with `--` is read as a missing value: a usage
+  error, exit 1.
 - `freeze` and `import-spec` refuse a wildcard budget glob that ends in `/`,
   such as `secrets/**/`, which matches no file; `check` and `report` warn on
   one in a frozen contract.
@@ -38,7 +59,10 @@ Consumer-visible changes, stated plainly:
 - A trust-base run reads the base ref's control files correctly when the pull
   request adds a file named like `REF:./PATH`, and a control file the base
   ref lists but git cannot read, or a base tree git cannot list, stops the
-  run with exit 2 instead of being read as empty or absent.
+  run with exit 2 instead of being read as empty or absent. The same holds
+  for the archived contract named by `--previous-contract` under
+  `--trust-base`: listed at the base ref but unreadable is now could-not-run,
+  exit 2, where it used to be read as no archived contract.
 - The action refuses a `json-output` path that reaches `.github/` under
   another spelling or through a symlink in the checkout.
 
