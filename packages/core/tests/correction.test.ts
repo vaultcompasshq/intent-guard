@@ -118,10 +118,36 @@ describe("briefCorrections", () => {
           acknowledged_by: "user",
         },
       ],
-      { maxAgeDays: null },
+      { maxAgeDays: null, now },
     );
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBe("cl-2");
+  });
+
+  const oldEntry = {
+    id: "cl-1",
+    timestamp: stale,
+    wrong: "a",
+    right: "b",
+    rule: "Keep data fetching out of view components",
+    acknowledged_by: "user" as const,
+  };
+
+  it("keeps an entry older than the default 90 days when maxAgeDays is null", () => {
+    const entries = briefCorrections([oldEntry], { maxAgeDays: null, now });
+    expect(entries.map((e) => e.id)).toEqual(["cl-1"]);
+  });
+
+  it("drops an entry older than the default 90 days when maxAgeDays is undefined", () => {
+    expect(briefCorrections([oldEntry], { now })).toHaveLength(0);
+    expect(
+      briefCorrections([oldEntry], { maxAgeDays: undefined, now }),
+    ).toHaveLength(0);
+  });
+
+  it("accepts now as a Date or epoch milliseconds", () => {
+    expect(briefCorrections([oldEntry], { now: now.getTime() })).toHaveLength(0);
+    expect(briefCorrections([oldEntry], { maxAgeDays: 400, now })).toHaveLength(1);
   });
 
   it("caps the number of corrections shown in brief surfaces", () => {
@@ -138,7 +164,7 @@ describe("briefCorrections", () => {
         rule: `Keep ${label} logic out of view components`,
         acknowledged_by: "user" as const,
       })),
-      { maxItems: 10, maxAgeDays: null },
+      { maxItems: 10, maxAgeDays: null, now },
     );
     expect(entries).toHaveLength(10);
     const ids = entries.map((entry) => entry.id);
