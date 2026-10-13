@@ -12,9 +12,14 @@ export const CORRECTION_RULE_DEDUPE_THRESHOLD = 0.72;
 
 export interface BriefCorrectionOptions {
   maxItems?: number;
-  /** Omit or null to disable the age filter. */
+  /**
+   * Omit (undefined) to use the default age limit; pass null to disable the
+   * age filter.
+   */
   maxAgeDays?: number | null;
   dedupeThreshold?: number;
+  /** Reference time for the age filter (epoch ms or Date). Defaults to Date.now(). */
+  now?: number | Date;
 }
 
 function tokenJaccard(a: Set<string>, b: Set<string>): number {
@@ -50,7 +55,11 @@ export function briefCorrections(
   options: BriefCorrectionOptions = {},
 ): CorrectionLogEntry[] {
   const maxItems = options.maxItems ?? DEFAULT_BRIEF_CORRECTION_MAX;
-  const maxAgeDays = options.maxAgeDays ?? DEFAULT_BRIEF_CORRECTION_MAX_AGE_DAYS;
+  // undefined means the default; null is an explicit "no age filter".
+  const maxAgeDays =
+    options.maxAgeDays === undefined
+      ? DEFAULT_BRIEF_CORRECTION_MAX_AGE_DAYS
+      : options.maxAgeDays;
   const dedupeThreshold =
     options.dedupeThreshold ?? CORRECTION_RULE_DEDUPE_THRESHOLD;
 
@@ -59,7 +68,13 @@ export function briefCorrections(
   );
 
   if (maxAgeDays != null && maxAgeDays > 0) {
-    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    const nowMs =
+      options.now === undefined
+        ? Date.now()
+        : options.now instanceof Date
+          ? options.now.getTime()
+          : options.now;
+    const cutoff = nowMs - maxAgeDays * 24 * 60 * 60 * 1000;
     candidates = candidates.filter(
       (entry) => new Date(entry.timestamp).getTime() >= cutoff,
     );

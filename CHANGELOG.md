@@ -7,6 +7,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`maxAgeDays: null` now disables the age filter on brief corrections**, as
+  documented. It was treated like an omitted value, so entries older than the
+  90 day default were still dropped. `briefCorrections` also takes an optional
+  `now` so the age cutoff can be fixed in tests.
+
 ## [1.8.1] - 2026-10-03
 
 What can newly block you, and how to clear it:
