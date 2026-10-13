@@ -74,10 +74,23 @@ export function matchesGlob(rawPath: string, rawGlob: string): boolean {
         i++;
         const slashBefore = re === "" || re.endsWith("/");
         const slashAfter = glob[i + 1] === "/";
+        const trailing = i + 1 === glob.length;
         if (slashAfter) i++;
-        // Between two slashes it may match zero or more whole segments;
-        // otherwise (e.g. a trailing `/**`) it matches the rest of the path.
-        re += slashBefore && slashAfter ? "(?:.*/)?" : ".*";
+        if (trailing && re.endsWith("/")) {
+          // A trailing `/**` after a directory: everything under it, AND the
+          // bare directory path itself. git lists a submodule pointer (a
+          // gitlink) as `vendor/pay`, with no slash and nothing under it, so
+          // `vendor/pay/**` compiled to `vendor/pay/.*` never matched a moved
+          // pointer. The slash stays mandatory before anything further, so
+          // `vendor/pay/**` still never matches `vendor/payments` or
+          // `vendor/pay.txt`.
+          re = `${re.slice(0, -1)}(?:/.*)?`;
+        } else {
+          // Between two slashes it may match zero or more whole segments;
+          // otherwise (a lone `**`, or `**` glued to other characters) it
+          // matches any run of characters.
+          re += slashBefore && slashAfter ? "(?:.*/)?" : ".*";
+        }
       } else {
         re += "[^/]*";
       }

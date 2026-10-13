@@ -7,8 +7,8 @@ import {
   validateBudgetPaths,
   type BudgetPathIssue,
 } from "./budget-paths.js";
-import { loadConfig } from "./config.js";
-import { STATE_DIR } from "./state-dir.js";
+import { CONFIG_FILE, loadConfig } from "./config.js";
+import { LEGACY_STATE_DIR, STATE_DIR } from "./state-dir.js";
 import {
   controlShapeReason,
   loadTrustedControls,
@@ -78,6 +78,49 @@ export interface CheckGateOptions {
    * is byte for byte what it was before this option existed.
    */
   trustBase?: string;
+  /**
+   * The ref the changed paths were listed against (`check --base`), when
+   * there was one. Used only to name a missing --trust-base: a run that
+   * judges a pull request's paths but reads the rules from the tree it is
+   * judging lets that pull request loosen its own contract. Never changes
+   * the status or the exit code.
+   */
+  base?: string;
+}
+
+const CONTROL_STATE_DIRS = [STATE_DIR, LEGACY_STATE_DIR] as const;
+
+/**
+ * The changed paths that are control inputs this gate reads: the contract,
+ * config.yaml, or anything under the contracts archive, in the current or
+ * the legacy state directory. Suffix-matched for the same reason as
+ * changedSetNamesContract: git lists paths from the repository root and
+ * --project may point at a subdirectory. Unlike that function this one
+ * requires the state directory in the path, because it only drives a
+ * warning and a bare `intent-contract.yaml` elsewhere is not read by the gate.
+ */
+export function changedControlPaths(changedPaths: string[]): string[] {
+  const underState = (path: string, rel: string): boolean =>
+    CONTROL_STATE_DIRS.some((dir) => {
+      const full = `${dir}/${rel}`;
+      return path === full || path.endsWith(`/${full}`);
+    });
+  const inArchive = (path: string): boolean =>
+    CONTROL_STATE_DIRS.some(
+      (dir) => path.startsWith(`${dir}/contracts/`) || path.includes(`/${dir}/contracts/`),
+    );
+  return changedPaths.filter(
+    (path) =>
+      underState(path, DEFAULT_CONTRACT_FILE) || underState(path, CONFIG_FILE) || inArchive(path),
+  );
+}
+
+/**
+ * The warning for `check --base` without `--trust-base` when the change edits
+ * a control input. Exported so the wording is pinned in one place.
+ */
+export function unanchoredControlWarning(base: string, paths: string[]): string {
+  return `--base ${base} was given without --trust-base, and this change edits ${paths.join(", ")}: the rules for this run were read from the tree being judged, so a change that loosens them is judged by the loosened version. Pass --trust-base ${base} as well, so the contract, config.yaml and the contracts archive are read from the base instead.`;
 }
 
 /**
@@ -120,6 +163,16 @@ export function checkGate(
   const config = trusted === null ? loadConfig(projectRoot) : trusted.config;
   const reasons: string[] = [];
   const warnings: string[] = [];
+
+  // Ordinary mode on a --base run, with a control input in the changed set:
+  // the exact shape that let a pull request loosen its own contract and pass.
+  // Named, never refused, because a push run on a protected branch is a
+  // legitimate place to run --base alone and editing the contract there is
+  // ordinary work.
+  if (trusted === null && options.base) {
+    const edited = changedControlPaths(options.signals?.changedPaths ?? []);
+    if (edited.length > 0) warnings.push(unanchoredControlWarning(options.base, edited));
+  }
 
   // The head's own budget is never judged -- the base governs this run --
   // but a defect in what the head proposes is worth naming now: merging it
@@ -175,7 +228,7 @@ export function checkGate(
         status: "blocked",
         exitCode: 1,
         reasons: [`Intent contract is invalid: ${(err as Error).message}`],
-        warnings: [],
+        warnings,
         contractFound: true,
         contractFrozen: false,
       };

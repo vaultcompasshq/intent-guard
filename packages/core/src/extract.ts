@@ -392,7 +392,8 @@ function extractInScope(text: string): string[] {
 
 function extractEmbeddedProhibitions(text: string): string[] {
   const { prohibitions } = parseActionClauses(text);
-  return uniqueItems(prohibitions, 12);
+  // Uncapped: draftContract ranks and applies the real cap.
+  return uniqueItems(prohibitions, Number.MAX_SAFE_INTEGER);
 }
 
 function isValidOutOfScopeItem(item: string): boolean {
@@ -443,17 +444,352 @@ function extractOutOfScope(text: string): { items: string[]; replaced: Set<strin
       }
     }
   }
-  const unique = uniqueItems(items, 12);
+  // Uncapped: draftContract ranks and applies the real cap. A cap here, before
+  // ranking, dropped whichever rules happened to come late in the document.
+  const unique = uniqueItems(items, Number.MAX_SAFE_INTEGER);
   return {
-    items: unique
-      .filter((item, index) => {
-        const key = item.toLowerCase();
-        return !unique
-          .slice(0, index)
-          .some((previous) => previous.toLowerCase().includes(key));
-      })
-      .slice(0, 8),
+    items: unique.filter((item, index) => {
+      const key = item.toLowerCase();
+      return !unique
+        .slice(0, index)
+        .some((previous) => previous.toLowerCase().includes(key));
+    }),
     replaced,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Heading-aware segmentation
+//
+// A real spec says what it will NOT do under a "Non-goals" heading, describes
+// what is broken today under "Problem" or "Background", and summarises in
+// tables. Reading it as one flat run of sentences authorised the non-goals
+// (their bullets became in_scope) and forbade the fix (a problem statement
+// such as "CI never runs npm test" became an out_of_scope item). The rules
+// below route by section before any clause is parsed. Text with no headings,
+// tables or labelled lines comes through unchanged.
+// ---------------------------------------------------------------------------
+
+type SectionKind = "normal" | "out_of_scope" | "problem";
+
+/** Lowercased heading text with numbering, emphasis, a colon and a trailing parenthetical removed. */
+function headingKey(raw: string): string {
+  return raw
+    .replace(/[*_`]/g, "")
+    .replace(/’/g, "'")
+    .trim()
+    .replace(/^(?:\d+(?:\.\d+)*\.?|[a-z]\.|section\s+\d+(?:\.\d+)*:?)\s+/i, "")
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/\s*:\s*$/, "")
+    .trim()
+    .toLowerCase();
+}
+
+// A heading that opens a list of things the spec will not do. "Non-goals",
+// "Out of scope" and "Not in scope" may carry a qualifier ("Out of scope for
+// v1"); the shorter, more ambiguous words must be the whole heading, so a
+// "Will not crash on empty input" requirement heading is not read as one.
+const OUT_OF_SCOPE_PREFIX_RE =
+  /^(?:explicit(?:ly)?\s+)?(?:non[\s-]?goals?|out[\s-]of[\s-]scope|not\s+in\s+scope)\b/;
+const OUT_OF_SCOPE_EXACT_RE =
+  /^(?:won't|will\s+not)(?:\s+(?:do|have|build|change|ship))?$|^(?:excluded|exclusions|deferred(?:\s+work)?|future\s+work)$/;
+
+// A heading whose section describes the world as it is today. A bare "no X"
+// or "never X" there is a finding, not a rule; an explicit prohibition there
+// is still a rule (see problemClauses). Whole-heading match only, so "Context
+// items" or "Background jobs" stay ordinary sections. "Introduction" is NOT
+// one: every Kiro requirements.md opens with it, and its rules are real.
+const PROBLEM_WORD = String.raw`(?:problem(?:\s+statement)?|problems|background|context|current\s+(?:state|failures|behaviou?r|problems|issues)|motivation)`;
+const PROBLEM_HEADING_RE = new RegExp(
+  String.raw`^(?:the\s+)?${PROBLEM_WORD}(?:\s+(?:and|&)\s+${PROBLEM_WORD})?$`,
+);
+
+function classifyHeading(raw: string): SectionKind | null {
+  const key = headingKey(raw);
+  if (OUT_OF_SCOPE_PREFIX_RE.test(key) || OUT_OF_SCOPE_EXACT_RE.test(key)) return "out_of_scope";
+  if (PROBLEM_HEADING_RE.test(key)) return "problem";
+  return null;
+}
+
+const ATX_HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
+// A line that is nothing but bold text: a pseudo-heading. Nests below every
+// real heading level.
+const BOLD_HEADING_RE = /^(\*\*|__)(.+?)\1\s*:?\s*$/;
+// A bold label followed by text on the same line: "**Out of scope:** X".
+const BOLD_LABEL_RE = /^(\*\*|__)(.+?)\1\s*:?\s+(.+)$/;
+// A short plain line ending in a colon: "Out of scope for this fix:".
+const COLON_LABEL_RE = /^([A-Za-z][^:]{2,60}):$/;
+const PSEUDO_HEADING_LEVEL = 7;
+const USER_STORY_RE = /^(?:[-*+]\s+)?(?:\*\*|__)?user stor(?:y|ies)\s*:?\s*(?:\*\*|__)?\s*:?\s/i;
+const TABLE_ROW_RE = /^\|.*\|$/;
+const BULLET_RE = /^(?:[-*+]|\d+[.)])\s+/;
+const DECLARED_OUT_OF_SCOPE_RE =
+  /^(?:\d+(?:\.\d+)*\.?\s+)?(.{3,120}?)\s+(?:is|are)\s+(?:explicitly\s+|deliberately\s+)?(?:out\s+of\s+scope|not\s+in\s+scope)\b/i;
+
+/** Sentence spans of one line, without the ";" split splitSentences adds. */
+function lineSentences(line: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (!isSentenceTerminatorAt(line, i)) continue;
+    const chunk = line.slice(start, i + 1).trim();
+    if (chunk) out.push(chunk);
+    start = i + 1;
+  }
+  const tail = line.slice(start).trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
+function cleanRoutedItem(raw: string): string {
+  const text = normalizeItem(raw.replace(BULLET_RE, "").replace(/\*\*|__|`/g, ""));
+  if (text.length <= 200) return text;
+  const cut = text.slice(0, 200);
+  const space = cut.lastIndexOf(" ");
+  return (space > 100 ? cut.slice(0, space) : cut).replace(/[,:;.\s]+$/, "");
+}
+
+/**
+ * Whether `line` continues a wrapped bullet whose text so far is `previous`:
+ * the bullet had not ended its sentence, and the line picks up mid-sentence
+ * (lowercase, or a code span or parenthesis). A capitalised line after an
+ * unpunctuated bullet is a new paragraph, since list items often carry no
+ * full stop.
+ */
+function continuesBullet(previous: string, line: string): boolean {
+  return !/[.!?]$/.test(previous.trim()) && /^[a-z0-9(`]/.test(line);
+}
+
+/** Items from the lines of one out-of-scope section: a bullet's first sentence, or each prose sentence. */
+function routedItemsFrom(lines: string[]): string[] {
+  const blocks: { bullet: boolean; text: string }[] = [];
+  for (const line of lines) {
+    const last = blocks[blocks.length - 1];
+    if (BULLET_RE.test(line)) {
+      blocks.push({ bullet: true, text: line.replace(BULLET_RE, "") });
+    } else if (last && last.bullet && continuesBullet(last.text, line)) {
+      last.text = `${last.text} ${line}`;
+    } else if (last && !last.bullet) {
+      // Wrapped prose: one paragraph, split into sentences below.
+      last.text = `${last.text} ${line}`;
+    } else {
+      blocks.push({ bullet: false, text: line });
+    }
+  }
+  const items: string[] = [];
+  for (const block of blocks) {
+    const clean = block.text.replace(/\*\*|__|`/g, "");
+    const sentences = lineSentences(clean.replace(/\s+/g, " "));
+    for (const sentence of block.bullet ? sentences.slice(0, 1) : sentences) {
+      const item = cleanRoutedItem(sentence);
+      if (item.length >= 5) items.push(item);
+    }
+  }
+  return items;
+}
+
+// An explicit prohibition: a negated modal or verb, or a modal with never
+// ("should never touch billing/").
+const EXPLICIT_NEGATION_RE =
+  /\b(do not|don't|must not|should not|shall not|will not|may not|cannot|can't|avoid)\b|\b(?:shall|must|should|will|may)\s+never\b/i;
+// The narrower set kept inside a problem section, where "cannot" and "will
+// not" usually describe today's behaviour rather than forbid anything. An
+// imperative "Avoid X" is a prohibition wherever it appears.
+const PROBLEM_KEEP_RE =
+  /\b(do not|don't|must not|should not|shall not|may not|avoid)\b|\b(?:shall|must|should|may)\s+never\b|^never\b|^no\b.*\b(?:shall|must)\b/i;
+const POSITIVE_MODAL_RE = /\b(?:shall|must|should|will)\s+(?!not\b|never\b|no\b)[a-z]+/i;
+
+// A clause boundary inside one sentence: a semicolon, or a comma that opens a
+// new negated clause ("MUST use the staging key, never the prod key").
+const CLAUSE_SPLIT_RE =
+  /;\s*|,\s*(?=(?:and\s+|but\s+|or\s+)?(?:never|no|not|do not|don't|must not|shall not|should not)\b)/i;
+
+function sentenceClauses(sentence: string): string[] {
+  return sentence
+    .split(CLAUSE_SPLIT_RE)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+}
+
+// What a "no" phrase governs decides whether it forbids anything. Only one
+// shape is read as a modifier: "with no X" where X is a resource the run goes
+// without ("SHALL run with no cloud credentials"). Every other "no" beside a
+// positive modal stays a prohibition: "with no writes to billing/" (an action
+// or a path), "SHALL show no wildcard Resource" (the modal's own object).
+const NO_PHRASE_RE = /\b(\w+)\s+no\s+([^,.;:]{1,80})/gi;
+const ACTION_NOUN_RE =
+  /^(?:\S+\s+){0,2}?(?:writes?|changes?|edits?|modifications?|deletions?|deletes?|removals?|access|calls?|requests?|commits?|pushes?|updates?|uploads?|mutations?|installs?|migrations?|side\s+effects?)\b/i;
+const PATH_LIKE_RE = /\/|\.[a-z]{2,5}\b/i;
+
+/** True when some "no" in the clause is not a "with no <resource>" modifier. */
+function hasProhibitiveNo(clause: string): boolean {
+  for (const match of clause.matchAll(NO_PHRASE_RE)) {
+    const before = match[1].toLowerCase();
+    const phrase = match[2].trim();
+    if (before !== "with") return true;
+    if (ACTION_NOUN_RE.test(phrase) || PATH_LIKE_RE.test(phrase)) return true;
+  }
+  return false;
+}
+
+/**
+ * A clause whose only prohibition marker is an embedded "no X" or "never X"
+ * beside a positive modal IN THE SAME CLAUSE: "CI SHALL run, with no cloud
+ * credentials: terraform validate, tflint". The "no" modifies the
+ * requirement; it does not forbid anything. Still a prohibition: a clause that
+ * starts with no or never, one with an explicit negation ("should never",
+ * "SHALL NOT"), a coordinated "and never X", and any "no" other than "with no
+ * <resource>" (see hasProhibitiveNo). When in doubt this keeps the
+ * prohibition: a false one blocks loudly, a lost one passes silently.
+ */
+function isModifierOnlyNegation(clause: string): boolean {
+  const trimmed = clause.replace(BULLET_RE, "").trim();
+  if (!POSITIVE_MODAL_RE.test(trimmed)) return false;
+  if (EXPLICIT_NEGATION_RE.test(trimmed)) return false;
+  if (/^(no|never)\b/i.test(trimmed)) return false;
+  if (/\b(?:and|or|but)\s+never\b/i.test(trimmed)) return false;
+  if (hasProhibitiveNo(trimmed)) return false;
+  return /\b(no|never)\s+/i.test(trimmed);
+}
+
+/**
+ * Rebuild a line from the clauses `keep` accepts. A line with nothing dropped
+ * goes through byte for byte, so text with no affected clause extracts exactly
+ * as it did before.
+ */
+function filterClauses(line: string, keep: (clause: string) => boolean): string {
+  const clauses = lineSentences(line.trim()).flatMap(sentenceClauses);
+  const kept = clauses.filter(keep);
+  if (kept.length === clauses.length) return line;
+  if (kept.length === 0) return "";
+  const bullet = line.trim().match(BULLET_RE)?.[0] ?? "";
+  const joined = kept.join("; ");
+  return bullet && !joined.startsWith(bullet.trim()) ? `${bullet}${joined}` : joined;
+}
+
+function withoutModifierNegations(line: string): string {
+  return filterClauses(line, (clause) => !isModifierOnlyNegation(clause));
+}
+
+/** In a problem section, only explicit prohibitions survive. */
+function problemProhibitions(line: string): string {
+  return filterClauses(line, (clause) => PROBLEM_KEEP_RE.test(clause.replace(BULLET_RE, "").trim()));
+}
+
+export interface SegmentedText {
+  /** Text in_scope and acceptance criteria are read from: no out-of-scope sections, no tables. */
+  scopeText: string;
+  /** Text prohibitions are read from: ordinary sections only, modifier-only negations dropped. */
+  prohibitionText: string;
+  /** out_of_scope items routed by heading, by label, or by an "is out of scope" sentence, in document order. */
+  routed: string[];
+}
+
+export function segmentForExtraction(text: string): SegmentedText {
+  const scope: string[] = [];
+  const prohibition: string[] = [];
+  const routedHeading: string[] = [];
+  const routedDeclared: string[] = [];
+  // A real `#` heading's section runs to the next heading of the same or a
+  // higher level, and a child heading with no kind of its own is neutral: it
+  // never inherits problem or out_of_scope from its parent, so a requirement
+  // nested under a Non-goals heading is still a requirement.
+  //
+  // listOnly: a classified pseudo-heading (a bold line, or a plain "Label:"
+  // line). It holds bullets and their wrapped lines only, and the first other
+  // line closes it, so it never swallows the prose that follows. An
+  // unclassified pseudo-heading ("**Acceptance criteria**") changes nothing.
+  const stack: { level: number; kind: SectionKind; listOnly: boolean }[] = [];
+  let pending: string[] = [];
+  // The last line of the bullet being routed, while a wrapped line could
+  // still continue it.
+  let bulletTail: string | null = null;
+
+  const kindNow = (): SectionKind => stack[stack.length - 1]?.kind ?? "normal";
+  const flush = (): void => {
+    if (pending.length > 0) routedHeading.push(...routedItemsFrom(pending));
+    pending = [];
+    bulletTail = null;
+  };
+  const open = (level: number, title: string, pseudo: boolean): void => {
+    flush();
+    const own = classifyHeading(title);
+    if (pseudo && own === null) return;
+    while (stack.length > 0 && stack[stack.length - 1].level >= level) stack.pop();
+    stack.push({ level, kind: own ?? "normal", listOnly: pseudo });
+  };
+
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (TABLE_ROW_RE.test(line)) continue;
+
+    const top = stack[stack.length - 1];
+    const continuation: boolean = bulletTail !== null && continuesBullet(bulletTail, line);
+    if (top?.listOnly && line.length > 0 && !BULLET_RE.test(line) && !continuation) {
+      // The list is over: close it and read this line in the enclosing section.
+      flush();
+      stack.pop();
+    }
+
+    const atx = line.match(ATX_HEADING_RE);
+    const bold = atx ? null : line.match(BOLD_HEADING_RE);
+    const colon =
+      atx || bold ? null : line.match(COLON_LABEL_RE);
+    const colonOpensList = colon !== null && classifyHeading(colon[1]) === "out_of_scope";
+    if (atx || bold || colonOpensList) {
+      const title = atx ? atx[2] : bold ? bold[2] : colon![1];
+      open(atx ? atx[1].length : PSEUDO_HEADING_LEVEL, title, !atx);
+      // The heading's own words stay in the text, as before, unless it opens
+      // an out-of-scope section (or, for prohibitions, a problem section).
+      const kind = kindNow();
+      if (kind !== "out_of_scope") scope.push(atx ? title : line);
+      if (kind === "normal") prohibition.push(atx ? title : line);
+      bulletTail = null;
+      continue;
+    }
+
+    const label = line.match(BOLD_LABEL_RE);
+    if (label && classifyHeading(label[2]) === "out_of_scope") {
+      flush();
+      routedHeading.push(...routedItemsFrom([label[3]]));
+      continue;
+    }
+
+    const kind = kindNow();
+    // Tracked in every section, since a problem list closes the same way an
+    // out-of-scope list does.
+    bulletTail = line.length > 0 && (BULLET_RE.test(line) || continuation) ? line : null;
+    if (kind === "out_of_scope") {
+      if (line.length > 0) pending.push(line);
+      continue;
+    }
+
+    scope.push(raw);
+    if (kind === "problem") {
+      // A bare "no X" or "never X" here describes today; an explicit
+      // prohibition ("MUST NOT touch billing/", a leading "Never edit") is
+      // still a rule.
+      prohibition.push(problemProhibitions(raw));
+      continue;
+    }
+    // A Kiro user story ("As a contributor, I do not want to open a
+    // 1,791-line module") is motivation, not a rule.
+    if (USER_STORY_RE.test(line)) continue;
+    for (const sentence of lineSentences(line)) {
+      const declared = sentence.match(DECLARED_OUT_OF_SCOPE_RE);
+      if (declared) {
+        const item = cleanRoutedItem(declared[1]);
+        if (item.length >= 5) routedDeclared.push(item);
+      }
+    }
+    prohibition.push(withoutModifierNegations(raw));
+  }
+  flush();
+
+  return {
+    scopeText: scope.join("\n"),
+    prohibitionText: prohibition.join("\n"),
+    routed: [...routedHeading, ...routedDeclared],
   };
 }
 
@@ -503,26 +839,43 @@ function extractAcceptanceCriteria(
   return defaults;
 }
 
+/** The most out_of_scope items a draft carries: the contract schema's maxItems. */
+export const OUT_OF_SCOPE_CAP = 12;
+
+// An item that states its prohibition explicitly, ranked first.
+const EXPLICIT_ITEM_RE =
+  /^(?:shall not|must not|should not|may not|do not|don't)\b|^no\b.*\b(?:shall|must)\b/i;
+
 export function draftContract(input: DraftContractInput): IntentContract {
   const { userText, constraints = [] } = input;
   const ruleTexts = constraintRuleTexts(constraints);
-  const inScope = extractInScope(userText);
+  const segmented = segmentForExtraction(userText);
+  const inScope = extractInScope(segmented.scopeText);
   const promptQuality = scorePrompt(userText, {
     constraints: ruleTexts,
     hasAcceptanceCriteria: /\b(verify|test|should|must|done)\b/i.test(userText),
   });
 
-  const extracted = extractOutOfScope(userText);
-  const embedded = extractEmbeddedProhibitions(userText).filter(
+  const extracted = extractOutOfScope(segmented.prohibitionText);
+  const embedded = extractEmbeddedProhibitions(segmented.prohibitionText).filter(
     (item) => !extracted.replaced.has(item.toLowerCase()),
   );
-  const outOfScope = uniqueItems(
-    [...extracted.items, ...embedded],
-    12,
-  ).filter((item, index, unique) => {
-    const key = item.toLowerCase();
-    return !unique.slice(0, index).some((previous) => previous.toLowerCase().includes(key));
-  }).slice(0, 8);
+  // Ranked, then capped: the spec's routed non-goals first, then explicit
+  // prohibitions (SHALL NOT, MUST NOT, Do not, "No X SHALL ..."), then every
+  // other prohibition. Measured on three public repositories, putting the
+  // explicit tier first let keyword-matched fragments of long Kiro specs
+  // crowd out the non-goals and wrongly blocked 5 of 20 real commits; routed
+  // first blocked 2 of 20. The cap is the schema's own maxItems, so a draft
+  // always validates.
+  const prohibitions = [...extracted.items, ...embedded];
+  const explicit = prohibitions.filter((item) => EXPLICIT_ITEM_RE.test(item));
+  const rest = prohibitions.filter((item) => !EXPLICIT_ITEM_RE.test(item));
+  const outOfScope = uniqueItems([...segmented.routed, ...explicit, ...rest], Number.MAX_SAFE_INTEGER)
+    .filter((item, index, unique) => {
+      const key = item.toLowerCase();
+      return !unique.slice(0, index).some((previous) => previous.toLowerCase().includes(key));
+    })
+    .slice(0, OUT_OF_SCOPE_CAP);
 
   return {
     contract_id: generateContractId(),
@@ -531,7 +884,7 @@ export function draftContract(input: DraftContractInput): IntentContract {
     in_scope: inScope,
     out_of_scope: outOfScope,
     constraints,
-    acceptance_criteria: extractAcceptanceCriteria(userText, inScope),
+    acceptance_criteria: extractAcceptanceCriteria(segmented.scopeText, inScope),
     frozen_at: new Date().toISOString(),
     prompt_quality: {
       score: promptQuality.score,

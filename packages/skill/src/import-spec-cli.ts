@@ -31,6 +31,9 @@ plan in docs/superpowers/plans whose stem matches, with a trailing -design
 stripped. --plan without --spec is an error, and so is --spec or --plan
 combined with --from spec-kit, --from kiro, or --spec-dir.`;
 
+const REVIEW_NOTICE =
+  "Review each item; polarity is inferred from headings and modals and may be wrong.";
+
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 // The offending argument is named when there is one, because "here is the
 // usage" leaves the reader to diff their command against it by eye.
@@ -157,6 +160,24 @@ try {
   };
 
   const writtenPath = args.dryRun ? null : writeContract(args.projectRoot, contract);
+
+  // Every item the importer inferred, in both lists, in front of the person
+  // about to freeze them. Which list an item lands in is read from the spec's
+  // headings ("Non-goals", "Background") and from modal verbs, and that
+  // reading can be wrong in either direction, so "review the draft" is not
+  // enough: a non-goal that landed in in_scope authorises exactly what the
+  // spec ruled out. stderr, so stdout stays one JSON document.
+  const reviewLines = [
+    REVIEW_NOTICE,
+    "in_scope:",
+    ...(contract.in_scope.length > 0 ? contract.in_scope.map((item) => `  - ${item}`) : ["  (none)"]),
+    "out_of_scope:",
+    ...(contract.out_of_scope.length > 0
+      ? contract.out_of_scope.map((item) => `  - ${item}`)
+      : ["  (none)"]),
+  ];
+  console.error(reviewLines.join("\n"));
+
   console.log(
     JSON.stringify({
       valid: true,
@@ -168,7 +189,13 @@ try {
       })),
       written_path: writtenPath,
       frozen: false,
-      next_step: "Review the imported draft, then approve with: intent-guard freeze --project <root> --approved-by <name>",
+      next_step:
+        "Review each in_scope and out_of_scope item (move or delete any that landed in the wrong list), then approve with: intent-guard freeze --project <root> --approved-by <name>",
+      review: {
+        notice: REVIEW_NOTICE,
+        in_scope: contract.in_scope,
+        out_of_scope: contract.out_of_scope,
+      },
       loaded_constraint_files: loaded.loadedFiles,
       contract_yaml: stringify(contract),
     }),

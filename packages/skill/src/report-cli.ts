@@ -163,6 +163,7 @@ const report = buildConductorReport(args.projectRoot, {
   previousContract: args.previousContract || undefined,
   withSecrets: args.withSecrets,
   ...(args.trustBase ? { trustBase: args.trustBase } : {}),
+  ...(args.base ? { base: args.base } : {}),
   signals: {
     changedPaths,
     signals: args.signals,

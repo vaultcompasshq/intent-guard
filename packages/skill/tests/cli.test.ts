@@ -395,6 +395,44 @@ describe("conductor-import-spec", () => {
     expect(written).not.toContain("approval:");
   });
 
+  it("lists every extracted in_scope and out_of_scope item with a polarity warning", async () => {
+    const dir = tmpProject();
+    const specDir = join(dir, ".kiro", "specs", "hardening");
+    mkdirSync(specDir, { recursive: true });
+    writeFileSync(
+      join(specDir, "requirements.md"),
+      [
+        "# Requirements",
+        "## Requirements",
+        "- Add an auth token check to every route",
+        "### Non-goals",
+        "- Kubernetes manifests or Helm charts",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const res = await run("import-spec-cli.js", [
+      "--project", dir,
+      "--from", "kiro",
+      "--spec-dir", ".kiro/specs/hardening",
+      "--dry-run",
+    ]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    // The JSON carries the lists and the notice.
+    expect(out.review.notice).toMatch(/review each item; polarity is inferred from headings and modals and may be wrong/i);
+    expect(out.review.in_scope.join("\n")).toContain("auth token check");
+    expect(out.review.out_of_scope).toContain("Kubernetes manifests or Helm charts");
+    expect(out.next_step).toMatch(/review each/i);
+    // And a person running it sees every item, one per line, on stderr, so
+    // stdout stays a single JSON document.
+    expect(res.stderr).toMatch(/review each item; polarity is inferred from headings and modals and may be wrong/i);
+    expect(res.stderr).toContain("in_scope:");
+    expect(res.stderr).toContain("out_of_scope:");
+    expect(res.stderr).toMatch(/^ {2}- Add an auth token check to every route$/m);
+    expect(res.stderr).toMatch(/^ {2}- Kubernetes manifests or Helm charts$/m);
+  });
+
   it("--dry-run prints a contract without writing", async () => {
     const dir = tmpProject();
     const specDir = join(dir, "specs", "export");

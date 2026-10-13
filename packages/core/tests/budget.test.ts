@@ -45,6 +45,40 @@ describe("matchesGlob", () => {
     expect(matchesGlob("legacy/handler.ts", "**/legacy/**")).toBe(true);
   });
 
+  // git lists a submodule pointer (a gitlink) as the bare directory path, with
+  // no trailing slash and nothing under it. A protected `vendor/pay/**` has to
+  // cover a moved pointer at `vendor/pay`, or the most sensitive kind of
+  // vendored code is the one a budget cannot protect.
+  it("matches the bare root of a trailing /** (a submodule gitlink path)", () => {
+    expect(matchesGlob("vendor/pay", "vendor/pay/**")).toBe(true);
+    expect(matchesGlob("vendor/pay/x.ts", "vendor/pay/**")).toBe(true);
+    expect(matchesGlob("secrets", "secrets/**")).toBe(true);
+    expect(matchesGlob("app/legacy", "**/legacy/**")).toBe(true);
+    expect(matchesGlob("legacy", "**/legacy/**")).toBe(true);
+  });
+
+  it("does not stretch a trailing /** past the segment boundary", () => {
+    expect(matchesGlob("vendor/payments", "vendor/pay/**")).toBe(false);
+    expect(matchesGlob("vendor/pay.txt", "vendor/pay/**")).toBe(false);
+    expect(matchesGlob("vendor/pay-old/x.ts", "vendor/pay/**")).toBe(false);
+    expect(matchesGlob("vendor", "vendor/pay/**")).toBe(false);
+    expect(matchesGlob("secretsfoo", "secrets/**")).toBe(false);
+    expect(matchesGlob("secrets.txt", "secrets/**")).toBe(false);
+    expect(matchesGlob("notlegacy/x", "**/legacy/**")).toBe(false);
+    expect(matchesGlob("notlegacy", "**/legacy/**")).toBe(false);
+  });
+
+  it("keeps a globstar between slashes to whole segments", () => {
+    expect(matchesGlob("src/x.ts", "src/**/x.ts")).toBe(true);
+    expect(matchesGlob("src/a/b/x.ts", "src/**/x.ts")).toBe(true);
+    expect(matchesGlob("src/ax.ts", "src/**/x.ts")).toBe(false);
+  });
+
+  it("still lets a lone ** match everything", () => {
+    expect(matchesGlob("a", "**")).toBe(true);
+    expect(matchesGlob("a/b/c", "**")).toBe(true);
+  });
+
   it("matches a single ? character", () => {
     expect(matchesGlob("v1.ts", "v?.ts")).toBe(true);
     expect(matchesGlob("v10.ts", "v?.ts")).toBe(false);

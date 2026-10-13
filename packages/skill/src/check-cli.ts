@@ -48,7 +48,9 @@ or a missing merge base exits 2 rather than gating on an empty path set.
 judged. They are independent, and a pull-request run passes both. Under
 --trust-base a contract or config the head changed is reported and ignored,
 and a contract change that also grants itself a new approval is refused. It
-fails closed the same way: a ref that will not resolve exits 2.`;
+fails closed the same way: a ref that will not resolve exits 2. A run given
+--base without --trust-base prints a warning when the change edits the
+contract, config.yaml or the contracts archive; the exit code is unchanged.`;
 
 // A usage error is not a help request: it goes to stderr and exits non-zero.
 // The offending argument is named when there is one, because "here is the
@@ -189,6 +191,7 @@ const changedPaths = collectChangedPaths({
 const result = checkGate(args.projectRoot, {
   requireFrozen: args.requireFrozen,
   ...(args.trustBase ? { trustBase: args.trustBase } : {}),
+  ...(args.base ? { base: args.base } : {}),
   signals: {
     changedPaths,
     signals: args.signals,

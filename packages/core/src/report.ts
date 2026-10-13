@@ -84,6 +84,8 @@ export interface BuildReportOptions {
    * reading the pull request's own claim about itself.
    */
   trustBase?: string;
+  /** The --base ref, passed to the gate only to name a missing --trust-base. */
+  base?: string;
 }
 
 function evidenceTokens(signals: DriftSignals): Set<string> {
@@ -167,6 +169,7 @@ export function buildConductorReport(
     requireFrozen: options.requireFrozen,
     signals,
     ...(options.trustBase === undefined ? {} : { trustBase: options.trustBase }),
+    ...(options.base ? { base: options.base } : {}),
   });
 
   const trustBase = options.trustBase;

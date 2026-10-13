@@ -286,11 +286,105 @@ describe("intent-guard check --base", { timeout: 60_000 }, () => {
 });
 
 /**
+ * The audit's attack on the shipped CI sample shape: main carries a frozen
+ * contract protecting secrets/**, and the feature branch rewrites that glob
+ * to nothing/** in the same commit that edits secrets/key.txt. `check --base`
+ * alone reads the contract from the branch it judges, so it passes; the fix
+ * is --trust-base, and the gate says so when it is missing.
+ */
+async function repoThatLoosensItsOwnContract(extra: Record<string, string> = {}): Promise<string> {
+  const dir = tmpDir();
+  git(dir, ["init", "-b", "main"]);
+  git(dir, ["config", "user.email", "tester@example.com"]);
+  git(dir, ["config", "user.name", "tester"]);
+  await freezeWithBudget(dir, '\nbudget:\n  protected_paths:\n    - "secrets/**"\n');
+  writeAt(dir, "secrets/key.txt", "v1\n");
+  writeAt(dir, "README.md", "# Project\n");
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "initial"]);
+  git(dir, ["checkout", "-b", "feature"]);
+  const contractFile = join(dir, ".intent-guard", "intent-contract.yaml");
+  const loosened = readFileSync(contractFile, "utf8").replace('"secrets/**"', '"nothing/**"');
+  expect(loosened).toContain('"nothing/**"');
+  writeFileSync(contractFile, loosened, "utf8");
+  writeAt(dir, "secrets/key.txt", "v2\n");
+  for (const [relative, body] of Object.entries(extra)) writeAt(dir, relative, body);
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "loosen and edit"]);
+  return dir;
+}
+
+describe("check --base without --trust-base names an edited control file", { timeout: 60_000 }, () => {
+  const CONTRACT = ".intent-guard/intent-contract.yaml";
+
+  it("warns, naming the contract and the flag, and keeps the exit code", async () => {
+    const dir = await repoThatLoosensItsOwnContract();
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main"]);
+    // Exit code unchanged: this run still reads the loosened head contract.
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain("Intent Guard gate: ok");
+    const warning = res.stdout.split("\n").find((line) => line.includes("warning:") && line.includes(CONTRACT));
+    expect(warning).toBeDefined();
+    expect(warning).toContain("--trust-base");
+  });
+
+  it("carries the same warning in --json", async () => {
+    const dir = await repoThatLoosensItsOwnContract();
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.status).toBe("ok");
+    expect(out.warnings.some((w: string) => w.includes(CONTRACT) && w.includes("--trust-base"))).toBe(true);
+  });
+
+  it("names config.yaml too", async () => {
+    const dir = await repoThatLoosensItsOwnContract({ ".intent-guard/config.yaml": "{}\n" });
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(out.warnings.some((w: string) => w.includes(".intent-guard/config.yaml"))).toBe(true);
+  });
+
+  it("names an edited contracts archive entry too", async () => {
+    const dir = await repoThatLoosensItsOwnContract({
+      ".intent-guard/contracts/ic-20260101-abcdef.yaml": "contract_id: ic-20260101-abcdef\n",
+    });
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(0);
+    const out = JSON.parse(res.stdout);
+    expect(
+      out.warnings.some((w: string) => w.includes(".intent-guard/contracts/ic-20260101-abcdef.yaml")),
+    ).toBe(true);
+  });
+
+  it("still blocks the same change with --trust-base, and does not warn there", async () => {
+    const dir = await repoThatLoosensItsOwnContract();
+    const res = await run("check-cli.js", [
+      "--project", dir, "--base", "main", "--trust-base", "main", "--json",
+    ]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.budget.action).toBe("hard_block");
+    expect(JSON.stringify(out.budget.violations)).toContain("secrets/key.txt");
+    expect(out.trustBase.proposals.join("\n")).toContain("contract changed");
+    expect(out.warnings.some((w: string) => w.includes("--trust-base"))).toBe(false);
+  });
+
+  it("does not warn when the change leaves every control file alone", async () => {
+    const dir = repoWithBranch(["README.md"]);
+    await freezeWithBudget(dir, "\nbudget:\n  max_files: 5\n");
+    const res = await run("check-cli.js", ["--project", dir, "--base", "main", "--json"]);
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.stdout).warnings).toEqual([]);
+  });
+});
+
+/**
  * A repo whose main branch registers a submodule at secrets/vendor. `ignore`
  * in .gitmodules, or diff.ignoreSubmodules in config, makes a plain git diff
  * leave a moved submodule pointer out of its listing.
  */
-function repoWithSubmodule(): string {
+function repoWithSubmodule(at = "secrets/vendor"): string {
   const sub = tmpDir();
   git(sub, ["init", "-b", "main"]);
   git(sub, ["config", "user.email", "tester@example.com"]);
@@ -306,7 +400,7 @@ function repoWithSubmodule(): string {
   writeAt(dir, "README.md", "# Project\n");
   git(dir, ["add", "--", "README.md"]);
   git(dir, ["commit", "-m", "initial"]);
-  git(dir, ["-c", "protocol.file.allow=always", "submodule", "add", sub, "secrets/vendor"]);
+  git(dir, ["-c", "protocol.file.allow=always", "submodule", "add", sub, at]);
   git(dir, ["commit", "-m", "add submodule"]);
   return dir;
 }
@@ -329,17 +423,17 @@ function gitOut(cwd: string, args: string[]): string {
  * nothing and every assertion after it would be about an unchanged repo.
  * The check at the end makes such a no-op fail loudly here instead.
  */
-function bumpSubmodule(dir: string): void {
-  const checkout = join(dir, "secrets", "vendor");
+function bumpSubmodule(dir: string, at = "secrets/vendor"): void {
+  const checkout = join(dir, ...at.split("/"));
   git(checkout, ["config", "user.email", "tester@example.com"]);
   git(checkout, ["config", "user.name", "tester"]);
-  const before = gitOut(dir, ["rev-parse", ":secrets/vendor"]);
+  const before = gitOut(dir, ["rev-parse", `:${at}`]);
   writeAt(checkout, "lib.txt", "v2\n");
   git(checkout, ["commit", "-am", "v2"]);
   const moved = gitOut(checkout, ["rev-parse", "HEAD"]);
-  git(dir, ["update-index", "--cacheinfo", `160000,${moved},secrets/vendor`]);
+  git(dir, ["update-index", "--cacheinfo", `160000,${moved},${at}`]);
   expect(moved).not.toBe(before);
-  expect(gitOut(dir, ["rev-parse", ":secrets/vendor"])).toBe(moved);
+  expect(gitOut(dir, ["rev-parse", `:${at}`])).toBe(moved);
 }
 
 describe("a moved submodule pointer is always listed", { timeout: 60_000 }, () => {
@@ -387,6 +481,50 @@ describe("a moved submodule pointer is always listed", { timeout: 60_000 }, () =
     bumpSubmodule(dir);
     await freezeWithBudget(dir, PROTECT);
     await expectBlocked(dir, ["--staged"]);
+  });
+});
+
+// The submodule IS the protected root, rather than sitting somewhere under it.
+// git lists the moved pointer as the bare path `vendor/pay`, and before the
+// fix `vendor/pay/**` compiled to `vendor/pay/.*`, which never matched it: the
+// gate said ok, exit 0, for a pointer move into the protected tree.
+describe("a protected X/** covers a submodule pointer at X itself", { timeout: 60_000 }, () => {
+  const AT = "vendor/pay";
+  const PROTECT = '\nbudget:\n  protected_paths:\n    - "vendor/pay/**"\n';
+
+  async function expectBlockedOnPointer(dir: string, mode: string[]): Promise<void> {
+    const res = await run("check-cli.js", ["--project", dir, ...mode, "--json"]);
+    expect(res.code).toBe(1);
+    const out = JSON.parse(res.stdout);
+    expect(out.budget.action).toBe("hard_block");
+    const protectedHit = out.budget.violations.find(
+      (v: { rule: string }) => v.rule === "protected_paths",
+    );
+    expect(protectedHit.matched).toEqual([AT]);
+  }
+
+  it("--staged, when the pointer is moved and staged", async () => {
+    const dir = repoWithSubmodule(AT);
+    bumpSubmodule(dir, AT);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlockedOnPointer(dir, ["--staged"]);
+  });
+
+  it("--base HEAD~1, after the moved pointer is committed", async () => {
+    const dir = repoWithSubmodule(AT);
+    bumpSubmodule(dir, AT);
+    git(dir, ["commit", "-m", "bump"]);
+    await freezeWithBudget(dir, PROTECT);
+    await expectBlockedOnPointer(dir, ["--base", "HEAD~1"]);
+  });
+
+  it("does not block a sibling whose name only starts with the same letters", async () => {
+    const dir = repoWithSubmodule("vendor/payments");
+    bumpSubmodule(dir, "vendor/payments");
+    await freezeWithBudget(dir, PROTECT);
+    const res = await run("check-cli.js", ["--project", dir, "--staged", "--json"]);
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.stdout).budget.ok).toBe(true);
   });
 });
 

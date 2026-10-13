@@ -7,6 +7,89 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+This is a minor release (1.9.0) under docs/release/stability-policy.md: the
+import output, the extraction rules and what a protected glob matches all
+change. The version is not bumped in this tree yet.
+
+What can newly block you, and how to clear it:
+
+- **A protected `X/**` now covers a submodule pointer at `X` itself.** git
+  lists a moved gitlink as the bare path `vendor/pay`, which `vendor/pay/**`
+  never matched, so a pointer move into a protected submodule passed `check
+  --staged`, `check --base` and the Stop hook. It now hard-blocks like any
+  protected path. `vendor/pay/**` still never matches `vendor/payments` or
+  `vendor/pay.txt`. Clear it like any protected-path finding. The same
+  matcher serves `allowed_paths`, where `X/**` now also allows the bare `X`.
+- **A re-imported spec can carry more, and different, `out_of_scope` items**
+  (see Changed), and those can block work the old draft let through. Review
+  the list `import-spec` prints and delete what is not a rule before `freeze`.
+
+### Changed
+
+- **`import-spec` and `extract` sort text by section.** Bullets and sentences
+  under a Non-goals, Out of scope, Not in scope, Won't, Will not, Excluded,
+  Deferred work or Future work heading go to `out_of_scope` and never to
+  `in_scope`. A child heading with no kind of its own is neutral, and a bold
+  or colon pseudo-heading covers only the list under it. In a Problem,
+  Background, Context, Current state, Current failures or Motivation section
+  only explicit prohibitions survive (Do not, MUST NOT, SHALL NOT, a modal
+  with never, a leading Never, "No X SHALL"); a bare "no X" or "never X"
+  there is dropped. Introduction is an ordinary section. User story lines
+  yield no prohibitions. Tables are skipped. "X is out of scope" routes X.
+  The positive-modal exemption is judged per clause and covers only "with no
+  <resource>" ("CI SHALL run, with no cloud credentials"); every other no or
+  never beside a modal stays a prohibition, so a few positive requirements
+  still extract as noisy prohibitions. `out_of_scope` is ranked (routed
+  non-goals, then explicit prohibitions, then the rest) and capped at 12, the
+  contract schema's own limit, instead of 8. See docs/cli-reference.md, How
+  imported text is sorted.
+- **What this did on three public repositories** (obra/superpowers,
+  RickZee/ai-team, hrirkslab/context-server-rs; the 2026-10-12 audit's runs
+  T1 to T4): the importer's polarity errors are gone (non-goals are no longer
+  imported as `in_scope`, problem statements and table rows no longer become
+  prohibitions, and "no cloud terraform validate" is no longer extracted from
+  a positive requirement), and real rules the 1.8.1 importer dropped are now
+  present. Wrongly blocked real commits went from 3 of 20 (1.8.1) to 2 of
+  20. Planted or out-of-scope violations blocked stayed at 2 of 12, but both
+  1.8.1 blocks were for reasons unrelated to the violation; now one is for
+  the right reason (a planted rate-limiting change, routed from "RATE
+  LIMITING IS OUT OF SCOPE") and one is a declared non-goal matched by a path
+  keyword. Both remaining false positives are explicit or routed rules
+  matched to unrelated commits by file-name keywords. Ranking explicit
+  prohibitions first instead was measured at 5 of 20 wrongly blocked and 0 of
+  12 caught. Treat an imported contract as a draft to edit, not a gate.
+- **`import-spec` lists every extracted item** on stderr under the notice
+  "Review each item; polarity is inferred from headings and modals and may be
+  wrong.", and in a new `review` field of its JSON. It no longer feeds its own
+  "Do not treat the imported contract as approved" sentence into extraction,
+  where it became an `out_of_scope` item.
+- **`check` and `report` warn when `--base` is given without `--trust-base`**
+  and the change edits the contract, `config.yaml` or the contracts archive.
+  The warning names the file and the flag; status and exit code are unchanged.
+- **Both GitHub Actions samples now pass `--trust-base "origin/$BASE_REF"`**
+  and pin exact versions (intent-guard 1.8.1, vault-guard 1.9.1) instead of
+  `@latest`. A copy made from the old samples reads the contract from the
+  branch it judges; add the flag.
+- **The SKILL.md files document `npx --no-install @vaultcompass/intent-guard
+  <command>`** instead of a `pnpm --filter` form that only worked inside this
+  repository and exited 0 having run nothing anywhere else. npx can run an
+  intent-guard already on PATH or in a global install instead of the
+  project's copy, so each skill says to check `--version` first.
+
+### Known limits
+
+- **The `out_of_scope` cap of 12 drops real rules on long specs.** It is the
+  contract schema's `maxItems`, and every released gate refuses a contract
+  with more, so it is not raised in this release. With non-goals ranked
+  first, a long Kiro spec can lose explicit SHALL NOT rules past the twelfth
+  item, including security-relevant ones (measured on RickZee/ai-team at
+  commit 61dd578: "SHALL NOT execute code: permission_denied" in
+  seven-layer-harness and "SHALL NOT modify vendored source" in
+  harness-alignment). Read the list `import-spec` prints and move the rules
+  you need into the contract by hand. Open item: raise the cap behind a new
+  schema version that older gates can recognise and refuse with a clear
+  message.
+
 ### Fixed
 
 - **`maxAgeDays: null` now disables the age filter on brief corrections**, as

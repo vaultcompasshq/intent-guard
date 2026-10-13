@@ -165,6 +165,69 @@ describe("spec bridge", () => {
   });
 });
 
+describe("spec bridge: heading structure reaches extraction", () => {
+  function kiroProject(files: Record<string, string>): string {
+    const dir = tmpProject();
+    const specDir = join(dir, ".kiro", "specs", "hardening");
+    mkdirSync(specDir, { recursive: true });
+    for (const [name, body] of Object.entries(files)) {
+      writeFileSync(join(specDir, name), body, "utf8");
+    }
+    return dir;
+  }
+
+  it("routes a Kiro Non-goals section to out_of_scope, never to in_scope", () => {
+    const dir = kiroProject({
+      "requirements.md": [
+        "# Requirements",
+        "## Background",
+        "CI runs the build but never npm test or npm run lint.",
+        "### Non-goals",
+        "- Rewriting any backend or the orchestration layer",
+        "- Kubernetes manifests, Helm charts, or a cloud deployment story",
+        "## Requirements",
+        "- Run npm test and npm run lint in CI",
+      ].join("\n"),
+    });
+    const { contract } = importSpecContract(dir, {
+      format: "kiro",
+      specDir: ".kiro/specs/hardening",
+    });
+    const inScope = contract.in_scope.join("\n").toLowerCase();
+    const outOfScope = contract.out_of_scope.join("\n").toLowerCase();
+    expect(outOfScope).toContain("rewriting any backend");
+    expect(outOfScope).toContain("kubernetes manifests");
+    expect(inScope).not.toContain("rewriting any backend");
+    expect(outOfScope).not.toContain("npm test");
+    expect(inScope).toContain("npm test");
+  });
+
+  it("ends a section at the file boundary, so the next file is not swallowed", () => {
+    const dir = kiroProject({
+      "requirements.md": ["# Requirements", "## Out of scope", "- Rate limiting the public API"].join("\n"),
+      "tasks.md": ["- [ ] Add the auth token check to every route", "- [ ] Write the threat model section"].join("\n"),
+    });
+    const { contract } = importSpecContract(dir, {
+      format: "kiro",
+      specDir: ".kiro/specs/hardening",
+    });
+    expect(contract.out_of_scope.join("\n").toLowerCase()).toContain("rate limiting");
+    expect(contract.in_scope.join("\n").toLowerCase()).toContain("auth token check");
+    expect(contract.out_of_scope.join("\n").toLowerCase()).not.toContain("auth token");
+  });
+
+  it("does not turn the importer's own review reminder into an out_of_scope item", () => {
+    const dir = kiroProject({
+      "requirements.md": ["# Requirements", "- Add the auth token check to every route"].join("\n"),
+    });
+    const { contract } = importSpecContract(dir, {
+      format: "kiro",
+      specDir: ".kiro/specs/hardening",
+    });
+    expect(contract.out_of_scope.join("\n").toLowerCase()).not.toContain("imported contract");
+  });
+});
+
 describe("spec bridge: superpowers", () => {
   it("imports an explicit spec as requirements and plan as tasks", () => {
     const dir = superpowersProject(

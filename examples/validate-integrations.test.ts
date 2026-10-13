@@ -60,10 +60,17 @@ describe("integration hook samples", () => {
   });
 
   it("ships a GitHub Actions gate CI sample", () => {
+    // The samples pin the same intent-guard version the composite action
+    // defaults to, so a release that bumps the action default and forgets a
+    // sample turns this red instead of shipping two versions.
+    const actionVersion = /^ {4}default: (\d+\.\d+\.\d+)$/m.exec(readText("action.yml"))?.[1];
+    expect(actionVersion).toMatch(/^\d+\.\d+\.\d+$/);
+
     const workflow = readText(
       "integrations/github-actions/conductor-drift-ci.yml.sample",
     );
-    expect(workflow).toContain("@vaultcompass/intent-guard@latest");
+    expect(workflow).toContain(`@vaultcompass/intent-guard@${actionVersion}`);
+    expect(workflow).not.toMatch(/guard@latest/);
     // CI must run the full gate (`check`), which enforces the change budget,
     // not the score-only `drift` command.
     expect(workflow).toContain("check");
@@ -71,6 +78,10 @@ describe("integration hook samples", () => {
     // built in shell from git output without -z would reach the budget
     // C-quoted for some names, which docs/INVARIANTS.md rules out.
     expect(workflow).toContain('--base "origin/$BASE_REF"');
+    // And reads its rules from the base, never from the branch it judges:
+    // without --trust-base a pull request can loosen its own contract in the
+    // commit being judged and pass. Same ref shape as action.yml passes.
+    expect(workflow).toContain('--trust-base "origin/$BASE_REF"');
     expect(workflow).not.toContain("--paths");
     expect(workflow).not.toContain("--name-only");
 
@@ -78,11 +89,39 @@ describe("integration hook samples", () => {
       "integrations/github-actions/conductor-vault-guard-ci.yml.sample",
     );
     expect(pairedWorkflow).toContain('--base "origin/$BASE_REF"');
+    expect(pairedWorkflow).toContain('--trust-base "origin/$BASE_REF"');
     expect(pairedWorkflow).not.toContain("--paths");
     expect(pairedWorkflow).not.toContain("--name-only");
-    expect(pairedWorkflow).toContain("@vaultcompass/intent-guard@latest");
-    expect(pairedWorkflow).toContain("@vaultcompass/vault-guard@latest");
+    expect(pairedWorkflow).toContain(`@vaultcompass/intent-guard@${actionVersion}`);
+    expect(pairedWorkflow).not.toMatch(/guard@latest/);
+    expect(pairedWorkflow).toMatch(/@vaultcompass\/vault-guard@\d+\.\d+\.\d+ /);
     expect(pairedWorkflow).toContain("scan . --format text");
+  });
+
+  it("pins every intent-guard version in the samples to the action default, and vault-guard to one version", () => {
+    const actionVersion = /^ {4}default: (\d+\.\d+\.\d+)$/m.exec(readText("action.yml"))?.[1];
+    expect(actionVersion).toMatch(/^\d+\.\d+\.\d+$/);
+    const files = [
+      "integrations/github-actions/conductor-drift-ci.yml.sample",
+      "integrations/github-actions/conductor-vault-guard-ci.yml.sample",
+    ];
+    const vaultPins: string[] = [];
+    for (const file of files) {
+      const text = readText(file);
+      // Every reference: the install line, the check step, and the comment
+      // naming the action tag (vaultcompasshq/intent-guard@vX.Y.Z).
+      const pins = [...text.matchAll(/intent-guard@(v?)([^\s)`'"]+)/g)].map((m) => m[2]);
+      expect({ file, count: pins.length >= 3 }).toEqual({ file, count: true });
+      for (const pin of pins) expect({ file, pin }).toEqual({ file, pin: actionVersion });
+      vaultPins.push(...[...text.matchAll(/vault-guard@([^\s)`'"]+)/g)].map((m) => m[1]));
+    }
+    // vault-guard has no default here to follow, so the sample and the README
+    // that quotes its command must name the same exact release.
+    const readme = readText("integrations/github-actions/README.md");
+    vaultPins.push(...[...readme.matchAll(/vault-guard@([^\s)`'"]+)/g)].map((m) => m[1]));
+    expect(vaultPins.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(vaultPins).size).toBe(1);
+    expect(vaultPins[0]).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
 
