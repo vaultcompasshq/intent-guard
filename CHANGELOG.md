@@ -7,9 +7,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-14
+
 This is a minor release (1.9.0) under docs/release/stability-policy.md: the
 import output, the extraction rules and what a protected glob matches all
-change. The version is not bumped in this tree yet.
+change. The version is bumped in this tree.
 
 What can newly block you, and how to clear it:
 
@@ -67,7 +69,7 @@ What can newly block you, and how to clear it:
   and the change edits the contract, `config.yaml` or the contracts archive.
   The warning names the file and the flag; status and exit code are unchanged.
 - **Both GitHub Actions samples now pass `--trust-base "origin/$BASE_REF"`**
-  and pin exact versions (intent-guard 1.8.1, vault-guard 1.9.1) instead of
+  and pin exact versions (intent-guard 1.9.0, vault-guard 1.9.1) instead of
   `@latest`. A copy made from the old samples reads the contract from the
   branch it judges; add the flag.
 - **The SKILL.md files document `npx --no-install @vaultcompass/intent-guard
