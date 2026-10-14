@@ -28,8 +28,15 @@ description: >-
 
 ## Score drift (helper CLI)
 
+Run from the target project's root. It needs `@vaultcompass/intent-guard`
+installed there (`npm install -D @vaultcompass/intent-guard`). `npx
+--no-install` can run an intent-guard it finds on PATH or in a global install
+instead of the project's copy, so a stale version can answer: run `npx
+--no-install @vaultcompass/intent-guard --version` once per session and
+check it matches the version in the project's package.json.
+
 ```bash
-pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-drift \
+npx --no-install @vaultcompass/intent-guard drift \
   --contract /path/to/project/.intent-guard/intent-contract.yaml \
   --project /path/to/project \
   --paths "src/api/new-route.ts,src/hooks/useWebSocket.ts" \
@@ -37,6 +44,11 @@ pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-drift \
   --message "actually let's also add notifications" \
   --log
 ```
+
+If the command exits non-zero, prints "npx canceled due to missing
+packages" or "command not found", or prints no JSON, drift did NOT run and
+nothing was scored. Tell the user that, and do not continue past the handoff
+boundary as if the check had passed.
 
 JSON output:
 
@@ -95,11 +107,11 @@ Do not mutate frozen fields without a `pivot_log` entry.
 ## Hard enforcement (outside the agent)
 
 A SKILL.md is advisory -- an agent can ignore it. For a gate that *cannot* be
-ignored, use `intent-guard-check`, which exits non-zero when no frozen contract
+ignored, use `intent-guard check`, which exits non-zero when no frozen contract
 exists or staged changes drift past a blocking threshold:
 
 ```bash
-intent-guard-check --project . --staged
+npx --no-install @vaultcompass/intent-guard check --project . --staged
 ```
 
 Install it as a git pre-commit hook with `intent-guard hook install` (add

@@ -18,10 +18,9 @@ judges the pull request.
 
 It decides both refs from the event: `--base origin/$GITHUB_BASE_REF` for the
 paths it judges, and `--trust-base` for where the contract, the config and the
-contracts archive are read from. That second one is the reason to prefer it over
-the samples below, which pass neither: a workflow that forgets `--trust-base`
-reads the rules out of the branch it is judging, so a pull request can widen its
-own contract in the commit being judged and the gate agrees. The action cannot
+contracts archive are read from. A workflow that forgets `--trust-base` reads
+the rules out of the branch it is judging, so a pull request can widen its own
+contract in the commit being judged and the gate agrees. The action cannot
 forget. See the [README](../../README.md#github-action) for every input, and
 note that there is no SARIF: the verdict is in the job log, and the job's own
 pass or fail is what branch protection reads.
@@ -31,16 +30,19 @@ pass or fail is what branch protection reads.
 Use these when the action does not fit: a self-hosted runner without registry
 access, a job that has to do something between the steps, or a repository that
 pins its own copy of the workflow. They are the manual alternative, not the
-starting point, and neither passes `--trust-base`. Add it, as
-`--trust-base origin/$GITHUB_BASE_REF`, to any of them that runs on a pull
-request.
+starting point. Both pass `--base "origin/$BASE_REF"` and
+`--trust-base "origin/$BASE_REF"`, the same pair the action builds, and both
+pin an exact released version rather than `@latest`. Keep both flags in any
+copy that runs on a pull request. When `check` is given `--base` without
+`--trust-base` and the change edits the contract, `config.yaml` or the
+contracts archive, it prints a warning naming the file and the missing flag;
+the exit code does not change.
 
-They also fetch the gate with `pnpm dlx` from inside the checkout, at `@latest`.
-The action deliberately does neither: it installs an exact pinned version into a
-prefix under the runner temp and calls it from there, so the tree being judged
-cannot repoint the registry with a committed `.npmrc` or hand over its own copy
-out of `node_modules`. A workflow you write yourself should do the same thing,
-and the samples are due an update.
+They still fetch the gate with `pnpm dlx` from inside the checkout. The action
+deliberately does not: it installs the pinned version into a prefix under the
+runner temp and calls it from there, so the tree being judged cannot repoint
+the registry with a committed `.npmrc` or hand over its own copy out of
+`node_modules`. A workflow you write yourself should do the same where it can.
 
 Use these samples when a repository already has a frozen
 `.intent-guard/intent-contract.yaml` and wants CI to fail on blocking drift.
@@ -52,12 +54,11 @@ For Intent Guard only, copy
 .github/workflows/conductor-drift.yml
 ```
 
-Then adjust the `--paths` collection if your workflow needs a different diff
-range. The sample uses changed files from the pull request base and passes them
-to:
+The sample lets the gate list the pull request's changes itself, from the
+merge base with the base branch, and reads the rules from that same base:
 
 ```bash
-intent-guard check --project . --paths "$CHANGED_PATHS"
+intent-guard check --project . --base "origin/$BASE_REF" --trust-base "origin/$BASE_REF"
 ```
 
 `intent-guard check` is the full gate: it scores drift and enforces the contract's
@@ -79,7 +80,7 @@ For Intent Guard plus vault-guard, copy
 That workflow runs the same gate check, then runs:
 
 ```bash
-npx --yes @vaultcompass/vault-guard@latest -- scan . --format text
+npx --yes @vaultcompass/vault-guard@1.9.1 -- scan . --format text
 ```
 
 The two checks are independent. Intent Guard blocks intent drift; vault-guard

@@ -126,8 +126,68 @@ Discovery checks Spec Kit-style `specs/<feature>/spec.md`, `plan.md`,
 `tasks.md` and `.specify/specs/<feature>/...`; Kiro-style
 `.kiro/specs/<feature>/requirements.md` or `bugfix.md`, `design.md`, and
 `tasks.md`; then superpowers-style `docs/superpowers/`. JSON includes `format`,
-`spec_dir`, `imported_files`, `written_path`, `frozen: false`, `next_step`, and
-`contract_yaml`.
+`spec_dir`, `imported_files`, `written_path`, `frozen: false`, `next_step`,
+`review` (`notice`, `in_scope`, `out_of_scope`), and `contract_yaml`.
+
+Every run also prints, on stderr, the line "Review each item; polarity is
+inferred from headings and modals and may be wrong." followed by every
+extracted `in_scope` and `out_of_scope` item, one per line. Read both lists
+before `freeze`: an item in the wrong list either authorises what the spec
+ruled out or forbids what it asked for.
+
+### How imported text is sorted
+
+Extraction reads the spec's structure, not only its sentences:
+
+- **Out-of-scope sections.** Bullets and sentences under a heading named
+  Non-goals, Out of scope, Not in scope, Won't (have), Will not, Excluded,
+  Deferred work or Future work (any level, any case, numbering ignored, and
+  also a bold line such as `**Out of scope:**` or a plain `Out of scope for
+  this fix:` line) go to `out_of_scope` and never to `in_scope`. A sentence of
+  the form "X is out of scope" also sends X to `out_of_scope`.
+- **Section extent.** A `#` heading's section runs to the next heading of the
+  same or a higher level. A child heading with no kind of its own is
+  ordinary: it never inherits out-of-scope or problem from its parent, so a
+  requirement nested under a Non-goals heading stays a requirement. A bold or
+  colon pseudo-heading of either kind covers only the list right under it and
+  closes at the first line that is not a bullet; a bold line with no kind
+  ("**Acceptance criteria**") changes nothing.
+- **Problem sections.** Under a heading named Problem, Problem statement,
+  Background, Context, Current state, Current failures or Motivation, a bare
+  "no X" or "never X" is a description of today, not a rule, and is dropped.
+  An explicit prohibition there is still a rule: Do not, MUST NOT, SHALL NOT,
+  should not, may not, a modal with never ("should never"), a clause that
+  starts with Never, and "No X SHALL ...". The whole heading must be one of
+  those words, so "Context items" is an ordinary section. Introduction is an
+  ordinary section, because every Kiro requirements.md opens with one.
+- **User stories.** A line labelled `User story:` is motivation ("As a
+  contributor, I do not want ..."), not a rule, and yields no prohibition.
+- **Tables** are skipped for every rule.
+- **Modifier negations, judged per clause.** A sentence is split into
+  clauses at a semicolon and at a comma that opens a negated clause
+  ("MUST use the staging key, never the prod key"). In a clause with a
+  positive modal (SHALL run, must use), a "with no X" where X is a resource
+  the run goes without is a modifier, not a prohibition: "CI SHALL run, with
+  no cloud credentials: terraform validate" forbids nothing. Every other
+  shape stays a prohibition: a clause that starts with No or Never, one with
+  an explicit negation, a coordinated "and never", a "no" that is the verb's
+  own object ("SHALL show no wildcard Resource"), and a "with no" that names
+  an action or a path ("with no writes to billing/"). When in doubt the
+  prohibition is kept: a false one blocks loudly, a lost one passes silently.
+- **Ranking and cap.** `out_of_scope` keeps at most 12 items, the contract
+  schema's own limit, so a draft always validates. The routed non-goals come
+  first, then explicit prohibitions (SHALL NOT, MUST NOT, should not, Do
+  not, "No X SHALL ..."), then every other prohibition. On a long Kiro spec
+  the list fills before every explicit rule fits, and the later ones are
+  dropped, security rules included: read the list `import-spec` prints, and
+  move the rules you need into the contract by hand before `freeze`.
+
+The importer no longer appends its own "Do not treat the imported contract as
+approved" sentence to the extracted text; on a spec with no prohibitions it
+was the contract's only `out_of_scope` item. `intent-guard extract` applies
+the same sorting to its input text; a prompt with no headings, tables or
+labels extracts as before, apart from the modifier-negation rule and the
+ranking.
 
 ### superpowers artifacts
 
@@ -269,8 +329,13 @@ or fetch the base ref explicitly before running the gate:
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
-- run: npx intent-guard check --project . --base origin/${{ github.base_ref }}
+- run: |
+    npx intent-guard check --project . \
+      --base origin/${{ github.base_ref }} \
+      --trust-base origin/${{ github.base_ref }}
 ```
+
+Pass `--trust-base` on every pull-request run; the next section says why.
 
 When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
 this does not change the gate exit code.
@@ -297,6 +362,15 @@ judging, so a pull request can widen `in_scope`, delete `protected_paths`,
 write its own `frozen_by: user` and `approval`, and make the change all of
 that forbade, in one commit. The gate agrees with the rewritten contract and
 passes.
+
+So that this shape is at least visible, a `check` or `report` run given
+`--base` without `--trust-base`, whose changed set includes
+`.intent-guard/intent-contract.yaml`, `.intent-guard/config.yaml`, or anything
+under `.intent-guard/contracts/` (or the same under the legacy `.conductor/`),
+prints a `warning:` line under the verdict naming each such file and telling
+you to pass `--trust-base <ref>`. The warning is also in the JSON `warnings`
+array. It never changes the status or the exit code: a push run on a protected
+branch is a legitimate place to run `--base` alone.
 
 With it, every control input comes from `<ref>` via `git show`, and the head
 tree is the thing judged:
@@ -476,6 +550,22 @@ three wildcards:
 | `*` | any run of characters within one path segment (never `/`) |
 | `**` | any number of whole segments; `src/**/x.ts` also matches `src/x.ts` |
 | `?` | exactly one character within a segment |
+
+A trailing `/**` covers everything under the directory **and the bare
+directory path itself**: `vendor/pay/**` matches `vendor/pay/lib.ts` and
+`vendor/pay`. The second form is how git lists a submodule pointer (a
+gitlink), with no trailing slash and nothing under it, so a protected
+`vendor/pay/**` blocks a moved submodule pointer at `vendor/pay`. The segment
+boundary still holds: `vendor/pay/**` never matches `vendor/payments`,
+`vendor/pay.txt` or `vendor/pay-old/x.ts`. Through 1.8.1 a trailing `/**`
+required something after the slash, so a submodule at exactly the protected
+root passed the gate.
+
+The matcher is shared, so this applies to `allowed_paths` as well: an
+`allowed_paths` entry `vendor/pay/**` now also allows a change listed as the
+bare path `vendor/pay` (a moved submodule pointer, or a plain file named
+exactly `vendor/pay`), which through 1.8.1 was reported as outside
+`allowed_paths`.
 
 A glob with no wildcard at all is treated as a directory prefix, so `src`
 and `src/` both cover everything under `src/`, and an exact file path still

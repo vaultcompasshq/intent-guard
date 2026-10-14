@@ -475,6 +475,12 @@ function assertBudgetValid(contract: IntentContract, path: string): void {
  * mostly code by design, and feeding source lines into the extractor turned
  * literal `test(...)` lines into acceptance criteria. `extractBudget` reads the
  * raw file content, so dropping fences here does not hide a budget block.
+ *
+ * Heading markers are KEPT. Extraction routes by section (a "Non-goals"
+ * heading sends its bullets to out_of_scope, a "Background" heading keeps its
+ * problem statements out of the prohibitions), and through 1.8.1 this function
+ * dropped the `#` so every heading read as an ordinary line. extract.ts strips
+ * the marker itself once it has read the level.
  */
 function stripMarkdown(content: string): string {
   const lines: string[] = [];
@@ -489,7 +495,6 @@ function stripMarkdown(content: string): string {
     if (inFence) continue;
 
     const line = trimmed
-      .replace(/^#{1,6}\s+/, "")
       .replace(/^[-*]\s+\[[ xX]\]\s+/, "- ")
       .replace(/^[-*]\s+/, "- ")
       .replace(/`([^`]+)`/g, "$1")
@@ -516,12 +521,17 @@ function buildImportText(
         : file.role === "design"
           ? "Design"
           : "Tasks";
-    parts.push(`${label}:\n${stripMarkdown(file.content)}`);
+    // A level-1 heading, not a plain line: it closes whatever section the
+    // previous file ended in, so a Non-goals list at the end of one file
+    // cannot swallow the next file. Extraction reads it as "Requirements:",
+    // exactly the line this used to be.
+    parts.push(`# ${label}:\n${stripMarkdown(file.content)}`);
   }
 
-  parts.push(
-    "Human review is required before freeze. Do not treat the imported contract as approved.",
-  );
+  // No closing "Human review is required ... Do not treat the imported
+  // contract as approved." sentence any more: extraction read it as a rule,
+  // and on a spec with no prohibitions of its own it was the contract's only
+  // out_of_scope item. import-spec says it to the reader instead.
   return parts.join("\n\n");
 }
 

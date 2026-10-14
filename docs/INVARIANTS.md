@@ -484,3 +484,104 @@ protected_paths carries a wildcard glob ending in '/'` in
 `packages/core/tests/freeze-budget-paths.test.ts`, and `warns without blocking
 when a frozen contract carries a wildcard glob ending in '/', and says it
 protects nothing` in `packages/core/tests/gate-budget.test.ts`.
+
+## The shipped Actions samples read the rules from the base
+
+Both `integrations/github-actions/*.yml.sample` files pass `--base
+"origin/$BASE_REF"` and `--trust-base "origin/$BASE_REF"`
+(`conductor-drift-ci.yml.sample:63`, `conductor-vault-guard-ci.yml.sample:60`)
+and pin an exact intent-guard version rather than `@latest`
+(`conductor-drift-ci.yml.sample:60`, `conductor-vault-guard-ci.yml.sample:57`).
+`ships a GitHub Actions gate CI sample` in
+`examples/validate-integrations.test.ts` asserts both flags and the absence of
+`guard@latest`. `pins every intent-guard version in the samples to the action
+default, and vault-guard to one version` in the same file parses every
+`intent-guard@` reference in both samples (the install line, the check step
+and the comment naming the action tag) and requires each to equal the
+`version` default in `action.yml`, so a release that bumps one and not the
+other goes red. vault-guard has no default in this repository to follow: the
+same test only requires every `vault-guard@` pin in the paired sample and in
+`integrations/github-actions/README.md` to be one exact release.
+
+## `check --base` without `--trust-base` names an edited control file
+
+When a run has `--base` and no `--trust-base`, and the changed set includes
+`.intent-guard/intent-contract.yaml`, `.intent-guard/config.yaml` or a path
+under `.intent-guard/contracts/` (or the legacy `.conductor/` equivalents,
+`packages/core/src/gate.ts:102`), the gate adds a warning naming each file
+and the missing flag (`packages/core/src/gate.ts:172` through
+`packages/core/src/gate.ts:174`, wording at `packages/core/src/gate.ts:122`).
+A warning never changes the status or exit code. Pinned in
+`packages/skill/tests/base-ref.test.ts` by `warns, naming the contract and
+the flag, and keeps the exit code`, `carries the same warning in --json`,
+`names config.yaml too`, `names an edited contracts archive entry too`,
+`still blocks the same change with --trust-base, and does not warn there`,
+and `does not warn when the change leaves every control file alone`; the
+legacy directory, the archive in both directories, a `--project`
+subdirectory, and the paths that must NOT count are pinned in
+`packages/core/tests/gate-control-paths.test.ts`.
+
+## A trailing `/**` covers the bare directory path
+
+`matchesGlob` compiles a trailing `/**` after a directory as that directory
+OR anything under it (`packages/core/src/budget.ts:79`), because git lists a
+submodule pointer as the bare path. The slash stays mandatory before anything
+further. Pinned in `packages/core/tests/budget.test.ts` by `matches the bare
+root of a trailing /** (a submodule gitlink path)` and `does not stretch a
+trailing /** past the segment boundary`, and end to end, with a real
+submodule at the protected root, in `packages/skill/tests/base-ref.test.ts`
+by `--staged, when the pointer is moved and staged` and `--base HEAD~1, after
+the moved pointer is committed`.
+
+## Spec extraction is heading-aware
+
+`segmentForExtraction` (`packages/core/src/extract.ts:687`) runs before any
+clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:492`
+and `packages/core/src/extract.ts:494`) route their bullets and sentences to
+`out_of_scope` only. A child heading with no kind of its own is neutral, and a
+classified bold or colon pseudo-heading covers only the list under it
+(`packages/core/src/extract.ts:718`). In a problem section
+(`packages/core/src/extract.ts:503`; Introduction is not one) only explicit
+prohibitions survive (`packages/core/src/extract.ts:597`, applied at
+`packages/core/src/extract.ts:771`). User story lines yield no prohibitions
+(`packages/core/src/extract.ts:776`). Table rows are skipped
+(`packages/core/src/extract.ts:723`). The positive-modal exemption is judged
+per clause (`packages/core/src/extract.ts:603`) and covers only a "with no
+<resource>" phrase (`packages/core/src/extract.ts:624`,
+`packages/core/src/extract.ts:644`). out_of_scope is ranked routed non-goals,
+then explicit prohibitions, then the rest, and capped at the schema's 12
+(`packages/core/src/extract.ts:842`, `packages/core/src/extract.ts:872`);
+pinned by `ranks routed non-goals first, then explicit prohibitions, then the
+rest`. At that cap a long spec can lose explicit rules past the twelfth item;
+see the CHANGELOG known limits.
+import-spec keeps heading markers and opens each file with a level-1 heading
+so a section never crosses a file boundary
+(`packages/core/src/spec-bridge.ts:528`). Pinned in
+`packages/core/tests/extract-headings.test.ts` (every rule has its own
+`describe`, and `every prohibition the base build kept is still kept` runs the
+2026-10-13 reviewer probe cases against the base build's recorded output) and
+in `packages/core/tests/spec-bridge.test.ts` by `routes a Kiro Non-goals
+section to out_of_scope, never to in_scope`, `ends a section at the file
+boundary, so the next file is not swallowed`, and `does not turn the
+importer's own review reminder into an out_of_scope item`.
+
+This makes polarity right more often; it does not make it verified.
+`import-spec` prints every item with a review notice
+(`packages/skill/src/import-spec-cli.ts:179`, pinned by `lists every extracted
+in_scope and out_of_scope item with a polarity warning` in
+`packages/skill/tests/cli.test.ts`).
+
+## SKILL.md commands run from an installed package
+
+Every intent-guard command in `packages/skill/*/SKILL.md` is `npx --no-install
+@vaultcompass/intent-guard <command>`, which exits non-zero naming the package
+where it is not installed, and each skill tells the agent that a failed or
+empty run did not happen. `packages/skill/tests/skill-docs.test.ts` lints the
+four files and runs the documented form in a temp project without the package
+(`exits non-zero with a message naming the package in a project that does not
+have it`) and with it installed (`runs the published CLI in a project that has
+it installed`), on a PATH and npm prefix stripped of any other intent-guard.
+On an ordinary machine npx may run an intent-guard already on PATH or in a
+global install instead, which can be stale; each skill says to check `--version`
+(pinned by `warns that npx may run a stale global copy and says to check the
+version`).

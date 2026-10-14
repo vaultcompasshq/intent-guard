@@ -23,9 +23,20 @@ Show coaching and suggested rewrite. User may proceed without changing their ask
 
 ## Score prompt (helper CLI)
 
+Run from the target project's root, with `@vaultcompass/intent-guard`
+installed there (`npm install -D @vaultcompass/intent-guard`). `npx
+--no-install` can run an intent-guard it finds on PATH or in a global install
+instead of the project's copy, so check `npx --no-install
+@vaultcompass/intent-guard --version` against the project's package.json
+first:
+
 ```bash
-pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-coach "USER MESSAGE HERE"
+npx --no-install @vaultcompass/intent-guard coach "USER MESSAGE HERE"
 ```
+
+If the command exits non-zero, prints "npx canceled due to missing
+packages" or "command not found", or prints no JSON, the prompt was NOT
+scored: the coach did NOT run. Say so instead of reporting a score.
 
 JSON output:
 

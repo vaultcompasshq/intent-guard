@@ -46,14 +46,24 @@ Read from project root when present:
 
 ### 3. Draft contract (helper CLI)
 
-From the intent-guard repo (after `pnpm build`):
+Run from the target project's root, with `@vaultcompass/intent-guard`
+installed there (`npm install -D @vaultcompass/intent-guard`). `npx
+--no-install` can run an intent-guard it finds on PATH or in a global install
+instead of the project's copy, so check `npx --no-install
+@vaultcompass/intent-guard --version` against the project's package.json
+first:
 
 ```bash
-pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-extract \
+npx --no-install @vaultcompass/intent-guard extract \
   --project /path/to/target-project \
   --text "USER'S ORIGINAL ASK HERE" \
   --dry-run
 ```
+
+If a command in this skill exits non-zero, prints "npx canceled due to
+missing packages" or "command not found", or prints no JSON, it did NOT run:
+no draft exists and nothing was frozen. Tell the user; do not present a
+contract you did not get back.
 
 Review `contract_yaml`, `prompt_score`, and `coaching` in the JSON output.
 
@@ -75,7 +85,7 @@ Ask **one question at a time** for gaps. Update the draft mentally before writin
 ### 6. Write the draft
 
 ```bash
-pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-extract \
+npx --no-install @vaultcompass/intent-guard extract \
   --project /path/to/target-project \
   --text "FINAL ASK"
 ```
@@ -87,7 +97,7 @@ This writes an **unfrozen draft**. The gate still blocks until it is approved.
 Freezing is a separate, deliberate step -- the agent must **not** self-approve.
 
 ```bash
-pnpm --filter @vaultcompass/intent-guard-skill exec intent-guard-freeze \
+npx --no-install @vaultcompass/intent-guard freeze \
   --project /path/to/target-project
 # Interactive TTY → shows a summary and asks to confirm.
 # Non-interactive → requires --approved-by "<name>".

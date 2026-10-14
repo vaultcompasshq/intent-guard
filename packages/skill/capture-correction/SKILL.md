@@ -26,8 +26,17 @@ to a durable rule turns a landmine into a warning sign.
 
 ## Capture a correction (helper CLI)
 
+Run from the target project's root, with `@vaultcompass/intent-guard`
+installed there (`npm install -D @vaultcompass/intent-guard`). `npx
+--no-install` can run an intent-guard it finds on PATH or in a global install
+instead of the project's copy, so check `npx --no-install
+@vaultcompass/intent-guard --version` against the project's package.json
+first. If a command below exits non-zero, prints "npx canceled due to missing packages" or
+"command not found", or prints nothing, it did NOT run: nothing was recorded.
+Say so rather than telling the user the lesson was captured.
+
 ```bash
-intent-guard-correct --project /path/to/project \
+npx --no-install @vaultcompass/intent-guard correct --project /path/to/project \
   --wrong "fetched data inside the component" \
   --right "use a useThemePreference hook" \
   --rule "Never fetch in components; use a hook" \
@@ -44,8 +53,8 @@ intent-guard-correct --project /path/to/project \
 ## Emit the Session Brief
 
 ```bash
-intent-guard-brief --project /path/to/project          # markdown
-intent-guard-brief --project /path/to/project --json    # machine-readable
+npx --no-install @vaultcompass/intent-guard brief --project /path/to/project          # markdown
+npx --no-install @vaultcompass/intent-guard brief --project /path/to/project --json   # machine-readable
 ```
 
 The brief is the minimal correct-methodology context: intent, scope, acceptance

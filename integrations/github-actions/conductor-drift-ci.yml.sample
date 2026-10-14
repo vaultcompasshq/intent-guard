@@ -1,6 +1,9 @@
 name: Intent Guard Drift
 
-# Post-publish sample: installs @vaultcompass/intent-guard@latest from npm.
+# Post-publish sample: installs an exact released @vaultcompass/intent-guard
+# from npm. Pin an exact version rather than @latest, so the gate that judges
+# a pull request changes only when this file does. Prefer the composite action
+# (vaultcompasshq/intent-guard@v1.8.1) where it fits; see README.md here.
 
 on:
   pull_request:
@@ -26,7 +29,7 @@ jobs:
           cache: pnpm
 
       - name: Install Intent Guard
-        run: pnpm dlx @vaultcompass/intent-guard@latest --version
+        run: pnpm dlx @vaultcompass/intent-guard@1.8.1 --version
 
       # `check` is the full gate: it scores drift AND enforces the contract's
       # change budget (allowed/protected paths, max files, dependency guard),
@@ -37,16 +40,24 @@ jobs:
       # the merge base with the base branch, reading git NUL-separated, so
       # every file name reaches the budget exactly as it is. An unknown ref or
       # a missing merge base exits 2 rather than judging an empty list.
+      #
+      # --trust-base makes the gate read its rules (the contract, config.yaml
+      # and the contracts archive) from the base branch instead of from the
+      # branch it is judging. Without it a pull request can loosen its own
+      # contract in the same commit that breaks it and pass. Keep both flags.
+      #
       # github.base_ref is passed through env and read as a shell variable,
       # never as ${{ }} inside the run body, so a branch named with a $(...)
       # or backtick payload is data, not code, when bash sees it.
-      # Add `--no-require-frozen` if the branch may not carry a frozen contract.
+      # Add `--no-require-frozen` only while the base branch does not yet
+      # carry a frozen contract; it turns the contract requirement off.
       - name: Check intent + budget
         shell: bash
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch origin "$BASE_REF"
-          pnpm dlx @vaultcompass/intent-guard@latest check \
+          pnpm dlx @vaultcompass/intent-guard@1.8.1 check \
             --project . \
-            --base "origin/$BASE_REF"
+            --base "origin/$BASE_REF" \
+            --trust-base "origin/$BASE_REF"
