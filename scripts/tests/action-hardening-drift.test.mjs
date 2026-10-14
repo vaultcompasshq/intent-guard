@@ -37,8 +37,8 @@ const PINS = [
   '( cd "${npm_config_prefix}/lib" && npm audit signatures )',
   // The scanner tag a pull request is compared against.
   "IG_TAG_SCANNER_MAJOR=1",
-  "IG_TAG_SCANNER_MINOR=8",
-  "IG_TAG_SCANNER_PATCH=1",
+  "IG_TAG_SCANNER_MINOR=9",
+  "IG_TAG_SCANNER_PATCH=0",
 ];
 
 // The lines that run: every step's `run:` script, split into lines, trimmed,

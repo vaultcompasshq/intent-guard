@@ -622,7 +622,7 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
       "install",
       "-g",
       "--ignore-scripts",
-      "@vaultcompass/intent-guard@1.8.1",
+      "@vaultcompass/intent-guard@1.9.0",
     ]);
   });
 
@@ -961,7 +961,7 @@ describe("action.yml validates its inputs before a shell sees them", () => {
     // the run, a value beginning with a dot or ending in .tgz is read by npm
     // as a PATH, and a leading-zero string is invalid semver so npm reads it
     // as a dist-tag too.
-    expect(runValidate({ version: "1.8.1" }).status).toBe(0);
+    expect(runValidate({ version: "1.9.0" }).status).toBe(0);
     for (const rejected of [
       ".",
       "..",
@@ -1105,9 +1105,9 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   }
 
   // The same validate script, with the tag constant advanced by one minor
-  // version: the action as it will be the day a 1.9.0 gate ships and this tag
+  // version: the action as it will be the day a 1.10.0 gate ships and this tag
   // starts shipping it. NOT here because the rule is invisible on the shipped
-  // file -- it is visible, every published version below 1.8.1 is refused
+  // file -- it is visible, every published version below 1.9.0 is refused
   // there already -- but because this exercises the comparison at a boundary
   // the published set cannot reach today, where the minor leg of the
   // comparison does the work rather than the major leg.
@@ -1125,10 +1125,10 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   }
 
   // The same validate script, with the tag constant's PATCH leg raised by
-  // two: on the shipped file only 1.8.0 sits below the tag (1.8.1) at the
-  // same major.minor. This exercises the same-minor-lower-patch arm against a
-  // version that is not published, so the test does not depend on which
-  // versions happen to exist.
+  // two: the shipped tag's patch is 0, so no published version sits below it
+  // at the same major.minor, and the same-minor-lower-patch arm of the
+  // comparison never runs against the real file. This exercises that arm
+  // without waiting for a patch release to make a real fixture possible.
   function scriptWithPatchOverride(): string {
     const patched = validateScript.replace(
       /IG_TAG_SCANNER_PATCH=([0-9]+)/,
@@ -1155,13 +1155,13 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
 
   it("refuses a below-tag pin on a pull request, on the shipped file", () => {
     // 1.5.1 is a real published version, well-formed, and it clears the shape
-    // check. It sits below the tag this action ships (1.8.1) and is refused
+    // check. It sits below the tag this action ships (1.9.0) and is refused
     // here rather than several steps later at the gate itself.
     const refused = runValidate({ version: "1.5.1" }, PULL_REQUEST_EVENT);
     expect(refused.status).toBe(1);
     // Both numbers, for the same reason the npm floor names both.
     expect(refused.stdout).toContain("1.5.1");
-    expect(refused.stdout).toContain("1.8.1");
+    expect(refused.stdout).toContain("1.9.0");
     expect(refused.stdout).toMatch(/pull request/);
     expect(refused.stdout).toContain("REMOVE the `version` input");
 
@@ -1186,26 +1186,21 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const run = runValidateScript(future, { version: "1.5.2" }, PULL_REQUEST_EVENT);
     expect(run.status).toBe(1);
     expect(run.stdout).toContain("1.5.2");
-    expect(run.stdout).toContain("1.9.0");
+    expect(run.stdout).toContain("1.10.0");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
 
   it("refuses a pull request pinned to a lower patch at the same major.minor", () => {
-    // On the shipped file (tag 1.8.1), 1.8.0 is the one published version
-    // that only this arm refuses.
-    const shipped = runValidate({ version: "1.8.0" }, PULL_REQUEST_EVENT);
-    expect(shipped.status).toBe(1);
-    expect(shipped.stdout).toContain("1.8.0");
-    expect(shipped.stdout).toContain("1.8.1");
-    // Raising the tag's patch leg by two (to 3) makes 1.8.2 (same
-    // major.minor, lower patch, not published) a case that arm alone must
-    // catch, independent of which versions happen to exist.
+    // The shipped tag's patch is 0, so no real published version can exercise
+    // the same-minor-lower-patch arm of the comparison. Raising the tag's
+    // patch leg to 2 makes 1.9.1 (same major.minor, lower patch) a case that
+    // arm alone must catch.
     const patched = scriptWithPatchOverride();
-    const run = runValidateScript(patched, { version: "1.8.2" }, PULL_REQUEST_EVENT);
+    const run = runValidateScript(patched, { version: "1.9.1" }, PULL_REQUEST_EVENT);
     expect(run.status).toBe(1);
-    expect(run.stdout).toContain("1.8.2");
-    expect(run.stdout).toContain("1.8.3");
+    expect(run.stdout).toContain("1.9.1");
+    expect(run.stdout).toContain("1.9.2");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
@@ -1225,10 +1220,9 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   });
 
   it("allows pinning forward on a pull request, and orders numerically", () => {
-    // 1.10.0 is the case a lexicographic comparison gets wrong: it sorts
-    // below 1.9.0 as text and above it as a version.
+    // The helper advances the tag by one minor, so the floor here is 1.10.0.
     const future = scriptWithFutureTag();
-    for (const ok of ["1.9.0", "1.9.1", "1.10.0", "2.0.0", "10.0.0"]) {
+    for (const ok of ["1.10.0", "1.10.1", "2.0.0", "10.0.0"]) {
       expect([
         ok,
         runValidateScript(future, { version: ok }, PULL_REQUEST_EVENT).status,
@@ -1243,8 +1237,16 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const shipped = `${tagPart("MAJOR")}.${tagPart("MINOR")}.${tagPart("PATCH")}`;
     expect(runValidate({ version: shipped }, PULL_REQUEST_EVENT).status).toBe(0);
     expect(runValidate({}, PULL_REQUEST_EVENT).status).toBe(0);
-    for (const ok of ["1.8.1", "1.8.2", "1.10.0", "2.0.0"]) {
+    // 1.10.0 is the case a lexicographic comparison gets wrong: it sorts
+    // below 1.9.0 as text and above it as a version.
+    for (const ok of ["1.9.0", "1.9.1", "1.10.0", "2.0.0"]) {
       expect([ok, runValidate({ version: ok }, PULL_REQUEST_EVENT).status]).toEqual([ok, 0]);
+    }
+    for (const older of ["1.8.1", "1.8.2"]) {
+      expect([older, runValidate({ version: older }, PULL_REQUEST_EVENT).status]).toEqual([
+        older,
+        1,
+      ]);
     }
   });
 
