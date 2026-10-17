@@ -4,11 +4,17 @@ import type {
   IntentContract,
 } from "@vaultcompass/intent-guard-schema";
 import { scorePrompt } from "./coach.js";
-import { constraintRuleTexts } from "./constraints.js";
+import { constraintRuleTexts, dedupeRules, type RuleReplacement } from "./constraints.js";
 
 export interface DraftContractInput {
   userText: string;
   constraints?: Constraint[];
+  /**
+   * The text original_ask is built from, when it is not the whole userText.
+   * import-spec passes its one-line header, so the spec body is never copied
+   * into original_ask (where drift would read all of it as agreed scope).
+   */
+  ask?: string;
 }
 
 function randomSuffix(): string {
@@ -57,6 +63,48 @@ function oneSentence(text: string, max = 500): string {
     : normalized.slice(0, boundary + 1)
   ).trim();
   return sentence.length > max ? `${sentence.slice(0, max - 1)}…` : sentence;
+}
+
+/** The longest original_ask a draft carries: the contract schema's own maxLength. */
+export const ORIGINAL_ASK_MAX = 500;
+const ELLIPSIS = " ...";
+
+/**
+ * The whole ask, whitespace-normalised. Through 1.9.0 this kept only the
+ * first sentence, so a reviewer freezing the draft never saw the rest of
+ * what was asked. An ask longer than ORIGINAL_ASK_MAX keeps as many whole
+ * sentences as fit and ends with " ..."; only a first sentence that alone is
+ * too long is cut, at a word boundary.
+ */
+export function wholeAsk(text: string, max = ORIGINAL_ASK_MAX): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  const budget = max - ELLIPSIS.length;
+  let cut = -1;
+  for (let i = 0; i < budget; i++) {
+    if (isSentenceTerminatorAt(normalized, i)) cut = i + 1;
+  }
+  if (cut > 0) return `${normalized.slice(0, cut)}${ELLIPSIS}`;
+  const head = normalized.slice(0, budget + 1);
+  const space = head.lastIndexOf(" ");
+  return `${(space > 0 ? head.slice(0, space) : head.slice(0, budget)).trimEnd()}${ELLIPSIS}`;
+}
+
+// A prohibition marker anywhere in a sentence: "not" covers do not, must
+// not, should not, shall not and will not.
+const ANY_PROHIBITION_MARKER_RE =
+  /\b(?:no|not|never|don't|dont|cannot|can't|won't|mustn't|shouldn't|avoid)\b/i;
+
+/**
+ * The sentences of an ask that describe work to do: every sentence with no
+ * prohibition marker anywhere in it. Drift subtracts these tokens as agreed
+ * scope, so a sentence that forbids something ("Keep the change small and
+ * never touch billing", "Then, do not modify billing") must not cancel the
+ * out_of_scope item it produced. Drift also never subtracts an ask token
+ * that an out_of_scope item or a constraint uses (see drift.ts).
+ */
+export function askScopeSentences(ask: string): string[] {
+  return splitSentences(ask).filter((sentence) => !ANY_PROHIBITION_MARKER_RE.test(sentence));
 }
 
 // Split into sentence-like segments without breaking dotted file tokens or
@@ -511,6 +559,41 @@ function classifyHeading(raw: string): SectionKind | null {
   return null;
 }
 
+/**
+ * The headings import-spec reads under, as a reader would name them. Each
+ * stands for the spellings LABELLED_SCOPE_RE accepts.
+ */
+export const LABELLED_SCOPE_HEADINGS = [
+  "Scope",
+  "In scope",
+  "Out of scope",
+  "Non-goals",
+  "Requirements",
+  "Constraints",
+  "Acceptance criteria",
+  "Success criteria",
+] as const;
+
+// Scope ("Scope", "Project scope", "In scope", "Scope and non-goals"),
+// requirements ("Requirements", "Functional requirements", Kiro's
+// "Requirement 1: Export"; not "Requirements Document", a Kiro title that
+// covers the whole file), constraints, and acceptance or success criteria.
+// The out-of-scope spellings come from classifyHeading.
+const LABELLED_SCOPE_RE = new RegExp(
+  [
+    String.raw`^(?:(?:project|feature|change|the)\s+)?scope\b`,
+    String.raw`^in[\s-]scope\b`,
+    String.raw`^(?:(?:functional|non[\s-]?functional|technical|user|system|security|key|core)\s+)?requirements?(?:\s+\d+(?:\.\d+)*\b.*)?$`,
+    String.raw`^(?:(?:key|technical|design|hard|project)\s+)?constraints?\b`,
+    String.raw`^(?:acceptance|success)\s+criteria\b`,
+  ].join("|"),
+);
+
+/** Whether a heading opens a section import-spec reads. */
+export function isLabelledScopeHeading(raw: string): boolean {
+  return LABELLED_SCOPE_RE.test(headingKey(raw)) || classifyHeading(raw) === "out_of_scope";
+}
+
 const ATX_HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 // A line that is nothing but bold text: a pseudo-heading. Nests below every
 // real heading level.
@@ -846,7 +929,17 @@ export const OUT_OF_SCOPE_CAP = 12;
 const EXPLICIT_ITEM_RE =
   /^(?:shall not|must not|should not|may not|do not|don't)\b|^no\b.*\b(?:shall|must)\b/i;
 
+export interface DraftDetails {
+  contract: IntentContract;
+  /** out_of_scope items merged into a longer near-duplicate, for --verbose. */
+  replaced: RuleReplacement[];
+}
+
 export function draftContract(input: DraftContractInput): IntentContract {
+  return draftContractDetailed(input).contract;
+}
+
+export function draftContractDetailed(input: DraftContractInput): DraftDetails {
   const { userText, constraints = [] } = input;
   const ruleTexts = constraintRuleTexts(constraints);
   const segmented = segmentForExtraction(userText);
@@ -870,17 +963,23 @@ export function draftContract(input: DraftContractInput): IntentContract {
   const prohibitions = [...extracted.items, ...embedded];
   const explicit = prohibitions.filter((item) => EXPLICIT_ITEM_RE.test(item));
   const rest = prohibitions.filter((item) => !EXPLICIT_ITEM_RE.test(item));
-  const outOfScope = uniqueItems([...segmented.routed, ...explicit, ...rest], Number.MAX_SAFE_INTEGER)
+  // Near-duplicates (same words once case, punctuation and the leading
+  // negation are folded, or one a word-bounded part of the other) merge into
+  // the longer, in the earlier item's ranked place.
+  const deduped = dedupeRules(
+    uniqueItems([...segmented.routed, ...explicit, ...rest], Number.MAX_SAFE_INTEGER),
+  );
+  const outOfScope = deduped.kept
     .filter((item, index, unique) => {
       const key = item.toLowerCase();
       return !unique.slice(0, index).some((previous) => previous.toLowerCase().includes(key));
     })
     .slice(0, OUT_OF_SCOPE_CAP);
 
-  return {
+  const contract: IntentContract = {
     contract_id: generateContractId(),
     version: "1.0.0",
-    original_ask: oneSentence(userText),
+    original_ask: wholeAsk(input.ask ?? userText),
     in_scope: inScope,
     out_of_scope: outOfScope,
     constraints,
@@ -893,4 +992,5 @@ export function draftContract(input: DraftContractInput): IntentContract {
     },
     pivot_log: [],
   };
+  return { contract, replaced: deduped.replaced };
 }

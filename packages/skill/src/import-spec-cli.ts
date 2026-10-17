@@ -5,7 +5,14 @@ import {
   loadAllConstraints,
   writeContract,
 } from "@vaultcompass/intent-guard-core";
-import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
+import {
+  isHelpFlag,
+  isVersionFlag,
+  missingValue,
+  pathSuggestionLine,
+  printUsage,
+  printVersion,
+} from "./usage.js";
 
 const USAGE = `Usage: intent-guard import-spec [flags]
 
@@ -22,6 +29,8 @@ Flags:
   --spec <path>             superpowers: the design spec markdown file
   --plan <path>             superpowers: the plan markdown file
   --dry-run                 Print the draft without writing it
+  --verbose                 Say on stderr which near-duplicate item each
+                            kept item replaced
   --help, -h                Show this help
   --version, -v             Print the version
 
@@ -67,6 +76,7 @@ function parseArgs(argv: string[]) {
   let specPath = "";
   let planPath = "";
   let dryRun = false;
+  let verbose = false;
   let help = false;
   let version = false;
 
@@ -99,6 +109,8 @@ function parseArgs(argv: string[]) {
       tasksPath = argv[++i];
     } else if (arg === "--dry-run") {
       dryRun = true;
+    } else if (arg === "--verbose") {
+      verbose = true;
     } else if (isHelpFlag(arg)) {
       help = true;
     } else if (isVersionFlag(arg)) {
@@ -133,6 +145,7 @@ function parseArgs(argv: string[]) {
     specPath: specPath || undefined,
     planPath: planPath || undefined,
     dryRun,
+    verbose,
     help,
     version,
   };
@@ -177,6 +190,14 @@ try {
       : ["  (none)"]),
   ];
   console.error(reviewLines.join("\n"));
+  for (const warning of imported.warnings) console.error(`warning: ${warning}`);
+  if (imported.pathSuggestions.length > 0) console.error(pathSuggestionLine(imported.pathSuggestions));
+  const replaced = [...(loaded.replaced ?? []), ...imported.replaced];
+  if (args.verbose) {
+    for (const entry of replaced) {
+      console.error(`replaced: "${entry.replaced}" (kept "${entry.kept}")`);
+    }
+  }
 
   console.log(
     JSON.stringify({
@@ -197,6 +218,10 @@ try {
         out_of_scope: contract.out_of_scope,
       },
       loaded_constraint_files: loaded.loadedFiles,
+      sections: imported.sections,
+      warnings: imported.warnings,
+      suggested_allowed_paths: imported.pathSuggestions,
+      replaced,
       contract_yaml: stringify(contract),
     }),
   );

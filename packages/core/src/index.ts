@@ -13,7 +13,9 @@ export {
 export {
   DEFAULT_CONSTRAINT_FILES,
   constraintRuleTexts,
+  dedupeRules,
   extractConstraintsFromMarkdown,
+  type RuleReplacement,
   loadAllConstraints,
   loadConstraintFiles,
   loadCursorRules,
@@ -83,8 +85,16 @@ export {
   driftLogPath,
   type DriftLogEvent,
 } from "./drift-log.js";
-export { draftContract, generateContractId, type DraftContractInput } from "./extract.js";
+export {
+  ORIGINAL_ASK_MAX,
+  draftContract,
+  draftContractDetailed,
+  generateContractId,
+  type DraftContractInput,
+  type DraftDetails,
+} from "./extract.js";
 export { formatDriftMessage } from "./format-drift.js";
+export { suggestPathBudgets } from "./path-suggestions.js";
 export { gitSpawnEnv } from "./git-env.js";
 export {
   initConductor,

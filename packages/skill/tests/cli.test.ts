@@ -437,7 +437,7 @@ describe("conductor-import-spec", () => {
     const dir = tmpProject();
     const specDir = join(dir, "specs", "export");
     mkdirSync(specDir, { recursive: true });
-    writeFileSync(join(specDir, "spec.md"), "- Build CSV export\n", "utf8");
+    writeFileSync(join(specDir, "spec.md"), "## Requirements\n- Build CSV export\n", "utf8");
     writeFileSync(join(specDir, "plan.md"), "Client-side only.\n", "utf8");
     writeFileSync(join(specDir, "tasks.md"), "- [ ] Add export button\n", "utf8");
 
@@ -460,12 +460,12 @@ describe("conductor-import-spec", () => {
     mkdirSync(join(dir, "docs", "superpowers", "plans"), { recursive: true });
     writeFileSync(
       join(dir, "docs", "superpowers", "specs", "2026-09-02-csv-export-design.md"),
-      "# CSV export design\n\n## What this is\n\nAdd a CSV export button to the report table.\nDo not add new API endpoints.\n",
+      "# CSV export design\n\n## Scope\n\nAdd a CSV export button to the report table.\nDo not add new API endpoints.\n",
       "utf8",
     );
     writeFileSync(
       join(dir, "docs", "superpowers", "plans", "2026-09-02-csv-export.md"),
-      "# CSV export plan\n\n## Tasks\n\n- [ ] Add the export button\n",
+      "# CSV export plan\n\n## Scope\n\n- [ ] Add the export button\n",
       "utf8",
     );
 

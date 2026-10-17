@@ -9,7 +9,13 @@ import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ChangeBudget, IntentContract } from "@vaultcompass/intent-guard-schema";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
-import { draftContract } from "./extract.js";
+import {
+  LABELLED_SCOPE_HEADINGS,
+  draftContractDetailed,
+  isLabelledScopeHeading,
+} from "./extract.js";
+import type { RuleReplacement } from "./constraints.js";
+import { suggestPathBudgets } from "./path-suggestions.js";
 import { describeBudgetPathIssues, validateBudgetPaths } from "./budget-paths.js";
 
 export type SpecBridgeFormat = "auto" | "spec-kit" | "kiro" | "superpowers";
@@ -37,6 +43,14 @@ export interface ImportedSpecContract {
   specDir: string;
   files: SpecBridgeFile[];
   contract: IntentContract;
+  /** out_of_scope items merged into a longer near-duplicate, for --verbose. */
+  replaced: RuleReplacement[];
+  /** "file: heading" for each labelled section read, in document order. */
+  sections: string[];
+  /** Set when no labelled section was found and the draft is empty. */
+  warnings: string[];
+  /** allowed_paths globs the labelled sections name, to suggest; never written. */
+  pathSuggestions: string[];
 }
 
 const SPEC_KIT_FILES = {
@@ -482,9 +496,62 @@ function assertBudgetValid(contract: IntentContract, path: string): void {
  * dropped the `#` so every heading read as an ordinary line. extract.ts strips
  * the marker itself once it has read the level.
  */
-function stripMarkdown(content: string): string {
+function cleanSpecLine(trimmed: string): string {
+  return trimmed
+    .replace(/^[-*]\s+\[[ xX]\]\s+/, "- ")
+    .replace(/^[-*]\s+/, "- ")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
+
+const SPEC_ATX_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
+const SPEC_BOLD_HEADING_RE = /^(\*\*|__)(.+?)\1\s*:?\s*$/;
+const SPEC_BOLD_LABEL_RE = /^(\*\*|__)(.+?)\1\s*:?\s+(.+)$/;
+const SPEC_COLON_LABEL_RE = /^([A-Za-z][^:]{2,60}):$/;
+const SPEC_BULLET_RE = /^(?:[-*+]|\d+[.)])\s+/;
+// A Gherkin block opener, as a line or a heading: everything under it is a
+// test scenario, not scope.
+const GHERKIN_BLOCK_RE = /^(?:Feature|Scenario(?:\s+Outline)?|Background|Examples|Rule)\s*:/;
+// A step written with a bold keyword ("**Given** x, **When** y"), in any case.
+const BOLD_STEP_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?(?:\*\*|__)(?:given|when|then|and|but)(?:\*\*|__)/i;
+// A plain step keyword, title case only: an EARS "WHEN x THE SYSTEM SHALL y"
+// requirement is upper case and stays. "Given" opens a run of steps; When,
+// Then, And and But are steps only inside one.
+const GIVEN_STEP_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?Given\s/;
+const NEXT_STEP_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?(?:When|Then|And|But|\*)\s/;
+
+export interface LabelledSpecText {
+  /** The labelled sections' lines, cleaned, with their headings. */
+  text: string;
+  /** The heading of each labelled section found, in document order. */
+  headings: string[];
+}
+
+/**
+ * Only the labelled scope sections of a spec (see LABELLED_SCOPE_HEADINGS),
+ * prose only. Through 1.9.0 the whole file was read, so a competitor survey
+ * or a Gherkin scenario became scope or a prohibition. A labelled `#` heading
+ * covers everything to the next heading of the same or a higher level,
+ * nested headings included, so a Non-goals heading under Scope still routes.
+ * A labelled bold or "Label:" pseudo-heading covers the list under it. Inside
+ * a section, Gherkin scenarios and steps and table rows are dropped.
+ *
+ * Fenced blocks are dropped, using the same fence toggle
+ * `extractConstraintsFromMarkdown` uses: a superpowers plan is mostly code,
+ * and source lines turned into acceptance criteria. `extractBudget` reads the
+ * raw file content, so dropping fences here does not hide a budget block.
+ * Heading markers are kept, because extraction routes by section.
+ */
+export function selectLabelledSections(content: string): LabelledSpecText {
   const lines: string[] = [];
+  const headings: string[] = [];
   let inFence = false;
+  // The open labelled section: its heading level (7 for a pseudo-heading).
+  let section: number | null = null;
+  // A Gherkin scenario heading's level, while its body is being skipped.
+  let scenario: number | null = null;
+  let inGherkinBlock = false;
+  let inSteps = false;
 
   for (const raw of content.split("\n")) {
     const trimmed = raw.trim();
@@ -493,28 +560,105 @@ function stripMarkdown(content: string): string {
       continue;
     }
     if (inFence) continue;
+    if (trimmed.length === 0) {
+      inGherkinBlock = false;
+      inSteps = false;
+      continue;
+    }
 
-    const line = trimmed
-      .replace(/^[-*]\s+\[[ xX]\]\s+/, "- ")
-      .replace(/^[-*]\s+/, "- ")
-      .replace(/`([^`]+)`/g, "$1")
-      .trim();
-    if (line.length > 0) lines.push(line);
+    const atx = trimmed.match(SPEC_ATX_RE);
+    if (atx) {
+      const level = atx[1].length;
+      const title = atx[2];
+      inGherkinBlock = false;
+      inSteps = false;
+      if (scenario !== null && level <= scenario) scenario = null;
+      if (section !== null && level <= section) section = null;
+      if (section === null && isLabelledScopeHeading(title)) {
+        section = level;
+        headings.push(title.replace(/[*_`]/g, "").trim());
+        lines.push(cleanSpecLine(trimmed));
+        continue;
+      }
+      if (section === null || scenario !== null) continue;
+      if (GHERKIN_BLOCK_RE.test(title)) {
+        scenario = level;
+        continue;
+      }
+      lines.push(cleanSpecLine(trimmed));
+      continue;
+    }
+    if (scenario !== null) continue;
+
+    // A pseudo-heading section holds its list only: the first line that is
+    // neither a bullet nor an indented continuation closes it.
+    if (section === 7 && !SPEC_BULLET_RE.test(trimmed) && raw === raw.trimStart()) {
+      section = null;
+    }
+    const pseudo = trimmed.match(SPEC_BOLD_HEADING_RE)?.[2] ?? trimmed.match(SPEC_COLON_LABEL_RE)?.[1];
+    if (section === null && pseudo && isLabelledScopeHeading(pseudo)) {
+      section = 7;
+      headings.push(pseudo.replace(/[*_`]/g, "").trim());
+      lines.push(cleanSpecLine(trimmed));
+      continue;
+    }
+    const label = trimmed.match(SPEC_BOLD_LABEL_RE);
+    if (section === null && label && isLabelledScopeHeading(label[2])) {
+      headings.push(label[2].replace(/[*_`:]/g, "").trim());
+      lines.push(cleanSpecLine(trimmed));
+      continue;
+    }
+    if (section === null) continue;
+
+    if (trimmed.startsWith("|")) continue;
+    if (GHERKIN_BLOCK_RE.test(trimmed)) {
+      inGherkinBlock = true;
+      continue;
+    }
+    if (inGherkinBlock) continue;
+    if (BOLD_STEP_RE.test(trimmed) || GIVEN_STEP_RE.test(trimmed)) {
+      inSteps = true;
+      continue;
+    }
+    if (inSteps && NEXT_STEP_RE.test(trimmed)) continue;
+    inSteps = false;
+
+    lines.push(cleanSpecLine(trimmed));
   }
 
-  return lines.join("\n");
+  return { text: lines.join("\n"), headings };
+}
+
+/** The single in_scope item of a draft imported from a spec with no labelled section. */
+export const NO_LABELLED_SCOPE_ITEM =
+  "No labelled scope section was found; replace this with the agreed scope";
+
+function noLabelledSectionWarning(files: SpecBridgeFile[]): string {
+  return (
+    `No labelled scope section found in ${files.map((file) => basename(file.path)).join(", ")}. ` +
+    `import-spec reads only sections headed ${LABELLED_SCOPE_HEADINGS.join(", ")} ` +
+    "(and their common spellings), and never builds a contract from the whole file. " +
+    "The draft is empty: add one of those headings to the spec, or write the contract by hand."
+  );
+}
+
+function importHeader(format: Exclude<SpecBridgeFormat, "auto">, label: string): string {
+  return `Import ${format} spec "${label}" into an Intent Guard Intent Contract.`;
 }
 
 function buildImportText(
   format: Exclude<SpecBridgeFormat, "auto">,
   label: string,
   files: SpecBridgeFile[],
-): string {
-  const parts = [
-    `Import ${format} spec "${label}" into an Intent Guard Intent Contract.`,
-  ];
+): { text: string; sections: string[]; selected: string } {
+  const parts = [importHeader(format, label)];
+  const sections: string[] = [];
+  const selectedTexts: string[] = [];
 
   for (const file of files) {
+    const selected = selectLabelledSections(file.content);
+    if (selected.headings.length === 0) continue;
+    sections.push(...selected.headings.map((heading) => `${basename(file.path)}: ${heading}`));
     const label =
       file.role === "requirements"
         ? "Requirements"
@@ -523,16 +667,17 @@ function buildImportText(
           : "Tasks";
     // A level-1 heading, not a plain line: it closes whatever section the
     // previous file ended in, so a Non-goals list at the end of one file
-    // cannot swallow the next file. Extraction reads it as "Requirements:",
-    // exactly the line this used to be.
-    parts.push(`# ${label}:\n${stripMarkdown(file.content)}`);
+    // cannot swallow the next file. Added after section selection, so this
+    // "Requirements:" heading never labels a file by itself.
+    parts.push(`# ${label}:\n${selected.text}`);
+    selectedTexts.push(selected.text);
   }
 
   // No closing "Human review is required ... Do not treat the imported
   // contract as approved." sentence any more: extraction read it as a rule,
   // and on a spec with no prohibitions of its own it was the contract's only
   // out_of_scope item. import-spec says it to the reader instead.
-  return parts.join("\n\n");
+  return { text: parts.join("\n\n"), sections, selected: selectedTexts.join("\n") };
 }
 
 export function importSpecContract(
@@ -558,8 +703,21 @@ export function importSpecContract(
       ? basename(files[0].path).replace(/\.md$/i, "")
       : basename(discovered.specDir);
 
-  const userText = buildImportText(discovered.format, label, files);
-  const contract = draftContract({ userText });
+  const built = buildImportText(discovered.format, label, files);
+  const ask = importHeader(discovered.format, label);
+  const warnings: string[] = [];
+  const { contract, replaced } = draftContractDetailed({ userText: built.text, ask });
+  if (built.sections.length === 0) {
+    // Nothing labelled: an empty draft and a warning, never a contract built
+    // from the whole file. The one in_scope item is a placeholder because the
+    // schema requires one.
+    warnings.push(noLabelledSectionWarning(files));
+    contract.in_scope = [NO_LABELLED_SCOPE_ITEM];
+    contract.out_of_scope = [];
+    contract.acceptance_criteria = [
+      { id: "ac-1", description: "Replace with the acceptance criteria agreed for this change", testable: true },
+    ];
+  }
 
   // Scoped to superpowers on purpose: a yaml fence in a Spec Kit or Kiro file
   // never carried this meaning before, and reading one now would change what
@@ -574,5 +732,10 @@ export function importSpecContract(
     ...discovered,
     files,
     contract,
+    replaced: built.sections.length === 0 ? [] : replaced,
+    sections: built.sections,
+    warnings,
+    // Suggestions only: never written into the draft's budget.
+    pathSuggestions: suggestPathBudgets(built.selected, projectRoot),
   };
 }

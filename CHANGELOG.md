@@ -7,6 +7,128 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+A minor release under docs/release/stability-policy.md: extraction output
+and drift classification change; the contract schema does not.
+
+What can newly block you, and what stops blocking:
+
+- **Stops blocking: an out_of_scope item whose only evidence is a keyword
+  inside a changed file's name.** "Do not change sync" against
+  `src/components/SyncStatus.tsx` used to soft-block; it is now a possible
+  finding marked "(file name only, not counted)". The demotion fires only
+  when the file name is the sole evidence. Any other evidence restores the
+  full 1.9.0 strength, name tokens included: a directory segment
+  (`src/middleware/auth.ts` against "Never touch the auth middleware"), a
+  path category (`package.json`), a slash path the item writes out, a word
+  of the item that names the file under the closed file-name rule below, or
+  a `--signals` match. The pre-commit hook and the GitHub Action pass no
+  signals, so there a path is the only evidence.
+- **Unchanged: constraints.** A constraint keeps its 1.9.0 strength, with no
+  file-name demotion: "Never modify billing" against `src/billing.ts` and
+  "Never edit the lockfile" against `pnpm-lock.yaml` block as before.
+- **Unchanged: a rule word that names the changed file.** Under the closed
+  file-name rule, a word of the rule, plain or backticked, that equals a
+  changed file's basename (`.env.local`, `CODEOWNERS`, `Dockerfile`,
+  `Makefile`, `LICENSE`, `id_rsa`), or the basename without its final
+  extension (`CHANGELOG` for `CHANGELOG.md`, `.env` for `.env.local`), or a
+  `*.ext` word whose extension ends the basename (`*.pem`), is a path match
+  and blocks as in 1.9.0.
+- **Can newly block: a rule with a leading negation.** "Don't modify
+  billing" used to dilute coverage with `don`; it is now matched on `modify
+  billing`, so a billing path that was a possible finding can block.
+- **Can newly block: a prohibition inside the ask.** The ask's sentences
+  that hold a prohibition marker anywhere ("Keep the change small and never
+  touch billing", "It must not change billing", "Then, do not modify
+  billing") are not agreed scope, and no ask token that an out_of_scope item
+  or a constraint uses is subtracted. Through 1.9.0 the ask's first sentence
+  was subtracted whole. A side effect: a bug description that extraction
+  reads as a prohibition ("Fix the tab never updated by sync" yields "never
+  updated by sync") is no longer cancelled by the ask and now blocks a
+  matching path; delete such an item from the draft before `freeze`.
+- **Changes what a re-imported spec carries** (see Changed): usually fewer
+  items. Review the list `import-spec` prints before `freeze`.
+
+### Added
+
+- **Path budget suggestions.** `extract` and `import-spec` print the paths
+  an ask names as suggested `budget.allowed_paths` globs, on stderr and in a
+  new `suggested_allowed_paths` JSON field. A slash path ending in a slash,
+  a known extension or a top-level directory, a file with a known
+  extension, and the exact name of a top-level directory qualify; URLs and
+  globs the budget matcher could never match do not. A suggestion is never
+  written into the draft.
+- **`--verbose` on `extract` and `import-spec`** prints each near-duplicate
+  rule a kept rule replaced; the JSON carries the same list as `replaced`.
+- **`import-spec` JSON gains `sections`** (each labelled section read, as
+  `<file>: <heading>`) **and `warnings`**.
+
+### Changed
+
+- **Rules are extracted from whole paragraphs and list items**, not from
+  physical lines, in `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` and cursor rules.
+  A hard line break inside a paragraph is a space; a blank line, a heading or
+  a list marker ends the unit. A rule is never a fragment of a sentence, and
+  a wrapped line holding "never" is no longer a critical rule on its own. A
+  unit over the schema's 300-character rule limit is judged one whole
+  sentence at a time, and an abbreviation such as "e.g." ends no sentence. A
+  line ending in a colon that introduces a list is not a rule. YAML front
+  matter is skipped.
+- **`original_ask` keeps the whole ask** instead of its first sentence, up
+  to the schema's 500 characters; a longer ask keeps its whole sentences and
+  ends with ` ...`. `import-spec` keeps its one-line header as the ask.
+- **Near-duplicate rules merge into the longer one**: identical once case,
+  whitespace, punctuation and the leading negation are folded, or one a
+  word-bounded part of the other with the same drift tokens. Constraints
+  merge only with the same polarity and keep the higher priority. A superset
+  with words of its own is kept beside the narrower rule, because folding it
+  in lowers drift coverage.
+- **`import-spec` reads only labelled sections** (Scope, In scope, Out of
+  scope, Non-goals, Requirements, Constraints, Acceptance criteria, Success
+  criteria and their common spellings) and drops Gherkin scenarios, steps
+  and table rows inside them. A spec with no labelled section yields an
+  empty draft and a warning naming the headings it looked for, never a
+  contract built from the whole file. Specs whose scope sits under other
+  headings (Goals, Design, Tasks) now import less; add a labelled heading.
+- **Drift matchers are built from what a rule prohibits**: leading No, Do
+  not, Don't, Never, Must not, Should not, SHALL NOT and their variants are
+  stripped before tokens are taken. Only paired emphasis markers are
+  removed, never an underscore inside an identifier (`payment_methods`,
+  `id_rsa`). The rule text is kept as written.
+- **Drift prefers path matches to file-name keywords, for out_of_scope
+  only** (see above). Documented in docs/cli-reference.md, Unified
+  intent-guard.
+- **What this did on three public repositories** (RickZee/ai-team at
+  0eba4d6, obra/superpowers at bb92a77, github/spec-kit at c6a4c18; counts
+  only, 1.9.0 then this release):
+  - Rules from `CLAUDE.md`, `AGENTS.md` and `GEMINI.md`: 5 then 5, 12 then
+    15, 2 then 2; sentence fragments 2 then 0 (all in spec-kit).
+  - Imported specs (12, 22 and 1): out_of_scope items 144 then 114, 228
+    then 88, 5 then 0; in_scope items 126 then 68, 219 then 72, 12 then 12;
+    Gherkin items 14 then 0 in superpowers; six of 35 specs had no labelled
+    section and now import as an empty draft with a warning.
+  - Every tracked file checked alone, with paths only, against each
+    imported contract. Out_of_scope pairs that block: 645 then 190
+    (ai-team), 252 then 39 (superpowers), 0 then 0 (spec-kit); of the pairs
+    that would block without the file-name demotion, 498 and 46 are
+    demoted. The same out_of_scope items scored as user-stated constraints,
+    where no demotion applies: 554 then 426 and 143 then 24 pairs block.
+    Both drops include the change in which items are imported, not only
+    the drift rules. The repositories' own prose rules, scored as
+    user-stated constraints, blocked 0 pairs before and after.
+  - These are noise probes over unrelated files, not a measure of correct
+    blocking.
+
+### Known limits
+
+- **A threat-model heading such as "In scope attackers" reads as an In
+  scope section.** Rename the heading or delete the imported items.
+- **Path suggestions are noisy on task-heavy specs**: one measured spec
+  yields 118 globs because its tasks file lists every file under a
+  Requirements heading. They are printed only.
+- **A descriptive "never" is still read as a prohibition** ("Fix the tab
+  never updated by sync"), and with the ask no longer cancelling it, it can
+  block an aligned change. Delete it from the draft.
+
 ### Security
 
 - The release workflow now installs, builds, tests and packs in a job that
