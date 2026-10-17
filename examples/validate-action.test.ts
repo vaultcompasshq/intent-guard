@@ -622,7 +622,7 @@ describe("action.yml installs the gate from outside the tree it judges", () => {
       "install",
       "-g",
       "--ignore-scripts",
-      "@vaultcompass/intent-guard@1.9.0",
+      "@vaultcompass/intent-guard@1.10.0",
     ]);
   });
 
@@ -961,7 +961,7 @@ describe("action.yml validates its inputs before a shell sees them", () => {
     // the run, a value beginning with a dot or ending in .tgz is read by npm
     // as a PATH, and a leading-zero string is invalid semver so npm reads it
     // as a dist-tag too.
-    expect(runValidate({ version: "1.9.0" }).status).toBe(0);
+    expect(runValidate({ version: "1.10.0" }).status).toBe(0);
     for (const rejected of [
       ".",
       "..",
@@ -1105,9 +1105,9 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   }
 
   // The same validate script, with the tag constant advanced by one minor
-  // version: the action as it will be the day a 1.10.0 gate ships and this tag
+  // version: the action as it will be the day a 1.11.0 gate ships and this tag
   // starts shipping it. NOT here because the rule is invisible on the shipped
-  // file -- it is visible, every published version below 1.9.0 is refused
+  // file -- it is visible, every published version below 1.10.0 is refused
   // there already -- but because this exercises the comparison at a boundary
   // the published set cannot reach today, where the minor leg of the
   // comparison does the work rather than the major leg.
@@ -1155,13 +1155,13 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
 
   it("refuses a below-tag pin on a pull request, on the shipped file", () => {
     // 1.5.1 is a real published version, well-formed, and it clears the shape
-    // check. It sits below the tag this action ships (1.9.0) and is refused
+    // check. It sits below the tag this action ships (1.10.0) and is refused
     // here rather than several steps later at the gate itself.
     const refused = runValidate({ version: "1.5.1" }, PULL_REQUEST_EVENT);
     expect(refused.status).toBe(1);
     // Both numbers, for the same reason the npm floor names both.
     expect(refused.stdout).toContain("1.5.1");
-    expect(refused.stdout).toContain("1.9.0");
+    expect(refused.stdout).toContain("1.10.0");
     expect(refused.stdout).toMatch(/pull request/);
     expect(refused.stdout).toContain("REMOVE the `version` input");
 
@@ -1186,7 +1186,7 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     const run = runValidateScript(future, { version: "1.5.2" }, PULL_REQUEST_EVENT);
     expect(run.status).toBe(1);
     expect(run.stdout).toContain("1.5.2");
-    expect(run.stdout).toContain("1.10.0");
+    expect(run.stdout).toContain("1.11.0");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
@@ -1194,13 +1194,13 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   it("refuses a pull request pinned to a lower patch at the same major.minor", () => {
     // The shipped tag's patch is 0, so no real published version can exercise
     // the same-minor-lower-patch arm of the comparison. Raising the tag's
-    // patch leg to 2 makes 1.9.1 (same major.minor, lower patch) a case that
+    // patch leg to 2 makes 1.10.1 (same major.minor, lower patch) a case that
     // arm alone must catch.
     const patched = scriptWithPatchOverride();
-    const run = runValidateScript(patched, { version: "1.9.1" }, PULL_REQUEST_EVENT);
+    const run = runValidateScript(patched, { version: "1.10.1" }, PULL_REQUEST_EVENT);
     expect(run.status).toBe(1);
-    expect(run.stdout).toContain("1.9.1");
-    expect(run.stdout).toContain("1.9.2");
+    expect(run.stdout).toContain("1.10.1");
+    expect(run.stdout).toContain("1.10.2");
     expect(run.stdout).toMatch(/pull request/);
     expect(run.stdout).toContain("REMOVE the `version` input");
   });
@@ -1220,9 +1220,10 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
   });
 
   it("allows pinning forward on a pull request, and orders numerically", () => {
-    // The helper advances the tag by one minor, so the floor here is 1.10.0.
+    // The helper advances the tag by one minor, so the floor here is 1.11.0.
+    // 1.11.0 and 1.12.0 order above 1.9.x numerically, not as text.
     const future = scriptWithFutureTag();
-    for (const ok of ["1.10.0", "1.10.1", "2.0.0", "10.0.0"]) {
+    for (const ok of ["1.11.0", "1.11.1", "1.12.0", "2.0.0", "10.0.0"]) {
       expect([
         ok,
         runValidateScript(future, { version: ok }, PULL_REQUEST_EVENT).status,
@@ -1238,11 +1239,11 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     expect(runValidate({ version: shipped }, PULL_REQUEST_EVENT).status).toBe(0);
     expect(runValidate({}, PULL_REQUEST_EVENT).status).toBe(0);
     // 1.10.0 is the case a lexicographic comparison gets wrong: it sorts
-    // below 1.9.0 as text and above it as a version.
-    for (const ok of ["1.9.0", "1.9.1", "1.10.0", "2.0.0"]) {
+    // below 1.9.0 as text and above it as a version. It is the shipped tag.
+    for (const ok of ["1.10.0", "1.10.1", "1.11.0", "2.0.0"]) {
       expect([ok, runValidate({ version: ok }, PULL_REQUEST_EVENT).status]).toEqual([ok, 0]);
     }
-    for (const older of ["1.8.1", "1.8.2"]) {
+    for (const older of ["1.9.0", "1.8.1"]) {
       expect([older, runValidate({ version: older }, PULL_REQUEST_EVENT).status]).toEqual([
         older,
         1,
