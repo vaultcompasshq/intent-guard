@@ -7,8 +7,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-A minor release under docs/release/stability-policy.md: extraction output
-and drift classification change; the contract schema does not.
+## [1.10.0] - 2026-10-17
+
+This is a minor release (1.10.0) under docs/release/stability-policy.md:
+extraction reads whole paragraphs, import-spec reads labelled sections only,
+and a file name alone is no longer drift, so what blocks changes (the
+before-and-after counts are in the entry below); the contract schema does
+not change. The version is bumped in this tree.
 
 What can newly block you, and what stops blocking:
 
