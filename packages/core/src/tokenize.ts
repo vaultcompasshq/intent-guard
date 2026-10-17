@@ -41,6 +41,45 @@ export const OUT_OF_SCOPE_QUALIFIER_TOKENS = new Set([
 
 const MIN_TOKEN_LENGTH = 3;
 
+// Leading negation markers of a rule. "don't" tokenizes to "don", "won't" to
+// "won", and "cannot" and "avoid" are ordinary tokens, so left in place they
+// became terms to match and diluted coverage. Stacked markers ("Never, do
+// not ...") are all removed.
+const LEADING_NEGATION_RE =
+  /^(?:no|do\s+not|don['’]?t|never|must\s+not|mustn['’]?t|should\s+not|shouldn['’]?t|shall\s+not|cannot|can['’]?t|will\s+not|won['’]?t|may\s+not|avoid)\b[\s,:;]*/i;
+
+// A paired emphasis marker around words: it opens and closes off a word
+// boundary, so the underscore inside payment_methods or id_rsa is never one.
+const EMPHASIS_RE = /(?<![A-Za-z0-9])(\*\*|__|\*|_)(?=\S)(.+?)(?<=\S)\1(?![A-Za-z0-9])/g;
+
+/**
+ * Markdown emphasis and code spans removed, identifiers left whole: "**Never**
+ * touch `payment_methods`" becomes "Never touch payment_methods".
+ */
+export function stripEmphasis(text: string): string {
+  let out = text.replace(/`/g, "");
+  for (;;) {
+    const next = out.replace(EMPHASIS_RE, "$2");
+    if (next === out) return out;
+    out = next;
+  }
+}
+
+/**
+ * The thing a rule prohibits: the rule with its list marker, emphasis and
+ * leading negation markers removed ("Don't modify billing" -> "modify
+ * billing"). Matchers are built from this; the rule text itself is kept as
+ * written everywhere else. A rule with no leading marker comes back trimmed.
+ */
+export function prohibitedSubject(rule: string): string {
+  let text = stripEmphasis(rule.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "")).trim();
+  for (;;) {
+    const next = text.replace(LEADING_NEGATION_RE, "").trim();
+    if (next === text || next.length === 0) return text;
+    text = next;
+  }
+}
+
 /**
  * Break text into normalized, meaningful tokens.
  *
@@ -240,6 +279,45 @@ export function slashJoinedPathHits(
     hits.push(key);
   }
   return hits;
+}
+
+/** The words of a rule as written, with quotes, backticks, brackets and trailing punctuation trimmed. */
+function ruleWords(rule: string): string[] {
+  return rule
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .replace(/^[`'"(\[<]+/, "")
+        .replace(/[`'")\]>,;:!?]+$/, "")
+        .replace(/\.$/, ""),
+    )
+    .filter(Boolean);
+}
+
+/**
+ * The closed file-name rule. A word of the rule, plain or backticked, names a
+ * changed file when it is exactly that file's basename (".env.local",
+ * "CODEOWNERS", "Dockerfile", "id_rsa"), or exactly the basename without its
+ * final extension ("CHANGELOG" for CHANGELOG.md, ".env" for .env.local,
+ * "secrets" for secrets.json), or a "*.ext" word whose extension ends the
+ * basename ("*.pem" for server.pem). Case-sensitive. Such a match is a path
+ * match, so the file-name tokens it rests on count. Nothing else about a file
+ * name is: a bare word found inside a name ("sync" in SyncStatus.tsx) is not.
+ */
+export function namesChangedFile(rule: string, changedPaths: string[]): boolean {
+  const words = ruleWords(rule);
+  if (words.length === 0) return false;
+  for (const path of changedPaths) {
+    const base = path.replace(/\\/g, "/").split("/").pop() ?? "";
+    if (!base) continue;
+    const dot = base.lastIndexOf(".");
+    const stem = dot > 0 ? base.slice(0, dot) : null;
+    for (const word of words) {
+      if (word === base || (stem !== null && word === stem)) return true;
+      if (/^\*\.[^./*]+$/.test(word) && base.length > word.length - 1 && base.endsWith(word.slice(1))) return true;
+    }
+  }
+  return false;
 }
 
 /**

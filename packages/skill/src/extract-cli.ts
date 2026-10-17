@@ -3,15 +3,23 @@ import { writeFileSync } from "node:fs";
 import { stringify } from "yaml";
 import {
   coachMessage,
-  draftContract,
+  draftContractDetailed,
   loadAllConstraints,
+  suggestPathBudgets,
   loadConfig,
   scorePrompt,
   validateProtectedPathFlag,
   writeContract,
 } from "@vaultcompass/intent-guard-core";
 import { validateIntentContract } from "@vaultcompass/intent-guard-schema";
-import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
+import {
+  isHelpFlag,
+  isVersionFlag,
+  missingValue,
+  pathSuggestionLine,
+  printUsage,
+  printVersion,
+} from "./usage.js";
 
 const USAGE = `Usage: intent-guard extract --text <user ask> [flags]
 
@@ -23,7 +31,9 @@ Flags:
   --project <root>           Project root (default: .)
   --protected-path <glob>    Add a glob to budget.protected_paths (repeatable)
   --dry-run                  Print the draft without writing it
-  --help, -h                 Show this help
+  --verbose                  Say on stderr which near-duplicate rule each
+                             kept rule replaced
+  --help, -h                Show this help
   --version, -v              Print the version
 
 With no --protected-path, the draft carries no budget block: budget is
@@ -61,6 +71,7 @@ function parseArgs(argv: string[]) {
   let userText = "";
   const protectedPaths: string[] = [];
   let dryRun = false;
+  let verbose = false;
   let help = false;
   let version = false;
 
@@ -80,6 +91,8 @@ function parseArgs(argv: string[]) {
       protectedPaths.push(value);
     } else if (arg === "--dry-run") {
       dryRun = true;
+    } else if (arg === "--verbose") {
+      verbose = true;
     } else if (arg === "--freeze") {
       console.error(
         "intent-guard-extract --freeze was removed. Extract only writes unfrozen drafts.\n" +
@@ -102,7 +115,7 @@ function parseArgs(argv: string[]) {
     }
   }
 
-  return { projectRoot, userText, protectedPaths, dryRun, help, version };
+  return { projectRoot, userText, protectedPaths, dryRun, verbose, help, version };
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -118,10 +131,22 @@ if (!args.userText) {
 
 const loaded = loadAllConstraints(args.projectRoot);
 const config = loadConfig(args.projectRoot);
-const draft = draftContract({
+const detailed = draftContractDetailed({
   userText: args.userText,
   constraints: loaded.constraints,
 });
+const draft = detailed.contract;
+// Near-duplicate merges, constraints first, then out_of_scope items.
+const replaced = [...(loaded.replaced ?? []), ...detailed.replaced];
+if (args.verbose) {
+  for (const entry of replaced) {
+    console.error(`replaced: "${entry.replaced}" (kept "${entry.kept}")`);
+  }
+}
+// Printed, never written: the draft keeps no budget unless --protected-path
+// asked for one.
+const suggestedAllowedPaths = suggestPathBudgets(args.userText, args.projectRoot);
+if (suggestedAllowedPaths.length > 0) console.error(pathSuggestionLine(suggestedAllowedPaths));
 const scored = scorePrompt(args.userText, {
   constraints: loaded.constraints.map((c) => c.rule),
   hasAcceptanceCriteria: /\b(verify|test|should|must|done)\b/i.test(args.userText),
@@ -152,6 +177,8 @@ console.log(
     frozen: false,
     next_step: "Review the draft, then approve with: intent-guard-freeze --project <root> [--approved-by <name>]",
     loaded_constraint_files: loaded.loadedFiles,
+    replaced,
+    suggested_allowed_paths: suggestedAllowedPaths,
     prompt_score: scored.score,
     needs_coaching: needsCoaching,
     coaching,

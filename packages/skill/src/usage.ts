@@ -97,6 +97,15 @@ export function listValueAt(argv: string[], i: number): string | undefined {
   return next;
 }
 
+/**
+ * The stderr line for path budgets the ask names. A suggestion, never a
+ * write: extract and import-spec leave the draft without a budget, and the
+ * person accepts by adding the globs to it before freeze.
+ */
+export function pathSuggestionLine(globs: string[]): string {
+  return `suggestion: budget.allowed_paths could be ${globs.join(", ")} (not written; add them to the draft's budget before freeze to accept)`;
+}
+
 /** True when this token, in flag position, is a help request. */
 export function isHelpFlag(arg: string): boolean {
   return arg === "--help" || arg === "-h";

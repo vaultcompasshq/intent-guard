@@ -17,13 +17,14 @@ function tmpProject(): string {
 const SPEC_BODY = [
   "# Online checks design",
   "",
-  "## What this is",
+  // Labelled headings: import-spec reads only labelled sections.
+  "## Scope",
   "",
   "Add an opt-in online registry check to the scanner.",
   "Escalate a low-severity typosquat finding when downloads confirm the asymmetry.",
   "Do not enable the online check by default.",
   "",
-  "## Acceptance",
+  "## Acceptance criteria",
   "",
   "Verify a cached lookup is reused within the cache window.",
   "",
@@ -81,6 +82,7 @@ describe("spec bridge", () => {
       join(specDir, "spec.md"),
       [
         "# Photo albums",
+        "## Requirements",
         "- Build album grouping by date",
         "- Users can drag photos between albums",
         "- Albums must never be nested inside other albums",
@@ -205,7 +207,9 @@ describe("spec bridge: heading structure reaches extraction", () => {
   it("ends a section at the file boundary, so the next file is not swallowed", () => {
     const dir = kiroProject({
       "requirements.md": ["# Requirements", "## Out of scope", "- Rate limiting the public API"].join("\n"),
-      "tasks.md": ["- [ ] Add the auth token check to every route", "- [ ] Write the threat model section"].join("\n"),
+      // An unclassified bold pseudo-heading changes nothing in extraction, so
+      // it is the file boundary, not this label, that closes Out of scope.
+      "tasks.md": ["**Scope**", "- [ ] Add the auth token check to every route", "- [ ] Write the threat model section"].join("\n"),
     });
     const { contract } = importSpecContract(dir, {
       format: "kiro",
@@ -720,7 +724,7 @@ describe("spec bridge: superpowers", () => {
         plan: [
           "# Online checks implementation plan",
           "",
-          "## Tasks",
+          "## Scope",
           "",
           "- [ ] Port the registry client into core",
           "",

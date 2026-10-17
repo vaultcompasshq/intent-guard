@@ -68,6 +68,61 @@ thresholds live on `drift.thresholds` in `.intent-guard/config.yaml`. A
 increment, when the constraint's `source` is a prose rules file (`CLAUDE.md`,
 `AGENTS.md`, `GEMINI.md`, cursor rules). See `intent-guard check` below.
 
+**An out_of_scope match whose only evidence is a file-name keyword is not
+counted.** A rule "Do not change sync" and a changed
+`src/components/SyncStatus.tsx` share only `sync`, from the file name, so the
+finding is recorded as `partial` with "(file name only, not counted)" in its
+message and scores 0. The demotion fires only when the file name is the
+sole evidence. Any other evidence and the full strength counts, the name
+tokens included: a directory segment (`src/middleware/auth.ts` against
+"Never touch the auth middleware" is strong), a path-category token
+(`package.json` is a manifest), a slash fragment the item writes out, a word
+of the item that names the file under the closed file-name rule below, or a
+match in `--signals`. The pre-commit hook (`check --staged`) and the GitHub
+Action pass no `--signals`, so in those runs a changed path is the only
+evidence there is.
+
+**Constraints are never demoted.** A constraint's match keeps the strength
+it had in 1.9.0, file name included: "Never modify billing" against
+`src/billing.ts` and "Never edit the lockfile" against `pnpm-lock.yaml`
+block.
+
+**The closed file-name rule.** This is the rule an author can rely on to
+guard a file by name. A word of an out_of_scope item, written plain or in
+backticks, names a changed file when it is, case-sensitively:
+
+- exactly the file's basename: `.env.local`, `.env.production`,
+  `CODEOWNERS`, `Dockerfile`, `Makefile`, `LICENSE`, `id_rsa`,
+  `schema.prisma`;
+- exactly the basename without its final extension: `CHANGELOG` names
+  `CHANGELOG.md`, `.env` names `.env.local`, `secrets` names
+  `secrets.json`;
+- a `*.ext` word whose extension ends the basename: `*.pem` names
+  `server.pem`.
+
+Such a word makes the match a path match, so it is never demoted. Nothing
+else about a file name is: a word found inside a longer name (`sync` in
+`SyncStatus.tsx`) is not. A `protected_paths` budget is the firmer guard.
+
+**Matchers are built from what a rule prohibits.** Leading negation markers
+(No, Do not, Don't, Never, Must not, Should not, SHALL NOT, Cannot, Won't,
+Avoid and their variants, stacked or not) are stripped before tokens are
+taken, so "Don't modify billing" matches on `modify` and `billing`, not on
+`don`. Only paired emphasis markers (`**x**`, `_x_`) and backticks are
+removed; an underscore inside an identifier (`payment_methods`, `id_rsa`)
+stays. The rule text itself is kept as written, in the contract and in the
+finding.
+
+**The ask never cancels a rule it produced.** in_scope tokens are subtracted
+from each item before matching, as before. From `original_ask`, only the
+sentences with no prohibition marker anywhere in them (no, not, never,
+don't, cannot, won't, avoid and the like) are agreed scope, and even from
+those a token is not subtracted when an out_of_scope item or a constraint
+uses it. So "Add a theme toggle. Keep the change small and never touch
+billing." still blocks `src/billing/invoice.ts`. A bug description that
+extraction reads as a prohibition ("never updated by sync") is not
+cancelled either; delete it from the draft.
+
 A long prose rule cannot be matched lexically by a path: a 1-in-8 overlap
 is none by design. Secrets and `.env` files are vault-guard's job, not a
 filename special case here. Constraint-level path globs are the planned
@@ -89,6 +144,7 @@ separate (`intent-guard-freeze`).
 | `--text "<ask>"` | the user's ask (required) |
 | `--protected-path <glob>` | append a glob to `budget.protected_paths` (repeatable; syntax under [Glob syntax](#glob-syntax)) |
 | `--dry-run` | print the draft JSON, write nothing |
+| `--verbose` | on stderr, name each near-duplicate rule that a kept rule replaced |
 
 Each `--protected-path` value must be a relative glob as git would print the
 path: no leading slash, no backslash, no `..` segment, no `.` segment other
@@ -102,7 +158,49 @@ contract where it would match nothing. Without `--protected-path`, the draft car
 [Change budget](#change-budget)).
 
 JSON: `valid`, `written_path`, `frozen` (always false), `next_step`,
-`prompt_score`, `needs_coaching`, `coaching`, `contract_yaml`.
+`replaced`, `suggested_allowed_paths`, `prompt_score`, `needs_coaching`,
+`coaching`, `contract_yaml`.
+
+`original_ask` is the whole ask, whitespace folded. An ask longer than 500
+characters (the schema's limit) keeps as many whole sentences as fit and
+ends with ` ...`; only a first sentence that alone is too long is cut, at a
+word boundary.
+
+**Near-duplicate rules are merged.** Two rules merge when they are identical
+once case, whitespace, punctuation and the leading negation marker are
+folded ("Never touch billing." and "Do NOT touch billing"), or when one is a
+prefix or a word-bounded part of the other and both carry the same drift
+tokens ("PDF export" and "Do not add any PDF export"). The longer one is
+kept, in the place of the one that came first. Constraints merge only with
+the same polarity, so "Use the shared logger" and "Never use the shared
+logger" both stay, and the kept constraint carries the higher priority. A
+superset with words of its own is not a duplicate: "Do not touch billing"
+stays beside "Do not touch billing (Stripe or Braintree) code", because
+folding it in would lower drift coverage on a billing path from 0.5 to 0.25.
+Every merge is listed in `replaced` (`kept`, `replaced`), and `--verbose`
+prints each as `replaced: "<rule>" (kept "<rule>")`.
+
+**Rules are read from whole paragraphs and list items.** In `AGENTS.md`,
+`CLAUDE.md`, `GEMINI.md` and cursor rules, a hard line break inside a
+paragraph is a space; a blank line, a heading, a list marker, a fence, a
+table or a blockquote ends the unit, and each unit is judged once. A unit
+longer than 300 characters (the schema's rule limit) is judged one whole
+sentence at a time; an abbreviation such as "e.g.", "i.e." or "etc." ends no
+sentence. A rule is never a fragment of a sentence. A line ending in a colon
+that introduces a list ("You must follow these rules:") is not a rule; its
+items are. YAML front matter is skipped.
+
+**Path budget suggestions.** A token in the ask that looks like a path is
+printed as a suggested `budget.allowed_paths` glob, on stderr as
+`suggestion: budget.allowed_paths could be ... (not written; ...)` and in
+`suggested_allowed_paths`. It is never written into the draft: add the ones
+you want to the draft's budget before `freeze`. A token qualifies when it
+contains a slash and ends in one, ends in a known extension, or starts with
+a top-level directory of the project (`src/parser/` becomes `src/parser/**`);
+when it has a known extension alone (`README.md`); or when it is exactly the
+name of a top-level directory (`packages` becomes `packages/**`). A URL,
+`read/write`, and anything the budget matcher could never match (a leading
+`/`, a `..` segment, a brace) are not suggested.
 
 ## intent-guard import-spec / intent-guard-import-spec
 
@@ -121,13 +219,49 @@ spec system: review the draft, edit if needed, then run `intent-guard freeze`.
 | `--spec <path>` | superpowers: the design spec markdown file |
 | `--plan <path>` | superpowers: the plan markdown file |
 | `--dry-run` | print the draft JSON, write nothing |
+| `--verbose` | on stderr, name each near-duplicate item that a kept item replaced |
 
 Discovery checks Spec Kit-style `specs/<feature>/spec.md`, `plan.md`,
 `tasks.md` and `.specify/specs/<feature>/...`; Kiro-style
 `.kiro/specs/<feature>/requirements.md` or `bugfix.md`, `design.md`, and
 `tasks.md`; then superpowers-style `docs/superpowers/`. JSON includes `format`,
 `spec_dir`, `imported_files`, `written_path`, `frozen: false`, `next_step`,
-`review` (`notice`, `in_scope`, `out_of_scope`), and `contract_yaml`.
+`review` (`notice`, `in_scope`, `out_of_scope`), `sections`, `warnings`,
+`suggested_allowed_paths`, `replaced`, and `contract_yaml`. `original_ask`
+is the importer's one-line header (`Import <format> spec "<label>" into an
+Intent Guard Intent Contract.`), never the spec body. Near-duplicates merge
+and path budgets are suggested exactly as for `extract`.
+
+### Only labelled sections are read
+
+`import-spec` reads only sections headed Scope, In scope, Out of scope,
+Non-goals, Requirements, Constraints, Acceptance criteria or Success
+criteria, and their common spellings: "Project scope", "Scope summary",
+"Functional requirements", Kiro's "Requirement 1: Export", "Design
+constraints", every out-of-scope spelling listed below (Not in scope, Won't,
+Excluded, Deferred work, Future work), any case, numbering and a trailing
+parenthetical ignored. "Requirements Document", the title Kiro gives a whole
+file, is not one. A `#` heading's section runs to the next heading of the
+same or a higher level, nested headings included; a bold or `Label:`
+pseudo-heading covers the list under it. Everything else in the file (an
+introduction, a background, a competitor survey, a design discussion, a
+task list under a "Tasks" heading) is not read. `sections` lists each
+section read as `<file>: <heading>`.
+
+Inside a labelled section, Gherkin is dropped: a `Feature:`, `Scenario:`,
+`Scenario Outline:`, `Background:`, `Examples:` or `Rule:` line and the
+block under it, a `Scenario:` heading and its body, a run of steps that
+opens with a title-case `Given`, and any step with a bold keyword
+(`**Given** x, **When** y, **Then** z`). An upper-case EARS requirement
+("WHEN x THE SYSTEM SHALL y") is a requirement and is kept, and so is a
+prose line that merely starts with When. Table rows are dropped.
+
+A spec with no labelled section at all yields an empty draft: no
+`out_of_scope`, one placeholder `in_scope` item saying so, and one
+placeholder acceptance criterion. A `warnings` entry, also printed on
+stderr as `warning: ...`, names the files and the headings it looked for.
+It is never a contract built from the whole file. Add one of those headings,
+or write the contract by hand.
 
 Every run also prints, on stderr, the line "Review each item; polarity is
 inferred from headings and modals and may be wrong." followed by every

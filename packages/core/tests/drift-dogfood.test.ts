@@ -28,19 +28,27 @@ describe("drift replay regressions", () => {
     expect(drift.categories.scope_creep).toBe(0);
   });
 
-  it("sync replay: aligned sync paths still pass", () => {
+  it("sync replay: a bug description read as a prohibition is no longer cancelled by the ask", () => {
     const contract = draftContract({
       userText:
         "Fix Items tab never updated by sync: add refreshItemsRemote. Fix export column unformatted values. Add tests in items-summary.test.ts. Do not change integration token flow or webhook handlers.",
     });
+    // Extraction reads "never updated by sync" as an out_of_scope item. Through
+    // 1.9.0 the ask's own first sentence subtracted "sync", which left that
+    // item dead and this aligned change passing. An ask may no longer cancel
+    // an item it produced (a real "never touch billing" was cancelled the same
+    // way), so the pseudo-prohibition now blocks until a reviewer deletes it
+    // from the draft. Known false positive, pinned so a change here is seen.
+    expect(contract.out_of_scope).toContain("never updated by sync");
+    const paths = ["apps/web/lib/sync.ts", "apps/web/lib/templates/items-summary.ts"];
+    expect(scoreDrift(contract, { changedPaths: paths }).action).toBe("soft_block");
 
-    const drift = scoreDrift(contract, {
-      changedPaths: [
-        "apps/web/lib/sync.ts",
-        "apps/web/lib/templates/items-summary.ts",
-      ],
-    });
-    expect(drift.action).toBe("proceed");
+    // With the pseudo-prohibition deleted from the draft, the aligned change passes.
+    const reviewed = {
+      ...contract,
+      out_of_scope: contract.out_of_scope.filter((item) => !/never updated by sync/.test(item)),
+    };
+    expect(scoreDrift(reviewed, { changedPaths: paths }).action).toBe("proceed");
   });
 
   it("relink fix replay: meta refactor constraint does not block aligned fix", () => {

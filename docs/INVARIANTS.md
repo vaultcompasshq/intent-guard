@@ -535,28 +535,28 @@ the moved pointer is committed`.
 
 ## Spec extraction is heading-aware
 
-`segmentForExtraction` (`packages/core/src/extract.ts:687`) runs before any
-clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:492`
-and `packages/core/src/extract.ts:494`) route their bullets and sentences to
+`segmentForExtraction` (`packages/core/src/extract.ts:771`) runs before any
+clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:540`
+and `packages/core/src/extract.ts:542`) route their bullets and sentences to
 `out_of_scope` only. A child heading with no kind of its own is neutral, and a
 classified bold or colon pseudo-heading covers only the list under it
-(`packages/core/src/extract.ts:718`). In a problem section
-(`packages/core/src/extract.ts:503`; Introduction is not one) only explicit
-prohibitions survive (`packages/core/src/extract.ts:597`, applied at
-`packages/core/src/extract.ts:771`). User story lines yield no prohibitions
-(`packages/core/src/extract.ts:776`). Table rows are skipped
-(`packages/core/src/extract.ts:723`). The positive-modal exemption is judged
-per clause (`packages/core/src/extract.ts:603`) and covers only a "with no
-<resource>" phrase (`packages/core/src/extract.ts:624`,
-`packages/core/src/extract.ts:644`). out_of_scope is ranked routed non-goals,
+(`packages/core/src/extract.ts:801`). In a problem section
+(`packages/core/src/extract.ts:551`; Introduction is not one) only explicit
+prohibitions survive (`packages/core/src/extract.ts:681`, applied at
+`packages/core/src/extract.ts:855`). User story lines yield no prohibitions
+(`packages/core/src/extract.ts:860`). Table rows are skipped
+(`packages/core/src/extract.ts:807`). The positive-modal exemption is judged
+per clause (`packages/core/src/extract.ts:687`) and covers only a "with no
+<resource>" phrase (`packages/core/src/extract.ts:708`,
+`packages/core/src/extract.ts:728`). out_of_scope is ranked routed non-goals,
 then explicit prohibitions, then the rest, and capped at the schema's 12
-(`packages/core/src/extract.ts:842`, `packages/core/src/extract.ts:872`);
+(`packages/core/src/extract.ts:926`, `packages/core/src/extract.ts:977`);
 pinned by `ranks routed non-goals first, then explicit prohibitions, then the
 rest`. At that cap a long spec can lose explicit rules past the twelfth item;
 see the CHANGELOG known limits.
 import-spec keeps heading markers and opens each file with a level-1 heading
 so a section never crosses a file boundary
-(`packages/core/src/spec-bridge.ts:528`). Pinned in
+(`packages/core/src/spec-bridge.ts:672`). Pinned in
 `packages/core/tests/extract-headings.test.ts` (every rule has its own
 `describe`, and `every prohibition the base build kept is still kept` runs the
 2026-10-13 reviewer probe cases against the base build's recorded output) and
@@ -567,9 +567,113 @@ importer's own review reminder into an out_of_scope item`.
 
 This makes polarity right more often; it does not make it verified.
 `import-spec` prints every item with a review notice
-(`packages/skill/src/import-spec-cli.ts:179`, pinned by `lists every extracted
+(`packages/skill/src/import-spec-cli.ts:192`, pinned by `lists every extracted
 in_scope and out_of_scope item with a polarity warning` in
 `packages/skill/tests/cli.test.ts`).
+
+## A rule is never a sentence fragment
+
+`extractConstraintsFromMarkdown` judges units from `markdownUnits`
+(`packages/core/src/constraints.ts:231`), never physical lines: a line that
+is not blank, a heading, a fence, a list marker or a switch into or out of a
+table or blockquote continues the open unit
+(`packages/core/src/constraints.ts:283`). A unit over the schema's
+300-character rule limit is judged one whole sentence at a time
+(`packages/core/src/constraints.ts:343`), and an abbreviation such as "e.g."
+ends no sentence. A unit ending in a colon right before a list is not a rule
+(`packages/core/src/constraints.ts:336`). So every rule is a whole paragraph,
+a whole list item, or a whole sentence of one. Pinned in
+`packages/core/tests/extraction-review-fixes.test.ts` by `does not turn an
+intro line ending in a colon before a list into a rule` and `does not end a
+sentence at e.g. when splitting a long paragraph`, and in
+`packages/core/tests/extraction-quality.test.ts` by `joins a hard-wrapped
+paragraph into one rule, never a fragment`, `joins a wrapped list item and
+keeps the next item separate`, `does not mark the continuation line of a
+wrapped rule critical on its own` and `splits a paragraph too long to be one
+rule into whole sentences only`.
+
+Near-duplicates merge in `dedupeBy` (`packages/core/src/constraints.ts:94`)
+only with the same polarity (`packages/core/src/constraints.ts:110`), and a
+superset absorbs a rule only when both carry the same drift tokens
+(`packages/core/src/constraints.ts:113`), because folding a narrower rule into
+a wider one lowers drift coverage. Pinned by `never merges rules of opposite
+polarity` and `keeps both when the superset has words of its own, so the
+narrower matcher survives`.
+
+## import-spec never builds a contract from unlabelled text
+
+`selectLabelledSections` (`packages/core/src/spec-bridge.ts:545`) passes on
+only the lines of labelled sections (`isLabelledScopeHeading`,
+`packages/core/src/extract.ts:593`, over `LABELLED_SCOPE_RE` at
+`packages/core/src/extract.ts:582` and the out-of-scope spellings); every
+other line is dropped (`packages/core/src/spec-bridge.ts:611`), and a file
+with no labelled section contributes nothing
+(`packages/core/src/spec-bridge.ts:660`; pinned by `does not read an
+unlabelled file whole beside a labelled one`). Inside a
+section, table rows (`packages/core/src/spec-bridge.ts:613`) and Gherkin
+steps (`packages/core/src/spec-bridge.ts:619`) are dropped. With no labelled
+section in any file, the draft is emptied to one placeholder in_scope item,
+no out_of_scope and one placeholder acceptance criterion, and a warning
+names the headings looked for (`packages/core/src/spec-bridge.ts:710`;
+printed at `packages/skill/src/import-spec-cli.ts:193`). Pinned in
+`packages/core/tests/extraction-quality.test.ts` by `ignores prose outside a
+labelled section, such as a competitor survey` and `yields an empty contract
+and a warning naming the headings it looked for when nothing is labelled`,
+and in `packages/skill/tests/extraction-quality-cli.test.ts` by `warns on
+stderr and in JSON, names the headings, and lists the sections it read`.
+
+Path budgets an ask names are suggested only, never written: the
+suggestion is computed at `packages/core/src/spec-bridge.ts:739` and printed
+at `packages/skill/src/extract-cli.ts:149`; pinned by `never writes a
+suggestion into the draft` and `extract prints suggested allowed_paths and
+writes no budget`.
+
+## A file-name keyword match alone is not drift, for out_of_scope only
+
+Drift reads only the changed paths and the caller's `--signals`. The
+pre-commit hook runs `check --staged` with no signals
+(`packages/core/src/hook.ts:169`), and the GitHub Action builds its `check`
+arguments with `--paths` and no signals (`action.yml:671`, `action.yml:719`),
+so where the gate blocks, a path is the only evidence there is.
+
+`targetTokens` (`packages/core/src/drift.ts:171`) builds a second token set
+without the tokens that come only from a changed file's own name: directory
+segments (`packages/core/src/drift.ts:195`), path-category tokens and signal
+tokens are in it. For an out_of_scope item, the match is demoted to partial
+and not counted only when it has no evidence at all outside the file name: no
+token in that second set, no slash path, and no word of the item naming the
+file under the closed rule in `namesChangedFile`
+(`packages/core/src/tokenize.ts:307`: exactly the basename, the basename
+without its final extension, or a `*.ext` word). That check is
+`packages/core/src/drift.ts:299`; when there is other evidence, the full
+strength counts, name tokens included (`packages/core/src/drift.ts:305`).
+Constraints are never demoted and keep the 1.9.0 strength
+(`packages/core/src/drift.ts:343`).
+
+Matchers are built from `prohibitedSubject`
+(`packages/core/src/tokenize.ts:74`), the rule without its leading negation;
+`stripEmphasis` (`packages/core/src/tokenize.ts:59`) removes only paired
+emphasis markers and backticks, never an underscore inside an identifier.
+From `original_ask`, only sentences with no prohibition marker are agreed
+scope (`askScopeSentences`, `packages/core/src/extract.ts:106`), and an ask
+token that an out_of_scope item or a constraint uses is never subtracted
+(`packages/core/src/drift.ts:228`).
+
+This changes what blocks: an out_of_scope match whose only evidence was a
+file-name keyword used to soft-block. Pinned in
+`packages/core/tests/extraction-quality.test.ts` by `does not count a match
+on the file name only, and says why`, `still counts a match on a directory of
+the path`, `still counts a keyword match in the content signals`, `still
+counts a rule that names the path itself`, `counts a word that names the
+changed file under the closed rule, and a *.ext word` and `does not demote a
+constraint: a file name is often a constraint's only evidence`; in
+`packages/core/tests/extraction-review-fixes.test.ts` by every case of the
+`a rule token equal to a changed file's name is a path match`, `constraints
+keep their full strength; the name-only demotion is out_of_scope only`, `an
+underscore inside an identifier is part of the identifier` and `a
+prohibition in the ask is never subtracted as agreed scope` groups; and in
+`packages/core/tests/match-strength.test.ts` by `is strong when Never commit
+.env files is touched by apps/web/.env.local`.
 
 ## SKILL.md commands run from an installed package
 

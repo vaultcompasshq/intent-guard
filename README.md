@@ -69,7 +69,18 @@ wildcards are `*`, `**` and `?` only, see
 [Glob syntax](docs/cli-reference.md#glob-syntax)) adds
 `protected_paths` to the draft, `intent-guard import-spec` can pull a full
 budget block from a fenced yaml block in a superpowers spec, and otherwise the
-drafted contract is hand-edited before `intent-guard freeze`.
+drafted contract is hand-edited before `intent-guard freeze`. Both `extract`
+and `import-spec` print the paths an ask names as suggested `allowed_paths`
+globs; a suggestion is never written into the draft.
+
+For out_of_scope items, drift prefers path matches to file-name keywords:
+when a keyword inside a changed file's name ("sync" in `SyncStatus.tsx`) is
+the only evidence, the finding is reported as possible and not counted. Any
+other evidence (a directory, a path the item writes out, a word naming the
+file exactly, such as `Dockerfile` or `.env.local`) keeps the full strength.
+Constraints are never demoted. The hook and the Action pass no signals, so
+there a path is the only evidence. See
+[the drift rules](docs/cli-reference.md#unified-intent-guard).
 
 What it does not do is read the diff. It sees which files a change touched,
 never what changed inside them, so work that stays within the approved paths
@@ -78,8 +89,11 @@ real gap in this design. The `--signals` and `--message` flags soften it
 rather than close it: they are free text supplied by whatever is calling the
 gate, so they are only as honest as the caller. Intent Guard does not plan,
 write code, or review it either. `intent-guard import-spec` imports Spec Kit,
-Kiro, and superpowers artifacts as a draft contract, and the contract itself
-is plain YAML any model can read. See [integrations/](./integrations).
+Kiro, and superpowers artifacts as a draft contract, reading only their
+labelled Scope, Out of scope, Non-goals, Requirements, Constraints and
+acceptance sections (a spec with none yields an empty draft and a warning),
+and the contract itself is plain YAML any model can read. See
+[integrations/](./integrations).
 
 ```
 User conversation

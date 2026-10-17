@@ -1,4 +1,5 @@
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
+import { askScopeSentences } from "./extract.js";
 import { findingFingerprint } from "./fingerprint.js";
 import { DRIFT_WEIGHTS, type DriftAction } from "./rubric.js";
 import {
@@ -8,12 +9,15 @@ import {
 import {
   CONSTRAINT_NOISE_TOKENS,
   discriminatingTokens,
+  namesChangedFile,
   intersectingTokens,
   matchStrength,
   outOfScopeTouch,
   pathSegmentTokens,
+  prohibitedSubject,
   slashJoinedPathHits,
   tokenize,
+  tokensMatch,
 } from "./tokenize.js";
 
 export interface DriftSignals {
@@ -158,29 +162,71 @@ function pathSemanticTokens(path: string): string[] {
   return tokens;
 }
 
-/** Union of tokens describing what the work touched (paths + signals). */
-export function targetTokens(input: DriftSignals): { all: Set<string>; pathSegs: Set<string> } {
+/**
+ * Union of tokens describing what the work touched (paths + signals).
+ * `beyondName` is the same union without the tokens that come only from a
+ * changed file's own name: a directory segment, a path-category token and a
+ * signal all count, the file name alone does not.
+ */
+export function targetTokens(input: DriftSignals): {
+  all: Set<string>;
+  pathSegs: Set<string>;
+  beyondName: Set<string>;
+  beyondNameSegs: Set<string>;
+} {
   const all = new Set<string>();
   const pathSegs = new Set<string>();
+  const beyondName = new Set<string>();
+  const beyondNameSegs = new Set<string>();
   for (const path of input.changedPaths ?? []) {
+    const normalized = path.replace(/\\/g, "/");
+    const dir = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : "";
     for (const t of tokenize(path)) all.add(t);
-    for (const t of pathSemanticTokens(path)) all.add(t);
+    for (const t of pathSemanticTokens(path)) {
+      all.add(t);
+      // A category is read from the path's shape (package.json is a
+      // manifest), not a keyword in a name, so it counts.
+      beyondName.add(t);
+    }
     for (const t of pathSegmentTokens(path)) {
       all.add(t);
       pathSegs.add(t);
     }
+    for (const t of tokenize(dir)) beyondName.add(t);
+    for (const t of pathSegmentTokens(dir)) {
+      beyondName.add(t);
+      beyondNameSegs.add(t);
+    }
   }
   for (const signal of input.signals ?? []) {
-    for (const t of tokenize(signal)) all.add(t);
+    for (const t of tokenize(signal)) {
+      all.add(t);
+      beyondName.add(t);
+    }
   }
-  return { all, pathSegs };
+  return { all, pathSegs, beyondName, beyondNameSegs };
 }
+
+const FILE_NAME_ONLY = " (file name only, not counted)";
 
 /** Tokens describing the agreed work -- used to subtract non-discriminating tokens. */
 function scopeTokens(contract: IntentContract): Set<string> {
   const all = new Set<string>();
-  for (const item of [...contract.in_scope, contract.original_ask]) {
+  for (const item of contract.in_scope) {
     for (const t of tokenize(item)) all.add(t);
+  }
+  // original_ask holds the whole ask, not its first sentence. Only its
+  // sentences with no prohibition marker describe agreed work, and even from
+  // those a token is never subtracted when an out_of_scope item or a
+  // constraint uses it: the ask must not cancel a rule it produced.
+  const ruleTokens = new Set<string>();
+  for (const text of [...contract.out_of_scope, ...contract.constraints.map((c) => c.rule)]) {
+    for (const t of tokenize(prohibitedSubject(text))) ruleTokens.add(t);
+  }
+  for (const sentence of askScopeSentences(contract.original_ask)) {
+    for (const t of tokenize(sentence)) {
+      if (![...ruleTokens].some((r) => tokensMatch(r, t))) all.add(t);
+    }
   }
   return all;
 }
@@ -215,7 +261,7 @@ export function scoreDrift(
   const thresholds = { ...DEFAULT_THRESHOLDS, ...options.thresholds };
   const hardBlockCritical = options.hard_block_on_critical_constraints ?? true;
 
-  const { all: target, pathSegs } = targetTokens(input);
+  const { all: target, pathSegs, beyondName, beyondNameSegs } = targetTokens(input);
   const scope = scopeTokens(contract);
 
   // Scope creep: out-of-scope items touched by the work.
@@ -226,7 +272,8 @@ export function scoreDrift(
   );
 
   for (const item of contract.out_of_scope) {
-    const discriminating = discriminatingTokens(item, scope);
+    // Matchers come from what the item prohibits, not its negation word.
+    const discriminating = discriminatingTokens(prohibitedSubject(item), scope);
     const slashHits = slashJoinedPathHits(item, input.changedPaths ?? []);
     const tokenHits =
       discriminating.size === 0
@@ -237,11 +284,25 @@ export function scoreDrift(
     // matched only when the overlap is empty.
     const matched = tokenHits.length > 0 ? tokenHits : slashHits;
     if (matched.length === 0) continue;
-    const strength =
+    const fullStrength =
       slashHits.length > 0
         ? "strong"
         : matchStrength(discriminating, matched, thresholds);
-    if (strength === "none") continue;
+    if (fullStrength === "none") continue;
+    // Path matches are preferred over file-name keywords, for out_of_scope
+    // items only. When the changed file's own name is the SOLE evidence
+    // ("SyncStatus.tsx" against "Do not change sync"), the finding is
+    // reported as partial and not counted. Any other evidence (a directory
+    // segment, a path category, a slash path, a word of the item that names
+    // the file under the closed rule in namesChangedFile, a signal) and the
+    // full strength counts, name tokens included.
+    const otherEvidence =
+      slashHits.length > 0 ||
+      namesChangedFile(item, input.changedPaths ?? []) ||
+      (discriminating.size > 0 &&
+        outOfScopeTouch(discriminating, beyondName, beyondNameSegs).length > 0);
+    const nameOnly = !otherEvidence;
+    const strength = nameOnly ? "partial" : fullStrength;
     if (strength === "strong") {
       scopeHits += 1;
       // Overlap with an acceptance criterion amplifies divergence.
@@ -255,7 +316,7 @@ export function scoreDrift(
       "scope_creep",
       `scope_creep:${item}`,
       strength === "partial"
-        ? `possible Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})`
+        ? `possible Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})${nameOnly ? FILE_NAME_ONLY : ""}`
         : `Out-of-scope touched: "${item}" (matched: ${matched.join(", ")})`,
       matched,
       strength,
@@ -267,7 +328,7 @@ export function scoreDrift(
   let constraintViolation = 0;
   let criticalViolated = false;
   for (const c of contract.constraints) {
-    const discriminating = discriminatingTokens(c.rule, scope);
+    const discriminating = discriminatingTokens(prohibitedSubject(c.rule), scope);
     const slashHits = slashJoinedPathHits(c.rule, input.changedPaths ?? []);
     const tokenHits =
       discriminating.size === 0 ? [] : intersectingTokens(discriminating, target);
@@ -279,6 +340,10 @@ export function scoreDrift(
       if (!matched.includes(hit)) matched.push(hit);
     }
     if (matched.length === 0) continue;
+    // Constraints keep their full strength: no file-name demotion. The hook
+    // and the Action pass no signals, so for a constraint a file name is
+    // often the only evidence there is ("Never modify billing" against
+    // src/billing.ts).
     const strength = matchStrength(
       discriminating,
       matched,
