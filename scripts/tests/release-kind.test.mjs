@@ -524,6 +524,9 @@ describe(".github/workflows/release.yml wiring", () => {
   // the same thing right up until the output is empty or missing, at which
   // point it publishes on a run that decided nothing.
   const GATE = "steps.kind.outputs.action_only == 'false'";
+  // The publish job cannot read steps.kind. Its gate is the output prepare
+  // forwarded, spelled the same positive way.
+  const PUBLISH_GATE = "needs.prepare.outputs.action_only == 'false'";
 
   // The release job's steps sit at six spaces in this file (jobs.release
   // itself is nested one level deeper than in the sibling repositories'
@@ -569,21 +572,39 @@ describe(".github/workflows/release.yml wiring", () => {
     return steps;
   }
 
-  // Only the "release" job's own text: its steps and the smoke-published
-  // job's steps sit at the SAME indentation (each job's own "steps:" list
-  // starts a fresh nesting level from that job's "name:"/"needs:" block),
-  // so parseSteps cannot tell them apart by indentation alone. Cutting the
-  // text at the next top-level job key is what keeps this suite reading
-  // only the job it claims to.
-  const releaseJobText = workflow.slice(0, workflow.indexOf("\n  smoke-published:"));
-  const releaseJobSteps = () => parseSteps(releaseJobText);
+  // prepare and the publish job both indent steps at six spaces, and so
+  // does smoke, so each job is sliced out before it is parsed. Cutting at
+  // the next top-level job key is what keeps this suite reading only the
+  // job it claims to.
+  const prepareText = workflow.slice(workflow.indexOf("\n  prepare:"), workflow.indexOf("\n  release:"));
+  const publishText = workflow.slice(workflow.indexOf("\n  release:"), workflow.indexOf("\n  smoke-published:"));
+  const releaseJobSteps = () => parseSteps(prepareText);
+  const publishJobSteps = () => parseSteps(publishText);
 
   // Every step that exists to protect or perform a publish. The code gates
   // (install, build, the portfolio-name guard, test, release smoke) are NOT
   // here: they run on both kinds of release, because this workflow never
   // learns whether they already ran on the exact commit that got tagged,
   // and an action-only release's payload is exactly what those gates cover.
-  const GATED_STEPS = ["Publish to npm"];
+  const GATED_STEPS = [
+    "Pack the publishable tarballs",
+    "Check the packed tarballs match their packages",
+    "Upload the packed tarballs",
+  ];
+
+  // Every step in the job that holds id-token, in order. Checkout and
+  // Node setup run for both kinds of release, because both still cut a
+  // GitHub Release. Everything that publishes or announces a publish is
+  // gated.
+  const PUBLISH_JOB_STEPS = [
+    "uses:actions/checkout@v7",
+    "uses:actions/setup-node@v7",
+    "Upgrade npm for OIDC trusted publishing",
+    "Download the packed tarballs",
+    "Publish to npm",
+    "Create GitHub Release",
+    "Create GitHub Release (action-only)",
+  ];
 
   // Every step before the decision, in order.
   const STEPS_BEFORE_DECISION = [
@@ -593,11 +614,11 @@ describe(".github/workflows/release.yml wiring", () => {
     "Assert the tagged commit is on main",
   ];
 
-  // Every step from the decision to the end of the release job, gated or
-  // not, in order. The set assertion below cannot see a NEW ungated step --
-  // that is what this list is for: inserting anything after the decision,
+  // Every step from the decision to the end of the prepare job, gated or
+  // not, in order. The set assertion below cannot see a NEW ungated step.
+  // That is what this list is for: inserting anything after the decision,
   // named or unnamed, fails until somebody states which side of the gate it
-  // belongs on.
+  // belongs on. The publish job has its own list, for the same reason.
   const STEPS_AFTER_DECISION = [
     "Install",
     "Build",
@@ -605,17 +626,27 @@ describe(".github/workflows/release.yml wiring", () => {
     "Test",
     "Release smoke",
     ...GATED_STEPS,
-    "Create GitHub Release",
-    "Create GitHub Release (action-only)",
   ];
 
   it("gates exactly the publish-side steps on the decision step output", () => {
     const gated = releaseJobSteps()
       .filter((step) => step.if === GATE)
       .map((step) => step.id);
+    expect(gated.sort()).toEqual([...GATED_STEPS].sort());
+
+    const publishGated = publishJobSteps()
+      .filter((step) => step.if === PUBLISH_GATE)
+      .map((step) => step.id);
     // "Create GitHub Release" carries the same gate and is asserted
     // separately below, with the body claim it guards.
-    expect(gated.sort()).toEqual([...GATED_STEPS, "Create GitHub Release"].sort());
+    expect(publishGated.sort()).toEqual(
+      [
+        "Upgrade npm for OIDC trusted publishing",
+        "Download the packed tarballs",
+        "Publish to npm",
+        "Create GitHub Release",
+      ].sort(),
+    );
   });
 
   it("runs the code gates on both kinds of release", () => {
@@ -632,6 +663,7 @@ describe(".github/workflows/release.yml wiring", () => {
     const from = ids.indexOf("Decide the release kind, and refuse a tag that is neither");
     expect(from).toBeGreaterThan(-1);
     expect(ids.slice(from + 1)).toEqual(STEPS_AFTER_DECISION);
+    expect(publishJobSteps().map((step) => step.id)).toEqual(PUBLISH_JOB_STEPS);
   });
 
   it("accounts for every step in the whole release job, from checkout onward, in order", () => {
@@ -659,13 +691,13 @@ describe(".github/workflows/release.yml wiring", () => {
     const publishClaims = workflow.match(/Published @vaultcompass\/intent-guard packages to npm/g) ?? [];
     expect(publishClaims).toHaveLength(1);
 
-    const release = releaseJobSteps().find((step) => step.id === "Create GitHub Release");
-    expect(release.if).toBe(GATE);
+    const release = publishJobSteps().find((step) => step.id === "Create GitHub Release");
+    expect(release.if).toBe(PUBLISH_GATE);
 
-    const actionOnlyRelease = releaseJobSteps().find(
+    const actionOnlyRelease = publishJobSteps().find(
       (step) => step.id === "Create GitHub Release (action-only)",
     );
-    expect(actionOnlyRelease.if).toBe("steps.kind.outputs.action_only == 'true'");
+    expect(actionOnlyRelease.if).toBe("needs.prepare.outputs.action_only == 'true'");
     expect(workflow).toContain("Nothing was published to npm by this release.");
   });
 
@@ -712,14 +744,51 @@ describe(".github/workflows/release.yml wiring", () => {
     ].map((match) => match[1]);
     expect(decisionDirs.length).toBeGreaterThan(0);
 
-    const forPkgMatch = workflow.match(/for pkg in ([^;]+); do/);
-    expect(forPkgMatch).not.toBeNull();
-    const publishDirs = forPkgMatch[1]
-      .trim()
-      .split(/\s+/)
-      .map((dir) => dir.replace(/^packages\//, ""));
+    const publishDirs = [...workflow.matchAll(/^ {10}publish_one packages\/([a-z0-9_-]+) /gm)].map(
+      (match) => match[1],
+    );
+    expect(publishDirs.length).toBeGreaterThan(0);
 
     expect(new Set(publishDirs)).toEqual(new Set(decisionDirs));
+  });
+
+  // The text of one prepare step, from its "- name:" line to the next step.
+  function prepareStepText(name) {
+    const start = prepareText.indexOf(`\n      - name: ${name}\n`);
+    expect(start).toBeGreaterThan(-1);
+    const next = prepareText.indexOf("\n      - ", start + 1);
+    return prepareText.slice(start, next === -1 ? undefined : next);
+  }
+
+  it("packs each published package by directory, into an absolute destination", () => {
+    // On pnpm 9, "pnpm --filter <name> pack" in a multi-package workspace
+    // exits 1 with "Unknown option: 'recursive'". This repository floats
+    // pnpm 10, which accepts it, but --dir is correct on both majors and is
+    // what the sibling gates use. With --dir, a relative destination lands
+    // under the package directory rather than where the upload step looks.
+    const pack = prepareStepText("Pack the publishable tarballs");
+    expect(pack).not.toContain("--filter");
+    const order = ["schema", "core", "skill", "cli"].map((dir) => {
+      const command = `pnpm --dir packages/${dir} pack --pack-destination "\${GITHUB_WORKSPACE}/pack-out/${dir}"`;
+      expect(pack).toContain(command);
+      return pack.indexOf(command);
+    });
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("checks every packed tarball against the package it was packed from", () => {
+    const check = prepareStepText("Check the packed tarballs match their packages");
+    expect(check).toContain("set -euo pipefail");
+    expect(check).toContain("for dir in schema core skill cli; do");
+    expect(check).toContain("package/package.json");
+    expect(check).toContain("require('./packages/${dir}/package.json')");
+    expect(check).toContain("::error::");
+  });
+
+  it("keeps the publish token off the job that installs dependencies", () => {
+    expect(prepareText).not.toMatch(/^ {6}id-token:/m);
+    expect(publishText).toMatch(/^ {6}id-token: write$/m);
+    expect(publishText).toContain("needs: prepare");
   });
 
   it("calls the decision script from a step with the id the conditions read", () => {
@@ -731,10 +800,11 @@ describe(".github/workflows/release.yml wiring", () => {
     const ids = releaseJobSteps().map((step) => step.id);
     const decisionAt = ids.indexOf("Decide the release kind, and refuse a tag that is neither");
     const installAt = ids.indexOf("Install");
-    const publishAt = ids.indexOf("Publish to npm");
+    const publishAt = publishJobSteps().map((step) => step.id).indexOf("Publish to npm");
     expect(decisionAt).toBeGreaterThan(-1);
     expect(installAt).toBeGreaterThan(decisionAt);
-    expect(publishAt).toBeGreaterThan(decisionAt);
+    expect(publishAt).toBeGreaterThan(-1);
+    expect(publishText).toContain("needs: prepare");
   });
 });
 
