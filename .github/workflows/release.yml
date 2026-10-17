@@ -6,18 +6,20 @@ on:
       - "v*"
 
 jobs:
-  release:
+  # Install, build, and test live here, and this job has no id-token.
+  # The release job below publishes tarballs this job packed. It does not
+  # install this repository's dependencies. The tag-ancestry check below
+  # still refuses an off-main tag before anything is packed. The scope of
+  # that split is the publish token only: the tarballs are still built in
+  # this job, where dependency install scripts run, so the split keeps those
+  # scripts away from the token and does not by itself guarantee the
+  # integrity of the built output.
+  prepare:
     runs-on: ubuntu-latest
-    # id-token: write stays at job scope rather than a publish-only job:
-    # GitHub grants permissions per job, not per step, so narrowing it would
-    # mean splitting publish into its own job and shipping the built packages
-    # between jobs as artifacts, which is not a small change. The tag-ancestry
-    # check below is what keeps an off-main tag from ever reaching the publish
-    # step that uses this token.
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     outputs:
+      scanner_version: ${{ steps.kind.outputs.scanner_version }}
       # Exactly "true" or "false", written by the decision step below, and
       # only after every condition in scripts/lib/release-kind.mjs held.
       #
@@ -42,16 +44,15 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       # Runs before install, build, test and publish on purpose. This workflow
       # fires on any "v*" tag, and "git tag v9.9.9 <any-commit> && git push
       # --tags" fires it from any commit, on or off main. Without this check a
-      # tag pushed at a commit off main walks straight into an OIDC trusted
-      # publish to the latest dist-tag, around branch protection, with a real
-      # tag and a matching GitHub Release to show for it. The job grants
-      # id-token: write, so anyone who can push a tag could publish arbitrary
-      # code under the package names.
+      # tag pushed at a commit off main would pack that commit, and the
+      # release job would publish it, around branch protection, with a real
+      # tag and a matching GitHub Release to show for it. The release job
+      # grants id-token: write, so anyone who can push a tag could publish
+      # arbitrary code under the package names.
       #
       # actions/checkout@v7 uses its default fetch-depth (1) above, so this
       # job's working copy holds only the tagged commit, with no history
@@ -142,6 +143,98 @@ jobs:
       - name: Release smoke
         run: pnpm release:smoke
 
+      # pnpm pack rewrites workspace:* to a real range, the same rewrite
+      # publish used to do. Packages are packed and later published in
+      # dependency order: schema, core, skill, then the CLI. An action-only
+      # tag packs nothing.
+      #
+      # "pnpm --dir", not "pnpm --filter": on pnpm 9, "--filter ... pack" in
+      # a multi-package workspace exits 1 with "Unknown option:
+      # 'recursive'". This repository floats pnpm 10, which accepts it, but
+      # --dir is correct on both majors and matches the sibling gates. The
+      # destination is absolute because with --dir a relative one resolves
+      # under the package directory, not the repository root the upload step
+      # reads.
+      - name: Pack the publishable tarballs
+        if: steps.kind.outputs.action_only == 'false'
+        run: |
+          set -euo pipefail
+          mkdir -p pack-out/schema pack-out/core pack-out/skill pack-out/cli
+          pnpm --dir packages/schema pack --pack-destination "${GITHUB_WORKSPACE}/pack-out/schema"
+          pnpm --dir packages/core pack --pack-destination "${GITHUB_WORKSPACE}/pack-out/core"
+          pnpm --dir packages/skill pack --pack-destination "${GITHUB_WORKSPACE}/pack-out/skill"
+          pnpm --dir packages/cli pack --pack-destination "${GITHUB_WORKSPACE}/pack-out/cli"
+
+      # Each pack-out directory must hold exactly one tarball, and the
+      # package.json inside it must carry the name and version of the
+      # package it was packed from. A pack that silently produced nothing,
+      # or packed the wrong package, stops here, before anything leaves
+      # this job.
+      - name: Check the packed tarballs match their packages
+        if: steps.kind.outputs.action_only == 'false'
+        run: |
+          set -euo pipefail
+          for dir in schema core skill cli; do
+            shopt -s nullglob
+            tarballs=(pack-out/"${dir}"/*.tgz)
+            shopt -u nullglob
+            if [[ "${#tarballs[@]}" -ne 1 ]]; then
+              echo "::error::pack-out/${dir} holds ${#tarballs[@]} tarballs, expected exactly one."
+              exit 1
+            fi
+            want="$(node -p "const p = require('./packages/${dir}/package.json'); p.name + '@' + p.version")"
+            got="$(tar -xzOf "${tarballs[0]}" package/package.json | node -p "const p = JSON.parse(require('fs').readFileSync(0, 'utf8')); p.name + '@' + p.version")"
+            if [[ "${got}" != "${want}" ]]; then
+              echo "::error::pack-out/${dir} holds ${got}, expected ${want} from packages/${dir}/package.json."
+              exit 1
+            fi
+            echo "pack-out/${dir}: ${got}"
+          done
+
+      - name: Upload the packed tarballs
+        if: steps.kind.outputs.action_only == 'false'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-pack
+          path: |
+            pack-out/schema/*.tgz
+            pack-out/core/*.tgz
+            pack-out/skill/*.tgz
+            pack-out/cli/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  # Trusted publishing stays on this job only. It downloads the tarballs
+  # prepare packed and does not install this repository's dependencies.
+  # npm CLI >= 11.5.1 is required for OIDC. Pin major 11: npm@12 needs a
+  # newer Node than this job runs.
+  release:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      action_only: ${{ needs.prepare.outputs.action_only }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm for OIDC trusted publishing
+        if: needs.prepare.outputs.action_only == 'false'
+        run: npm install -g npm@11
+
+      - name: Download the packed tarballs
+        if: needs.prepare.outputs.action_only == 'false'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-pack
+          path: pack-out
+
       # Skips any package whose exact version is already on the registry, so a
       # tag run stays green after a version was published by hand. That happens
       # on a first publish of a new package name: npm only exposes the
@@ -156,25 +249,33 @@ jobs:
       # The skip is per exact version, so it never hides a real publish failure
       # of a version that is genuinely new.
       #
-      # Skipped entirely on an action-only release: the decision step above
-      # already proved every one of these packages is on the registry at
-      # this exact version, so there is nothing new here to publish, and
-      # running the loop would just walk into the skip branch four times.
+      # Skipped entirely on an action-only release: the decision step already
+      # proved every one of these packages is on the registry at this exact
+      # version, so there is nothing new here to publish.
+      # Order is schema, core, skill, then the CLI.
       - name: Publish to npm
-        if: steps.kind.outputs.action_only == 'false'
+        if: needs.prepare.outputs.action_only == 'false'
         run: |
           set -euo pipefail
-          for pkg in packages/schema packages/core packages/skill packages/cli; do
-            name="$(node -p "require('./$pkg/package.json').name")"
-            version="$(node -p "require('./$pkg/package.json').version")"
+          publish_one() {
+            dir="$1"
+            pack_dir="$2"
+            name="$(node -p "require('./${dir}/package.json').name")"
+            version="$(node -p "require('./${dir}/package.json').version")"
             published="$(npm view "$name@$version" version 2>/dev/null || true)"
             if [ "$published" = "$version" ]; then
               echo "SKIP: $name@$version is already on the registry"
-              continue
+              return 0
             fi
             echo "PUBLISH: $name@$version"
-            (cd "$pkg" && pnpm publish --access public --tag latest)
-          done
+            tarball="$(find "${pack_dir}" -name '*.tgz' -print)"
+            test -n "${tarball}"
+            npm publish "${tarball}" --access public
+          }
+          publish_one packages/schema pack-out/schema
+          publish_one packages/core pack-out/core
+          publish_one packages/skill pack-out/skill
+          publish_one packages/cli pack-out/cli
 
       # Two Release steps, one per release kind, rather than one step with a
       # computed body. The body is the only difference between them, and it
@@ -183,7 +284,7 @@ jobs:
       # publish step run at all, so an action-only release cannot announce
       # a publish that did not happen.
       - name: Create GitHub Release
-        if: steps.kind.outputs.action_only == 'false'
+        if: needs.prepare.outputs.action_only == 'false'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
@@ -192,15 +293,15 @@ jobs:
             See CHANGELOG.md on main.
 
       # The action-only body. It has to answer the question a reader of
-      # this Release page actually has -- "the tag moved, so what am I
-      # getting?" -- which is a scanner version that did not move with it.
+      # this Release page actually has: the tag moved, so what am I getting?
+      # That answer is a scanner version that did not move with it.
       - name: Create GitHub Release (action-only)
-        if: steps.kind.outputs.action_only == 'true'
+        if: needs.prepare.outputs.action_only == 'true'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           body: |
-            Action-only release. This tag moves the composite action; the scanner it installs stays at `${{ steps.kind.outputs.scanner_version }}`, which was already on npm before this tag.
+            Action-only release. This tag moves the composite action; the scanner it installs stays at `${{ needs.prepare.outputs.scanner_version }}`, which was already on npm before this tag.
 
             Nothing was published to npm by this release.
 
