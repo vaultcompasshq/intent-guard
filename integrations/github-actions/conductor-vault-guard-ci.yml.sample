@@ -4,7 +4,7 @@ name: Intent Guard and Vault Guard
 # @vaultcompass/intent-guard and @vaultcompass/vault-guard from npm. Pin an
 # exact version rather than @latest, so the gate that judges a pull request
 # changes only when this file does. Prefer the composite action
-# (vaultcompasshq/intent-guard@v1.10.0) where it fits; see README.md here.
+# (vaultcompasshq/intent-guard@v1.10.1) where it fits; see README.md here.
 
 on:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
           cache: pnpm
 
       - name: Install Intent Guard
-        run: pnpm dlx @vaultcompass/intent-guard@1.10.0 --version
+        run: pnpm dlx @vaultcompass/intent-guard@1.10.1 --version
 
       # `check` runs the full gate (drift + change-budget enforcement), matching
       # the pre-commit hook. `drift` is score-only and skips the budget.
@@ -54,7 +54,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch origin "$BASE_REF"
-          pnpm dlx @vaultcompass/intent-guard@1.10.0 check \
+          pnpm dlx @vaultcompass/intent-guard@1.10.1 check \
             --project . \
             --base "origin/$BASE_REF" \
             --trust-base "origin/$BASE_REF"
