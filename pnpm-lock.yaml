@@ -15,8 +15,8 @@ importers:
   .:
     devDependencies:
       '@vaultcompass/conductor':
-        specifier: 0.11.0
-        version: 0.11.0
+        specifier: 0.12.0
+        version: 0.12.0
       '@vaultcompass/dep-guard':
         specifier: 0.15.0
         version: 0.15.0
@@ -27,8 +27,8 @@ importers:
         specifier: workspace:*
         version: link:packages/schema
       '@vaultcompass/vault-guard':
-        specifier: 1.12.0
-        version: 1.12.0
+        specifier: 1.12.1
+        version: 1.12.1
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@22.19.21)(vite@7.3.5(@types/node@22.19.21)(yaml@2.9.0))
@@ -410,8 +410,8 @@ packages:
   '@types/node@22.19.21':
     resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
 
-  '@vaultcompass/conductor@0.11.0':
-    resolution: {integrity: sha512-zRRIUkneOydwANEnaD+rWUArsMPdlYpUnbTDmTkV6CGxCPi8pMrKnr9rrBKGv9MCcwH2SyWAGUCN4FIiNmkDlA==}
+  '@vaultcompass/conductor@0.12.0':
+    resolution: {integrity: sha512-ygiOws50rrl+UTCVNL65nwM73t3aHS2MxCcRJ6WGC5PfO9v9RiOS/3wZ4t2CUxOpZ0gRUaKmmVZULswxhrU7bw==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -438,16 +438,16 @@ packages:
     resolution: {integrity: sha512-jOPLk/dQt0PK54ZprVNhGLBRvBLabpnIFSs+S7XLXfBtOsiMa5l1WrePi+bzmCFlpCHOaWxmI0uCRU/zu6jKKA==}
     hasBin: true
 
-  '@vaultcompass/vault-guard-core@1.12.0':
-    resolution: {integrity: sha512-B3O8nzOqdQFoTToK4bPPKWQMY3WrY/qRbLQIBjZO2wyEP8BkQmB4bgv9V/D0cn4n/MscHJbe0FQAqhY2MBIHtQ==}
+  '@vaultcompass/vault-guard-core@1.12.1':
+    resolution: {integrity: sha512-f8wZFTB2rnq1QD7B3yZPtawvGjq3dcPSu622ctCfERWEgnQC75e9/EMiRdq695tZtQvgHpnu7aITLA91Lism7g==}
     engines: {node: '>=22.0.0', npm: '>=9.0.0', pnpm: '>=9.0.0'}
 
-  '@vaultcompass/vault-guard-telemetry@1.12.0':
-    resolution: {integrity: sha512-x+LBqJ5nYnFLOK8x196wyvKFOKlrdvWYjpRzOPCD1qlNwogy3PSsOehIidvlH3Gux97lt75i3e9IYq4F5r61hA==}
+  '@vaultcompass/vault-guard-telemetry@1.12.1':
+    resolution: {integrity: sha512-HyV5E1hWR17YwaUe0OzlBY+2cvxYsvZ+EnBvj49I53VBC5JbVLq2qMS4rJLlpaKvlarqjmBTS5lOkIO43wWQUw==}
     engines: {node: '>=22.0.0', npm: '>=9.0.0', pnpm: '>=9.0.0'}
 
-  '@vaultcompass/vault-guard@1.12.0':
-    resolution: {integrity: sha512-mqpk+T0Lh01ArbFnWWerAP/e3/hr6sIjq2YRfdfx69uBQ9KCDR80kxiLoHVoAjrvQu3OsyPOMUK6+UE6jXCWVg==}
+  '@vaultcompass/vault-guard@1.12.1':
+    resolution: {integrity: sha512-58l6WO+p8OIDqWNpVAkOkifwPz5S6t21lBE10q7IuxKt5FqtAxNLT7ejCWNN6imhhUAAnfp66aDnJzipbIf17g==}
     engines: {node: '>=22.0.0', npm: '>=9.0.0', pnpm: '>=9.0.0'}
     hasBin: true
 
@@ -917,7 +917,7 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@vaultcompass/conductor@0.11.0':
+  '@vaultcompass/conductor@0.12.0':
     dependencies:
       ajv: 8.20.0
       commander: 12.1.0
@@ -953,20 +953,20 @@ snapshots:
     dependencies:
       '@vaultcompass/intent-guard-skill': 1.10.1
 
-  '@vaultcompass/vault-guard-core@1.12.0':
+  '@vaultcompass/vault-guard-core@1.12.1':
     dependencies:
       ignore: 5.3.2
 
-  '@vaultcompass/vault-guard-telemetry@1.12.0':
+  '@vaultcompass/vault-guard-telemetry@1.12.1':
     dependencies:
-      '@vaultcompass/vault-guard-core': 1.12.0
+      '@vaultcompass/vault-guard-core': 1.12.1
     optionalDependencies:
       better-sqlite3: 13.0.3
 
-  '@vaultcompass/vault-guard@1.12.0':
+  '@vaultcompass/vault-guard@1.12.1':
     dependencies:
-      '@vaultcompass/vault-guard-core': 1.12.0
-      '@vaultcompass/vault-guard-telemetry': 1.12.0
+      '@vaultcompass/vault-guard-core': 1.12.1
+      '@vaultcompass/vault-guard-telemetry': 1.12.1
       chalk: 4.1.2
       commander: 12.1.0
 
