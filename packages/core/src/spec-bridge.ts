@@ -16,6 +16,7 @@ import {
 } from "./extract.js";
 import type { RuleReplacement } from "./constraints.js";
 import { suggestPathBudgets } from "./path-suggestions.js";
+import { EXPLICIT_PROHIBITION_RE, hasExplicitProhibition, normalizeMarkerText } from "./prohibition-markers.js";
 import { describeBudgetPathIssues, validateBudgetPaths } from "./budget-paths.js";
 
 export type SpecBridgeFormat = "auto" | "spec-kit" | "kiro" | "superpowers";
@@ -519,12 +520,95 @@ const BOLD_STEP_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?(?:\*\*|__)(?:given|when|then|an
 // Then, And and But are steps only inside one.
 const GIVEN_STEP_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?Given\s/;
 const NEXT_STEP_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?(?:When|Then|And|But|\*)\s/;
+// A Gherkin line is kept for the explicit markers of prohibition-markers.ts
+// only, the same definition extraction reads prohibitions with. Narrower than
+// extraction's full list on purpose: "no", "cannot" and "should not" in a
+// step usually state an expected outcome ("Then no file is downloaded").
+const PLAIN_STEP_KEYWORD_RE = /^(?:(?:[-*+]|\d+[.)])\s+)?(Given|When|Then|And|But|\*)\s+/;
+const BOLD_STEP_SPLIT_RE = /(?:\*\*|__)(given|when|then|and|but)(?:\*\*|__)/i;
+
+interface GherkinLine {
+  /** Explicit prohibitions to import, keyword removed, in marker normal form. */
+  kept: string[];
+  /** Given or When steps that carry a marker and are not imported, for a warning. */
+  dropped: string[];
+}
+
+/**
+ * The explicit prohibitions of one Gherkin line, with the step keyword
+ * removed, so extraction reads them as it reads any prohibition and sends
+ * them to out_of_scope ("Then the system SHALL NOT email the file" gives
+ * "the system SHALL NOT email the file"). A Then, And or But step, or a
+ * non-step line of a Scenario, Feature or Background body, is kept when it
+ * carries a marker, and is passed on with normalizeMarkerText applied so
+ * extraction sees the marker exactly as the keep did. A Given or When step
+ * never is kept (it sets up the scenario, "Given a user who has never
+ * exported"); one that carries a marker is reported in `dropped` so
+ * import-spec can warn. Every other Gherkin line is dropped, as in 1.10.0.
+ */
+function fromMarker(text: string): string[] {
+  // Normalised and split at semicolons; every clause that carries a marker
+  // is kept as its own rule, cut at its own first marker, and a clause with
+  // no marker is dropped. A subject in front of the marker ("the export
+  // never times out") was read by extraction as an imperative and became an
+  // in_scope item whose tokens cancelled real rules; a marker-less clause
+  // after a semicolon ("never retries; the scheduler reruns the nightly
+  // job") is a separate statement, not a prohibition; and a marked one ("...
+  // the audit log; it must never call the ledger service") is a rule 1.9.0
+  // enforced. A following sentence is dropped where the item is routed
+  // (routedItemsFrom keeps a bullet's first sentence).
+  const rules: string[] = [];
+  for (const clause of normalizeMarkerText(text).split(";")) {
+    const match = clause.match(EXPLICIT_PROHIBITION_RE);
+    if (!match || match.index === undefined) continue;
+    const rule = clause.slice(match.index).trim();
+    if (rule) rules.push(rule);
+  }
+  return rules;
+}
+
+/**
+ * The heading kept Gherkin prohibitions are emitted under, at the end of a
+ * file's selected text. Extraction routes an Out of scope section's bullets
+ * to out_of_scope by heading, so a kept line no longer depends on
+ * extraction re-reading its own marker (which it did not do for a don't that
+ * does not open its sentence). Never listed in `sections`.
+ */
+export const GHERKIN_RULES_HEADING = "Out of scope";
+
+function gherkinProhibitions(trimmed: string): GherkinLine {
+  const none: GherkinLine = { kept: [], dropped: [] };
+  if (!hasExplicitProhibition(trimmed)) return none;
+  if (BOLD_STEP_RE.test(trimmed)) {
+    const parts = trimmed.split(new RegExp(BOLD_STEP_SPLIT_RE.source, "gi"));
+    const result: GherkinLine = { kept: [], dropped: [] };
+    for (let i = 1; i + 1 < parts.length; i += 2) {
+      const keyword = parts[i].toLowerCase();
+      const body = parts[i + 1].replace(/^[\s,:]+/, "").replace(/[\s,;]+$/, "");
+      if (!hasExplicitProhibition(body)) continue;
+      if (keyword === "given" || keyword === "when") {
+        result.dropped.push(`${parts[i]} ${body}`);
+      } else {
+        result.kept.push(...fromMarker(body));
+      }
+    }
+    return result;
+  }
+  const step = trimmed.match(PLAIN_STEP_KEYWORD_RE);
+  if (step) {
+    if (step[1] === "Given" || step[1] === "When") return { kept: [], dropped: [trimmed] };
+    return { kept: fromMarker(trimmed.slice(step[0].length).trim()), dropped: [] };
+  }
+  return { kept: fromMarker(trimmed), dropped: [] };
+}
 
 export interface LabelledSpecText {
   /** The labelled sections' lines, cleaned, with their headings. */
   text: string;
   /** The heading of each labelled section found, in document order. */
   headings: string[];
+  /** Given or When steps with a prohibition marker that were not imported. */
+  droppedSteps: string[];
 }
 
 /**
@@ -534,7 +618,9 @@ export interface LabelledSpecText {
  * covers everything to the next heading of the same or a higher level,
  * nested headings included, so a Non-goals heading under Scope still routes.
  * A labelled bold or "Label:" pseudo-heading covers the list under it. Inside
- * a section, Gherkin scenarios and steps and table rows are dropped.
+ * a section, Gherkin scenarios and steps and table rows are dropped, except
+ * a Gherkin line with an explicit prohibition marker (see
+ * gherkinProhibitions), which is kept without its step keyword.
  *
  * Fenced blocks are dropped, using the same fence toggle
  * `extractConstraintsFromMarkdown` uses: a superpowers plan is mostly code,
@@ -545,6 +631,13 @@ export interface LabelledSpecText {
 export function selectLabelledSections(content: string): LabelledSpecText {
   const lines: string[] = [];
   const headings: string[] = [];
+  const droppedSteps: string[] = [];
+  const gherkinRules: string[] = [];
+  const keepGherkin = (line: string): void => {
+    const { kept, dropped } = gherkinProhibitions(line);
+    for (const item of kept) gherkinRules.push(cleanSpecLine(item));
+    droppedSteps.push(...dropped);
+  };
   let inFence = false;
   // The open labelled section: its heading level (7 for a pseudo-heading).
   let section: number | null = null;
@@ -588,7 +681,10 @@ export function selectLabelledSections(content: string): LabelledSpecText {
       lines.push(cleanSpecLine(trimmed));
       continue;
     }
-    if (scenario !== null) continue;
+    if (scenario !== null) {
+      if (!trimmed.startsWith("|")) keepGherkin(trimmed);
+      continue;
+    }
 
     // A pseudo-heading section holds its list only: the first line that is
     // neither a bullet nor an indented continuation closes it.
@@ -615,18 +711,27 @@ export function selectLabelledSections(content: string): LabelledSpecText {
       inGherkinBlock = true;
       continue;
     }
-    if (inGherkinBlock) continue;
-    if (BOLD_STEP_RE.test(trimmed) || GIVEN_STEP_RE.test(trimmed)) {
-      inSteps = true;
+    const gherkinLine =
+      inGherkinBlock ||
+      BOLD_STEP_RE.test(trimmed) ||
+      GIVEN_STEP_RE.test(trimmed) ||
+      (inSteps && NEXT_STEP_RE.test(trimmed));
+    if (gherkinLine) {
+      if (!inGherkinBlock) inSteps = true;
+      keepGherkin(trimmed);
       continue;
     }
-    if (inSteps && NEXT_STEP_RE.test(trimmed)) continue;
     inSteps = false;
 
     lines.push(cleanSpecLine(trimmed));
   }
 
-  return { text: lines.join("\n"), headings };
+  if (gherkinRules.length > 0) {
+    // A level-1 heading closes every section above it; the next file's own
+    // level-1 heading (buildImportText) closes this one.
+    lines.push(`# ${GHERKIN_RULES_HEADING}`, ...gherkinRules.map((rule) => `- ${rule}`));
+  }
+  return { text: lines.join("\n"), headings, droppedSteps };
 }
 
 /** The single in_scope item of a draft imported from a spec with no labelled section. */
@@ -650,14 +755,16 @@ function buildImportText(
   format: Exclude<SpecBridgeFormat, "auto">,
   label: string,
   files: SpecBridgeFile[],
-): { text: string; sections: string[]; selected: string } {
+): { text: string; sections: string[]; selected: string; droppedSteps: string[] } {
   const parts = [importHeader(format, label)];
   const sections: string[] = [];
   const selectedTexts: string[] = [];
+  const droppedSteps: string[] = [];
 
   for (const file of files) {
     const selected = selectLabelledSections(file.content);
     if (selected.headings.length === 0) continue;
+    droppedSteps.push(...selected.droppedSteps.map((step) => droppedStepWarning(basename(file.path), step)));
     sections.push(...selected.headings.map((heading) => `${basename(file.path)}: ${heading}`));
     const label =
       file.role === "requirements"
@@ -677,7 +784,20 @@ function buildImportText(
   // contract as approved." sentence any more: extraction read it as a rule,
   // and on a spec with no prohibitions of its own it was the contract's only
   // out_of_scope item. import-spec says it to the reader instead.
-  return { text: parts.join("\n\n"), sections, selected: selectedTexts.join("\n") };
+  return { text: parts.join("\n\n"), sections, selected: selectedTexts.join("\n"), droppedSteps };
+}
+
+/**
+ * A Given or When step with a prohibition marker is dropped (it sets up a
+ * scenario), where 1.9.0 imported it as a prohibition. Said out loud, so a
+ * rule written that way is not lost silently.
+ */
+function droppedStepWarning(file: string, step: string): string {
+  return (
+    `${file}: the Gherkin step "${step}" carries a prohibition marker but was not imported as a rule: ` +
+    "Given and When steps set up a scenario and are never imported. If it states a rule, write it as a " +
+    "Then step or under an Out of scope heading."
+  );
 }
 
 export function importSpecContract(
@@ -705,7 +825,7 @@ export function importSpecContract(
 
   const built = buildImportText(discovered.format, label, files);
   const ask = importHeader(discovered.format, label);
-  const warnings: string[] = [];
+  const warnings: string[] = [...built.droppedSteps];
   const { contract, replaced } = draftContractDetailed({ userText: built.text, ask });
   if (built.sections.length === 0) {
     // Nothing labelled: an empty draft and a warning, never a contract built

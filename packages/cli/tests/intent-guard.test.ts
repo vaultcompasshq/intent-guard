@@ -235,3 +235,72 @@ metadata:
     expect(readFileSync(contractPath, "utf8")).toContain("ic-20260704-clici0");
   });
 });
+
+describe("a rule that names a file in markdown blocks a staged edit of that file", () => {
+  function git(cwd: string, args: string[]): void {
+    execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" });
+  }
+
+  function repo(): string {
+    const dir = tmpProject();
+    git(dir, ["init", "-b", "main"]);
+    git(dir, ["config", "user.email", "tester@example.com"]);
+    git(dir, ["config", "user.name", "tester"]);
+    git(dir, ["config", "commit.gpgsign", "false"]);
+    writeFileSync(join(dir, "README.md"), "# Project\n", "utf8");
+    git(dir, ["add", "--", "README.md"]);
+    git(dir, ["commit", "-m", "initial"]);
+    return dir;
+  }
+
+  // Blocked in 1.9.0, passed in 1.10.0 (the closed file-name rule read
+  // **CHANGELOG.md**. as a word that names no file), blocks again.
+  it.each([
+    ["Add CSV export to the reports page. Do not edit **CHANGELOG.md**.", "CHANGELOG.md"],
+    ["Add CSV export to the reports page. Do not modify **payment**_methods.", "db/payment_methods.sql"],
+  ])("extract %j, freeze, stage %s: check --staged exits 1", (ask, path) => {
+    const dir = repo();
+    expect(run(["extract", "--project", dir, "--text", ask]).code).toBe(0);
+    expect(run(["freeze", "--project", dir, "--approved-by", "tester"]).code).toBe(0);
+    mkdirSync(join(dir, path, ".."), { recursive: true });
+    writeFileSync(join(dir, path), "changed\n", "utf8");
+    git(dir, ["add", "--", path]);
+    const res = run(["check", "--project", dir, "--staged"]);
+    expect(res.stdout).not.toContain("Intent Guard gate: ok");
+    expect(res.code).toBe(1);
+  });
+});
+
+describe("import-spec keeps an explicit prohibition written as a Gherkin step", () => {
+  // Blocked in 1.9.0, passed in 1.10.0 (the whole scenario was dropped).
+  it("imports Then SHALL NOT and And must never as out_of_scope, and check blocks on them", () => {
+    const dir = tmpProject();
+    const specDir = join(dir, ".kiro", "specs", "export");
+    mkdirSync(specDir, { recursive: true });
+    writeFileSync(
+      join(specDir, "requirements.md"),
+      [
+        "# Requirements",
+        "",
+        "## Requirement 1: Export",
+        "",
+        "Scenario: export a report",
+        "  Given a saved report",
+        "  When I export it",
+        "  Then the system SHALL NOT email the file",
+        "  And the exporter must never write to the audit log",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const imported = run(["import-spec", "--project", dir, "--from", "kiro", "--spec-dir", ".kiro/specs/export"]);
+    expect(imported.code).toBe(0);
+    const draft = readFileSync(join(dir, ".intent-guard", "intent-contract.yaml"), "utf8");
+    expect(draft).toContain("SHALL NOT email the file");
+    expect(draft).toContain("never write to the audit log");
+    expect(run(["freeze", "--project", dir, "--approved-by", "tester"]).code).toBe(0);
+    const res = run(["check", "--project", dir, "--paths", "src/email/send.ts"]);
+    expect(res.stdout).not.toContain("Intent Guard gate: ok");
+    expect(res.code).toBe(1);
+  });
+});
