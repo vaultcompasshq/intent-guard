@@ -50,7 +50,7 @@
   "devDependencies": {
     "@vaultcompass/conductor": "0.11.0",
     "@vaultcompass/dep-guard": "0.15.0",
-    "@vaultcompass/intent-guard": "1.10.0",
+    "@vaultcompass/intent-guard": "1.10.1",
     "@vaultcompass/intent-guard-schema": "workspace:*",
     "@vaultcompass/vault-guard": "1.12.0",
     "vitest": "^4.1.11",
