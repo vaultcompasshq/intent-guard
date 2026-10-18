@@ -52,8 +52,9 @@ because their pins live in the conductor action's defaults rather than in
 this repository: at each pin pull request the author checks them by hand
 against the defaults of the conductor action version being pinned, and the
 reviewer confirms it. The runtime control is conductor's own version-skew
-warning, due in the next conductor release, which reports a resolved gate
-version that differs from the action's pin.
+check, which reports a resolved gate version that differs from the action's
+pin: conductor 0.12.0 warns, and from conductor 0.13.0 a skew is a
+could-not-run (exit 2) under the Action.
 
 ---
 
