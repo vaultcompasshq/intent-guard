@@ -357,8 +357,12 @@ function bareOrSides(rest: string): [string, string] | null {
 function expandProhibitionLists(text: string): { items: string[]; replaced: Set<string> } {
   const items: string[] = [];
   const replaced = new Set<string>();
+  // Line-bounded: the list after the verb never runs into the next line.
+  // Through the second 1.10.x fix round "[^.!?]" took newlines, so a comma
+  // list on one line swallowed the prohibition on the next, which was then
+  // deduped away (the 2026-10-18 review's g3).
   const pattern =
-    /\b(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no)\s+([a-z]+)\s+([^.!?]{3,200})/gi;
+    /\b(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no)[ \t]+([a-z]+)[ \t]+([^.!?\n]{3,200})/gi;
 
   for (const match of text.matchAll(pattern)) {
     const prefix = match[1].replace(/\s+/g, " ");
@@ -457,7 +461,12 @@ function isValidOutOfScopeItem(item: string): boolean {
 }
 
 function extractOutOfScope(text: string): { items: string[]; replaced: Set<string> } {
-  const tail = String.raw`[\w\s/.\-]{3,200}`;
+  // Spaces and tabs only, never a newline, so no out_of_scope capture can
+  // cross a line. The patterns below run on splitSentences output, which is
+  // already split at newlines; this keeps that true if they ever run on
+  // unsplit text. The capture that did cross lines (the 2026-10-18 review's
+  // g3) was expandProhibitionLists'.
+  const tail = String.raw`[\w \t/.\-]{3,200}`;
   const patterns = [
     new RegExp(String.raw`\bdo\s+not\s+([a-z]${tail})`, "gi"),
     new RegExp(String.raw`\bmust\s+not\s+([a-z]${tail})`, "gi"),

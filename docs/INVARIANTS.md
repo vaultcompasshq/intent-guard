@@ -535,28 +535,28 @@ the moved pointer is committed`.
 
 ## Spec extraction is heading-aware
 
-`segmentForExtraction` (`packages/core/src/extract.ts:771`) runs before any
-clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:540`
-and `packages/core/src/extract.ts:542`) route their bullets and sentences to
+`segmentForExtraction` (`packages/core/src/extract.ts:780`) runs before any
+clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:549`
+and `packages/core/src/extract.ts:551`) route their bullets and sentences to
 `out_of_scope` only. A child heading with no kind of its own is neutral, and a
 classified bold or colon pseudo-heading covers only the list under it
-(`packages/core/src/extract.ts:801`). In a problem section
-(`packages/core/src/extract.ts:551`; Introduction is not one) only explicit
-prohibitions survive (`packages/core/src/extract.ts:681`, applied at
-`packages/core/src/extract.ts:855`). User story lines yield no prohibitions
-(`packages/core/src/extract.ts:860`). Table rows are skipped
-(`packages/core/src/extract.ts:807`). The positive-modal exemption is judged
-per clause (`packages/core/src/extract.ts:687`) and covers only a "with no
-<resource>" phrase (`packages/core/src/extract.ts:708`,
-`packages/core/src/extract.ts:728`). out_of_scope is ranked routed non-goals,
+(`packages/core/src/extract.ts:810`). In a problem section
+(`packages/core/src/extract.ts:560`; Introduction is not one) only explicit
+prohibitions survive (`packages/core/src/extract.ts:690`, applied at
+`packages/core/src/extract.ts:864`). User story lines yield no prohibitions
+(`packages/core/src/extract.ts:869`). Table rows are skipped
+(`packages/core/src/extract.ts:816`). The positive-modal exemption is judged
+per clause (`packages/core/src/extract.ts:696`) and covers only a "with no
+<resource>" phrase (`packages/core/src/extract.ts:717`,
+`packages/core/src/extract.ts:737`). out_of_scope is ranked routed non-goals,
 then explicit prohibitions, then the rest, and capped at the schema's 12
-(`packages/core/src/extract.ts:926`, `packages/core/src/extract.ts:977`);
+(`packages/core/src/extract.ts:935`, `packages/core/src/extract.ts:986`);
 pinned by `ranks routed non-goals first, then explicit prohibitions, then the
 rest`. At that cap a long spec can lose explicit rules past the twelfth item;
 see the CHANGELOG known limits.
 import-spec keeps heading markers and opens each file with a level-1 heading
 so a section never crosses a file boundary
-(`packages/core/src/spec-bridge.ts:672`). Pinned in
+(`packages/core/src/spec-bridge.ts:779`). Pinned in
 `packages/core/tests/extract-headings.test.ts` (every rule has its own
 `describe`, and `every prohibition the base build kept is still kept` runs the
 2026-10-13 reviewer probe cases against the base build's recorded output) and
@@ -602,19 +602,22 @@ narrower matcher survives`.
 
 ## import-spec never builds a contract from unlabelled text
 
-`selectLabelledSections` (`packages/core/src/spec-bridge.ts:545`) passes on
+`selectLabelledSections` (`packages/core/src/spec-bridge.ts:631`) passes on
 only the lines of labelled sections (`isLabelledScopeHeading`,
-`packages/core/src/extract.ts:593`, over `LABELLED_SCOPE_RE` at
-`packages/core/src/extract.ts:582` and the out-of-scope spellings); every
-other line is dropped (`packages/core/src/spec-bridge.ts:611`), and a file
+`packages/core/src/extract.ts:602`, over `LABELLED_SCOPE_RE` at
+`packages/core/src/extract.ts:591` and the out-of-scope spellings); every
+other line is dropped (`packages/core/src/spec-bridge.ts:707`), and a file
 with no labelled section contributes nothing
-(`packages/core/src/spec-bridge.ts:660`; pinned by `does not read an
+(`packages/core/src/spec-bridge.ts:766`; pinned by `does not read an
 unlabelled file whole beside a labelled one`). Inside a
-section, table rows (`packages/core/src/spec-bridge.ts:613`) and Gherkin
-steps (`packages/core/src/spec-bridge.ts:619`) are dropped. With no labelled
-section in any file, the draft is emptied to one placeholder in_scope item,
-no out_of_scope and one placeholder acceptance criterion, and a warning
-names the headings looked for (`packages/core/src/spec-bridge.ts:710`;
+section, table rows (`packages/core/src/spec-bridge.ts:709`) and Gherkin
+scenarios and steps (`packages/core/src/spec-bridge.ts:684`,
+`packages/core/src/spec-bridge.ts:714`) are dropped, except that a Gherkin
+line carrying an explicit prohibition marker is kept (next paragraph). With
+no labelled section in any file, the draft is emptied to one placeholder
+in_scope item, no out_of_scope and one placeholder acceptance criterion, and
+a warning names the headings looked for
+(`packages/core/src/spec-bridge.ts:830`;
 printed at `packages/skill/src/import-spec-cli.ts:193`). Pinned in
 `packages/core/tests/extraction-quality.test.ts` by `ignores prose outside a
 labelled section, such as a competitor survey` and `yields an empty contract
@@ -622,8 +625,106 @@ and a warning naming the headings it looked for when nothing is labelled`,
 and in `packages/skill/tests/extraction-quality-cli.test.ts` by `warns on
 stderr and in JSON, names the headings, and lists the sections it read`.
 
+An explicit prohibition written as a Gherkin line is never dropped.
+`gherkinProhibitions` (`packages/core/src/spec-bridge.ts:579`) keeps a Then,
+And or But step, or a non-step line of a scenario body, when it carries one
+of the markers in `EXPLICIT_PROHIBITION_MARKERS`
+(`packages/core/src/prohibition-markers.ts:14`: SHALL NOT, MUST NOT, never,
+do not, don't), matched after `normalizeMarkerText`
+(`packages/core/src/prohibition-markers.ts:26`: curly apostrophes and
+whitespace runs). `fromMarker` (`packages/core/src/spec-bridge.ts:549`)
+normalises the kept line and splits it at semicolons; every clause that
+carries a marker is kept as its own rule, cut at its own first marker, so
+no subject in front of a marker becomes an in_scope item, and a clause with
+no marker is dropped. Through the third fix round only the first clause was
+kept, which lost "it must never call the ledger service" after a semicolon,
+a rule 1.9.0 enforced (the review's g7). A Given or When step is always dropped, and so is an outcome written
+with no, cannot, can't, should not, will not, won't, avoid or without; a
+dropped Given or When step that carries a marker becomes an import warning
+(`packages/core/src/spec-bridge.ts:795`, added at
+`packages/core/src/spec-bridge.ts:828`). 1.10.0 dropped every Gherkin line,
+which turned "Then the system SHALL NOT email the file" from a block in
+1.9.0 into a pass.
+
+Kept lines are routed by heading, never by extraction re-reading their
+marker: each file's kept lines are emitted as bullets under a level-1
+`GHERKIN_RULES_HEADING` ("Out of scope",
+`packages/core/src/spec-bridge.ts:577`, emitted at
+`packages/core/src/spec-bridge.ts:732`), the same path a spec's own Out of
+scope section takes, and `routedItemsFrom` (`packages/core/src/extract.ts:656`)
+keeps each bullet's first sentence. The second fix round instead relied on
+extraction reading the marker again, which needed a mid-sentence don't
+pattern in extraction; that pattern blocked an ask such as "Add a mobile
+toolbar. Users don't see the export button on mobile today." against
+`src/export/button.ts` (1.9.0 and 1.10.0 pass it), and is reverted:
+extraction's out_of_scope markers are the 1.10.0 list again.
+
+No out_of_scope capture crosses a line. `expandProhibitionLists`
+(`packages/core/src/extract.ts:357`) reads the list after a prohibition verb
+with `[^.!?\n]` and spaces and tabs only; with `[^.!?]` a comma list on one
+line swallowed the prohibition on the next, which was then deduped away
+(the 2026-10-18 review's g3). `extractOutOfScope`
+(`packages/core/src/extract.ts:463`) uses a space-and-tab tail as well, but
+that change is defence in depth: its patterns run on `splitSentences`
+output, which is already split at newlines, and restoring `\s` there leaves
+every test green by construction.
+
+Pinned in `packages/core/tests/extraction-quality.test.ts` by `keeps an
+explicit prohibition written as a Then or And step, as out_of_scope`, `keeps
+an explicit prohibition in a scenario heading's body and in a bold Then
+step`, `still imports nothing from a scenario whose steps are all positive`,
+`drops a Given or When step even when it says never`, `drops a bold When
+segment that says never and keeps the Then segment of the same line`, `warns,
+naming the step, when it drops a Given or When step that carries a
+prohibition marker`, every case of `routes a kept Gherkin Then step with
+... to out_of_scope, never to in_scope` (19 marker spellings with the
+expected kept set written out in the test, not derived from the marker
+module, in a spec with bullets and in one without; the keep must accept
+exactly that set), every case of `imports each kept Gherkin line as its own
+out_of_scope item and blocks on it` (the review's g1, g3 and g4), `routes
+kept Gherkin lines through an Out of scope section, not through prohibition
+re-extraction`, every case of `keeps every marked clause of a kept line
+split at semicolons, so %s blocks` (the review's g7, four paths), `keeps a
+kept line's marked clauses only, so a following positive clause is not
+forbidden`, `keeps the 1.10.0 out_of_scope reading of
+an ask with a mid-sentence don't` and `keeps the prohibition on the next line
+its own item when a comma list ends a line`; and end to end in
+`packages/cli/tests/intent-guard.test.ts` by `imports Then SHALL NOT and And
+must never as out_of_scope, and check blocks on them`.
+
+Mutations run on 2026-10-18. First round: making `gherkinProhibitions`
+return nothing turns the two keep tests red; keeping Given and When steps
+turns `drops a Given or When step even when it says never` and `strips plain
+Given, When, Then, And and But steps from a labelled section` red; removing
+the marker filter turns `strips a scenario heading and its body from a
+labelled section`, `strips a Feature block from a labelled section` and
+`still imports nothing from a scenario whose steps are all positive` red.
+Second round (those that still apply to the code as it stands): a local
+keep list that adds "will not" turns the "will not" case red; not cutting
+kept text at the marker turns all 12 kept-marker cases of the no-bullet
+spec red; removing the Given and When check from the bold-step branch turns
+`drops a bold When segment ...` and the warning test red; dropping the
+warnings turns the warning test red. Third round: making
+`normalizeMarkerText` a no-op turns 11 cases red (both shapes of `SHALL
+NOT` with two spaces, must and not with a tab, `Do` and not with two spaces,
+and both curly don'ts, plus the g1 case); emitting kept lines in place
+instead of under the Out of scope heading turns the three straight and
+curly don't bullet-shape cases, the g1 case and the routing test red;
+restoring `[^.!?]` and `\s+` in `expandProhibitionLists` turns `keeps the
+prohibition on the next line its own item ...` red. Fourth round: keeping
+only the first semicolon clause turns all four g7 cases red; keeping a
+marker-less clause too turns the four g7 cases and `keeps a kept line's
+marked clauses only ...` red.
+
+Known open: on the first fix round a kept And line also became an
+acceptance criterion ("the exporter must never write to the audit log"), as
+in 1.9.0. Kept lines now sit in an Out of scope section, which extraction
+does not read acceptance criteria from, and the g1, g3 and g4 cases assert
+that no acceptance criterion carries a kept line; but no mutation has been
+shown to turn that assertion red on its own, so this stays open.
+
 Path budgets an ask names are suggested only, never written: the
-suggestion is computed at `packages/core/src/spec-bridge.ts:739` and printed
+suggestion is computed at `packages/core/src/spec-bridge.ts:859` and printed
 at `packages/skill/src/extract-cli.ts:149`; pinned by `never writes a
 suggestion into the draft` and `extract prints suggested allowed_paths and
 writes no budget`.
@@ -643,21 +744,59 @@ tokens are in it. For an out_of_scope item, the match is demoted to partial
 and not counted only when it has no evidence at all outside the file name: no
 token in that second set, no slash path, and no word of the item naming the
 file under the closed rule in `namesChangedFile`
-(`packages/core/src/tokenize.ts:307`: exactly the basename, the basename
-without its final extension, or a `*.ext` word). That check is
+(`packages/core/src/tokenize.ts:365`: exactly the basename, the basename
+without its final extension, or a `*.ext` word, case-sensitive). Each word of
+the item is compared in every form `wordForms`
+(`packages/core/src/tokenize.ts:322`) reduces it through: backslashes made
+slashes, then leading quotes, backticks, brackets and braces, leading `./`
+and `../` prefixes or a lone `/`, a trailing footnote or reference marker,
+and trailing punctuation trimmed, and one layer of paired emphasis removed
+per step,
+repeated until the word stops changing. A markdown link word gives the forms
+of its text and of its target, and a `*.ext` glob wrapped in emphasis stars
+gives the bare glob. So a name written in markdown, by a relative path or
+link, or ending a sentence (`` `Dockerfile`. ``, `**CHANGELOG.md**.`,
+`**payment**_methods`, `./Dockerfile`, `[changelog](CHANGELOG.md)`,
+`{Dockerfile}`, `*.pem*`) names the file. A dunder name (`__init__.py`) is
+never emphasis-stripped, so it names `__init__.py` and never `init.py`. A
+slash fragment reads backslashes as slashes and drops trailing sentence
+punctuation from each segment (`slashJoinedFragments`,
+`packages/core/src/tokenize.ts:234`), so `src\Dockerfile` and
+`src/Dockerfile.` are the path `src/Dockerfile`. A home-directory path
+(`~/Dockerfile`) names nothing, by ruling: it is outside the repository.
+That check is
 `packages/core/src/drift.ts:299`; when there is other evidence, the full
 strength counts, name tokens included (`packages/core/src/drift.ts:305`).
 Constraints are never demoted and keep the 1.9.0 strength
 (`packages/core/src/drift.ts:343`).
 
 Matchers are built from `prohibitedSubject`
-(`packages/core/src/tokenize.ts:74`), the rule without its leading negation;
+(`packages/core/src/tokenize.ts:79`), the rule without its leading negation;
 `stripEmphasis` (`packages/core/src/tokenize.ts:59`) removes only paired
-emphasis markers and backticks, never an underscore inside an identifier.
-From `original_ask`, only sentences with no prohibition marker are agreed
-scope (`askScopeSentences`, `packages/core/src/extract.ts:106`), and an ask
+emphasis markers and backticks, never an underscore inside an identifier:
+`EMPHASIS_RE` (`packages/core/src/tokenize.ts:53`) requires a non-alphanumeric
+character on both sides of the markers, so `payment_method_ids` stays whole.
+From `original_ask`, only sentences with no prohibition marker are
+candidates for subtraction (`askScopeSentences`,
+`packages/core/src/extract.ts:106`), and an ask
 token that an out_of_scope item or a constraint uses is never subtracted
 (`packages/core/src/drift.ts:228`).
+
+The second guard alone already implies the first, so the sentence filter in
+`askScopeSentences` is defence in depth and has no test of its own. Proof:
+every token drift scores a rule on is a token of `prohibitedSubject` of an
+out_of_scope item or a constraint (`packages/core/src/drift.ts:276`,
+`packages/core/src/drift.ts:331`), and each such token is in `ruleTokens`
+(`packages/core/src/drift.ts:224`). An ask token joins the scope set only
+when no token of `ruleTokens` matches it (`packages/core/src/drift.ts:228`),
+and `tokensMatch` is symmetric (`packages/core/src/tokenize.ts:117`), so no
+ask token can match, and subtract, any token a rule is scored on, whether or
+not its sentence was filtered. The scope set has no other reader in
+drift.ts. The 2026-10-18 audit's mutant M1 (drop the filter) is therefore
+equivalent and survives every test by construction (re-run 2026-10-18: all
+459 core tests stay green with it applied). A consequence worth
+knowing: as drift.ts stands, the ask's sentences subtract nothing from any
+rule at all; only in_scope tokens do.
 
 This changes what blocks: an out_of_scope match whose only evidence was a
 file-name keyword used to soft-block. Pinned in
@@ -674,6 +813,54 @@ underscore inside an identifier is part of the identifier` and `a
 prohibition in the ask is never subtracted as agreed scope` groups; and in
 `packages/core/tests/match-strength.test.ts` by `is strong when Never commit
 .env files is touched by apps/web/.env.local`.
+
+The markdown-wrapped and punctuated forms are pinned in
+`packages/core/tests/file-name-rule.test.ts` by every case of `names the
+file`, `reduces until the word stops changing` and `strips emphasis inside an
+identifier`, by `never strips an underscore that is part of an identifier`,
+`still names a dunder file whose underscores look like emphasis`, `stays
+closed: case-sensitive, no substring, no other extension` and every case of
+`counts the match in drift, not as file name only`; and end to end in
+`packages/cli/tests/intent-guard.test.ts` by both cases of `extract %j,
+freeze, stage %s: check --staged exits 1`. The two-underscore boundary is
+pinned by `leaves an identifier with two underscores whole` and `still blocks
+a rule naming a two-underscore directory`. Mutations run on 2026-10-18: a
+single trim-and-strip pass instead of the loop turns both `reduces until the
+word stops changing` cases red; dropping `stripEmphasis` from the reduction
+turns 11 cases red, and both end-to-end cases; stripping every underscore
+from the word turns the three `strips emphasis inside an identifier` cases
+and the `**payment**_methods.` drift case red; dropping the word-boundary
+lookarounds from `EMPHASIS_RE` turns `leaves an identifier with two
+underscores whole`, `still blocks a rule naming a two-underscore directory`
+and the `_payment_methods_` case red.
+
+The second fix round's forms are pinned in the same file by every case of
+`blocks` and `stays a pass, as in 1.9.0 or closed by rule` (the 2026-10-18
+review's probes, and its negative controls), every case of
+`namesChangedFile reads %s as naming %s`, and `keeps a dunder name whole
+rather than reading its underscores as emphasis`. Mutations run on
+2026-10-18: no leading `./` strip turns `/Dockerfile` and the three `./`
+cases of `namesChangedFile reads` red (the `./` drift cases also block
+through the slash-fragment path); no link handling turns five link cases
+red; no brace trimming turns both `{Dockerfile}` cases red; no starred-glob
+form turns both `*.pem*` cases red; keeping trailing punctuation on slash
+segments turns `src/Dockerfile.` and `config/.env.local.` red; no dunder
+guard turns `pkg/init.py` and the dunder test red; a single pass instead of
+the loop still turns both `reduces until the word stops changing` cases red.
+Third round (backslash paths, `../`, footnote and reference markers, the
+review's cases5): no backslash conversion in `wordForms` turns the `.\` and
+`..\` cases of `namesChangedFile reads` red; no backslash conversion in
+`slashJoinedFragments` turns `src\Dockerfile` red; no trailing-marker strip
+turns the three marker cases of both `blocks` and `namesChangedFile reads`
+red; `LEADING_PATH_RE` without `../` turns the `..\` and `../` cases of
+`namesChangedFile reads` red.
+
+The pin in this repository's own CI is pinned by `pins the
+@vaultcompass/intent-guard devDependency to ci.yml's intent-guard-version`
+in `examples/validate-integrations.test.ts`; setting the devDependency back
+to 1.2.1 turns it red. The other three gate devDependencies have no test,
+because their pins live in the conductor action's defaults; CONTRIBUTING
+says each pin change moves them.
 
 ## SKILL.md commands run from an installed package
 

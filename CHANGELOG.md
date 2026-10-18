@@ -7,6 +7,118 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+What can newly block you:
+
+- **Rules that name a file in markdown, by a relative or Windows path, by a
+  link, or with a footnote marker**, which blocked in 1.9.0, passed in
+  1.10.0, and block again (first entry under Fixed).
+- **An explicit prohibition written as a Gherkin Then, And or But step**,
+  which blocked in 1.9.0, passed in 1.10.0, and blocks again (second entry
+  under Fixed). This includes an expected outcome that happens to use one of
+  the kept markers: "Then the customer is never charged twice" imports as
+  the out_of_scope item "never charged twice" and blocks
+  `src/charge/retry.ts`, as it did in 1.9.0. Reword such an outcome (for
+  example "Then the customer is charged once") or delete the item from the
+  draft before `freeze`.
+
+### Fixed
+
+- **A rule that names a file in markdown, by a relative path or by a link
+  names the file again.** 1.10.0 compared the rule's words to the changed
+  file's basename after trimming leading quotes and brackets, trailing
+  punctuation and one full stop, in that order, and never removed emphasis.
+  Each of these blocked in 1.9.0, passed in 1.10.0, and blocks again:
+  ``Never touch `Dockerfile`.`` (the backtick sat behind the full stop),
+  `Do not edit "Makefile".`, `Never touch **Dockerfile**`,
+  ``Never touch **`Dockerfile`**``, `Never modify **payment**_methods`,
+  `Never touch ./Dockerfile`, `Never touch ../Dockerfile`,
+  ``Do not edit `./CHANGELOG.md`.``, `Never touch .\Dockerfile`,
+  `Never touch src\Dockerfile`, `Never touch [Dockerfile](Dockerfile)`,
+  `Do not edit the [changelog](CHANGELOG.md).`,
+  `Never edit [CHANGELOG.md][1]`, `Never edit Dockerfile[^1]`,
+  `Never edit Dockerfile[1].`, `Never touch {Dockerfile}`,
+  `Never commit *.pem*`, and a slash path ending a sentence,
+  `Never touch src/Dockerfile.` and `Never edit config/.env.local.`. End to
+  end: `extract --text "Add CSV export to the reports page. Do not edit
+  **CHANGELOG.md**."`, `freeze`, then a staged edit of `CHANGELOG.md` exits
+  1 under `check --staged` (exit 0 in 1.10.0). Each word of the rule is now
+  reduced, until it stops changing: backslashes become slashes; leading
+  quotes, backticks, brackets and braces, leading `./` and `../` prefixes
+  or a lone `/`, a trailing footnote or reference marker (`[^1]`, `[1]`),
+  and trailing punctuation are trimmed; and one layer of paired emphasis is
+  removed per step. Every form it passes through is compared. A markdown
+  link gives the forms of both its text and its target, and a `*.ext` glob
+  wrapped in emphasis stars gives the bare glob. A slash path written in a
+  rule reads backslashes as slashes, and its segments no longer keep a
+  trailing `.`, `,`, `;`, `:`, `!` or `?`. The rule stays closed: exact
+  basename, basename without its final extension, or a `*.ext` word,
+  case-sensitive, nothing substring. An underscore inside an identifier is
+  never emphasis (`payment_method_ids` stays whole), and a dunder name is
+  never emphasis-stripped, so `__init__.py` names `pkg/__init__.py` but not
+  `pkg/init.py` (1.9.0 matched the latter through its `init` token). A
+  home-directory path (`~/Dockerfile`) names nothing in the repository and
+  stays a pass, although 1.9.0 blocked it through its token.
+- **`import-spec` keeps an explicit prohibition written as a Gherkin
+  step.** 1.10.0 dropped every line of a Scenario, Feature, Background,
+  Examples or Rule block and every Given, When, Then, And and But step, so
+  "Then the system SHALL NOT email the file" and "And the exporter must
+  never write to the audit log" inside a scenario were lost; 1.9.0 imported
+  both as out_of_scope and `check --paths src/email/send.ts` exited 1, and
+  1.10.0 exited 0. Now a Then, And or But step, or a non-step line of a
+  scenario body, that carries SHALL NOT, MUST NOT, never, do not or don't
+  (straight or curly apostrophe, any spacing) is kept. Its step keyword is
+  removed and it is split at semicolons: every clause that carries a marker
+  becomes its own item, cut at its own first marker, and a clause with no
+  marker is dropped ("Then the exporter must never write to the audit log;
+  it must never call the ledger service" gives "never write to the audit
+  log" and "never call the ledger service"; "never retries; the scheduler
+  reruns the nightly job" gives "never retries"). Each item ends at its
+  first full stop ("SHALL NOT email the file. The owner receives a link"
+  gives "SHALL NOT email the file"), and is imported as an out_of_scope item
+  through the same path a bullet under an Out of scope heading takes, so its
+  routing never depends on extraction re-reading the marker. The words before the marker are removed because extraction read
+  them as an imperative, and an in_scope item made of them cancelled real
+  rules. A comma does not end the item: "never touches the archive bucket,
+  and the exporter emails the owner" is kept whole. Every other Gherkin
+  line is dropped, including an outcome written with no, cannot, can't,
+  should not, will not, won't, avoid or without ("Then no file is
+  downloaded"); write a rule you want enforced with one of the kept
+  markers, or under an Out of scope heading.
+- **A dropped Given or When step that carries a kept marker is now a
+  warning.** Given and When steps set up a scenario and are never imported
+  ("Given a user who has never exported"), where 1.9.0 imported a marked one
+  as a prohibition. `import-spec` now prints a warning naming the file and
+  the step, and saying it was not imported as a rule, so that block-to-pass
+  is visible.
+- **A prohibition with a comma list on one line no longer swallows the
+  prohibition on the next.** The comma-list expansion in extraction let its
+  capture run across a newline, so in "never touch the archive bucket, the
+  ledger or the mailer" followed by a line "do not touch the telemetry
+  bucket", the second rule became part of the first item and its own item
+  was deduped away. Every out_of_scope capture now stops at the end of its
+  line. The expansion is unchanged since 1.10.0, so the same capture
+  crossed lines in multi-line asks and imported specs there as well.
+- **The 1.10.0 entry overclaimed what the ask does.** It said the ask's
+  sentences with no prohibition marker "are not agreed scope" by contrast
+  with ones that are, implying those sentences are subtracted as agreed
+  scope. They are not: an ask token is subtracted only when no out_of_scope
+  item or constraint uses it, and every token a rule is scored on is one
+  that rule uses, so the ask subtracts nothing from any rule (proof in
+  docs/INVARIANTS.md). Only `in_scope` narrows a rule. Behaviour is
+  unchanged; docs/cli-reference.md now says so.
+
+### Changed
+
+- **This repository's own CI now runs the gate versions it pins.** On a
+  push run conductor prefers the gates in `node_modules/.bin` over the
+  action's installs, and the devDependencies still pinned conductor 0.4.0,
+  dep-guard 0.6.0, vault-guard 1.7.0 and intent-guard 1.2.1, so CI ran those
+  while `ci.yml` named 0.15.0, 1.12.0 and 1.10.0. The devDependencies are
+  now conductor 0.11.0, dep-guard 0.15.0, vault-guard 1.12.0 and
+  intent-guard 1.10.0, and a test fails when the intent-guard devDependency
+  and the `intent-guard-version` input in `ci.yml` disagree. No published
+  package changes because of this.
+
 ## [1.10.0] - 2026-10-17
 
 This is a minor release (1.10.0) under docs/release/stability-policy.md:

@@ -57,12 +57,17 @@ const EMPHASIS_RE = /(?<![A-Za-z0-9])(\*\*|__|\*|_)(?=\S)(.+?)(?<=\S)\1(?![A-Za-
  * touch `payment_methods`" becomes "Never touch payment_methods".
  */
 export function stripEmphasis(text: string): string {
-  let out = text.replace(/`/g, "");
+  let out = text;
   for (;;) {
-    const next = out.replace(EMPHASIS_RE, "$2");
+    const next = stripEmphasisOnce(out);
     if (next === out) return out;
     out = next;
   }
+}
+
+/** One step of stripEmphasis: code spans and one layer of paired emphasis. */
+function stripEmphasisOnce(text: string): string {
+  return text.replace(/`/g, "").replace(EMPHASIS_RE, "$2");
 }
 
 /**
@@ -228,11 +233,14 @@ const SLASH_FRAGMENT_RE = /[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]*)+/g;
 /** Slash-joined path fragments in `text`, as lowercase whole segments. */
 export function slashJoinedFragments(text: string): string[][] {
   const fragments: string[][] = [];
-  for (const match of text.matchAll(SLASH_FRAGMENT_RE)) {
+  // A Windows path is a path: "src\Dockerfile" is src/Dockerfile.
+  for (const match of text.replace(/\\/g, "/").matchAll(SLASH_FRAGMENT_RE)) {
+    // A segment never ends in sentence punctuation: "src/Dockerfile." at the
+    // end of a sentence is the path src/Dockerfile.
     const segments = match[0]
       .split("/")
-      .filter(Boolean)
-      .map((segment) => segment.toLowerCase());
+      .map((segment) => segment.replace(/[.,;:!?]+$/, "").toLowerCase())
+      .filter(Boolean);
     if (segments.length === 0) continue;
     fragments.push(segments);
   }
@@ -281,17 +289,67 @@ export function slashJoinedPathHits(
   return hits;
 }
 
-/** The words of a rule as written, with quotes, backticks, brackets and trailing punctuation trimmed. */
+const LEADING_WRAP_RE = /^[`'"(\[<{]+/;
+const TRAILING_WRAP_RE = /[`'")\]>},;:!?.]+$/;
+// Relative "./" and "../" prefixes, or a lone leading "/", before a name:
+// "./Dockerfile", "../../CHANGELOG.md". Backslashes are slashes by now.
+const LEADING_PATH_RE = /^(?:\.{1,2}\/)+|^\/(?!\/)/;
+// A footnote, note or reference-link marker after a name: "Dockerfile[^1]",
+// "Dockerfile[1].", "[CHANGELOG.md][1]". Never a whole bracketed word.
+const TRAILING_MARKER_RE = /(?<=[^\s[])\[[^\][]*\][.,;:!?]*$/;
+// A markdown link inside one word: "[CHANGELOG.md](./CHANGELOG.md)", or the
+// last word of "[the Dockerfile](./Dockerfile)".
+const LINK_RE = /^(.*)\]\(([^()\s]*)\)(.*)$/;
+// A "*.ext" glob with emphasis stars around it: "*.pem*", "**.pem**".
+const STARRED_GLOB_RE = /^\*+(\.[^./*]+)\*+$/;
+// A dunder name ("__init__.py", "__main__"): its underscores are the name,
+// never emphasis, so it is not reduced to "init.py".
+const DUNDER_RE = /^__\w+__(?:\.\w+)?$/;
+
+/**
+ * Every form a word of a rule takes on its way to the bare name: backslashes
+ * become slashes, then leading quotes, backticks, brackets and braces, leading
+ * "./" and "../" prefixes or a lone "/", a trailing footnote or reference
+ * marker ("[^1]", "[1]"), and trailing punctuation are trimmed, paired emphasis is removed with stripEmphasis, and
+ * the two repeat until the word stops changing, so "`Dockerfile`.",
+ * "**Dockerfile**", **"Makefile"**, "./Dockerfile", "{Dockerfile}" and
+ * "**payment**_methods" all reach the name. A markdown link gives the forms
+ * of its text and of its target; a "*.ext" glob wrapped in emphasis stars
+ * gives the bare glob. Each intermediate form is kept as a candidate. An
+ * underscore inside an identifier is never emphasis (EMPHASIS_RE requires a
+ * word boundary on both sides), and a dunder name is never emphasis-stripped.
+ */
+function wordForms(raw: string): string[] {
+  // A Windows path is a path: "src\Dockerfile", ".\Dockerfile".
+  const word = raw.replace(/\\/g, "/");
+  const link = word.match(LINK_RE);
+  if (link) return [...new Set([...wordForms(link[1]), ...wordForms(link[2])])];
+  const forms = new Set<string>();
+  // The 1.10.0 reduction, kept so no word that matched there stops matching.
+  forms.add(raw.replace(/^[`'"(\[<]+/, "").replace(/[`'")\]>,;:!?]+$/, "").replace(/\.$/, ""));
+  let current = word;
+  for (;;) {
+    forms.add(current);
+    const trimmed = current
+      .replace(LEADING_WRAP_RE, "")
+      .replace(TRAILING_MARKER_RE, "")
+      .replace(TRAILING_WRAP_RE, "")
+      .replace(LEADING_PATH_RE, "");
+    forms.add(trimmed);
+    const glob = trimmed.match(STARRED_GLOB_RE);
+    if (glob) forms.add(`*${glob[1]}`);
+    // One layer at a time, so a dunder name inside emphasis is seen whole.
+    const next = DUNDER_RE.test(trimmed) ? trimmed : stripEmphasisOnce(trimmed);
+    if (next === current) break;
+    current = next;
+  }
+  forms.delete("");
+  return [...forms];
+}
+
+/** The candidate words of a rule as written, each in every form wordForms reduces it through. */
 function ruleWords(rule: string): string[] {
-  return rule
-    .split(/\s+/)
-    .map((word) =>
-      word
-        .replace(/^[`'"(\[<]+/, "")
-        .replace(/[`'")\]>,;:!?]+$/, "")
-        .replace(/\.$/, ""),
-    )
-    .filter(Boolean);
+  return rule.split(/\s+/).filter(Boolean).flatMap(wordForms);
 }
 
 /**

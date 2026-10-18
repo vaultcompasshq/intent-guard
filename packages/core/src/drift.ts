@@ -215,10 +215,10 @@ function scopeTokens(contract: IntentContract): Set<string> {
   for (const item of contract.in_scope) {
     for (const t of tokenize(item)) all.add(t);
   }
-  // original_ask holds the whole ask, not its first sentence. Only its
-  // sentences with no prohibition marker describe agreed work, and even from
-  // those a token is never subtracted when an out_of_scope item or a
-  // constraint uses it: the ask must not cancel a rule it produced.
+  // An ask token joins only when no rule token matches it, so as written the
+  // ask subtracts nothing from any rule (proof: docs/INVARIANTS.md, "A
+  // file-name keyword match alone is not drift"). Kept as defence in depth;
+  // in_scope is what narrows a rule.
   const ruleTokens = new Set<string>();
   for (const text of [...contract.out_of_scope, ...contract.constraints.map((c) => c.rule)]) {
     for (const t of tokenize(prohibitedSubject(text))) ruleTokens.add(t);

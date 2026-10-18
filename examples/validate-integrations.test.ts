@@ -24,6 +24,22 @@ function readText(path: string) {
   return readFileSync(join(ROOT, path), "utf8");
 }
 
+// On a push run conductor prefers the gates in node_modules/.bin over the
+// action's own installs, so the devDependency is what this repository's CI
+// actually runs. Through 1.10.0 it was 1.2.1 while ci.yml named 1.10.0.
+describe("this repository's CI runs the intent-guard it pins", () => {
+  it("pins the @vaultcompass/intent-guard devDependency to ci.yml's intent-guard-version", () => {
+    const devDependency = readJson("package.json").devDependencies["@vaultcompass/intent-guard"];
+    const pins = [...readText(".github/workflows/ci.yml").matchAll(/^\s*intent-guard-version:\s*['"]?([^\s'"#]+)/gm)].map(
+      (match) => match[1],
+    );
+    expect(pins.length).toBeGreaterThan(0);
+    expect(new Set(pins).size).toBe(1);
+    expect(devDependency).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(devDependency).toBe(pins[0]);
+  });
+});
+
 describe("integration hook samples", () => {
   it("ships valid Codex hooks JSON", () => {
     const hooks = readJson("integrations/codex/hooks.json.sample");

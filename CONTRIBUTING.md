@@ -37,6 +37,26 @@ Open a GitHub issue (once remote exists) or comment on the spec with:
 
 ---
 
+## Pinning the guardrail gates
+
+On a push run the conductor action prefers the gates in `node_modules/.bin`
+over its own pinned installs, so the `@vaultcompass/*` gate devDependencies in
+`package.json` are what this repository's CI actually runs. Every pull request
+that moves a gate pin (the conductor action pin and its `intent-guard-version`
+input in `.github/workflows/ci.yml`, which carry the dep-guard and vault-guard
+defaults) moves the matching devDependency in the same change, conductor,
+dep-guard, vault-guard and intent-guard alike. A test in
+`examples/validate-integrations.test.ts` enforces this for intent-guard only.
+The conductor, dep-guard and vault-guard devDependencies have no test,
+because their pins live in the conductor action's defaults rather than in
+this repository: at each pin pull request the author checks them by hand
+against the defaults of the conductor action version being pinned, and the
+reviewer confirms it. The runtime control is conductor's own version-skew
+warning, due in the next conductor release, which reports a resolved gate
+version that differs from the action's pin.
+
+---
+
 ## Public repo hygiene
 
 Conductor is **public OSS**. Never commit names, paths, or context from other Vault &

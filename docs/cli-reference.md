@@ -88,8 +88,21 @@ it had in 1.9.0, file name included: "Never modify billing" against
 block.
 
 **The closed file-name rule.** This is the rule an author can rely on to
-guard a file by name. A word of an out_of_scope item, written plain or in
-backticks, names a changed file when it is, case-sensitively:
+guard a file by name. Each word of an out_of_scope item is reduced, until
+it stops changing: backslashes become slashes; leading quotes, backticks,
+brackets and braces, leading `./` and `../` prefixes or a lone `/`, a
+trailing footnote or reference marker (`[^1]`, `[1]`), and trailing
+punctuation are trimmed; and one layer of paired emphasis is removed per
+step. A markdown link word gives both its text and its target, and a
+`*.ext` glob wrapped in emphasis stars (`*.pem*`) gives the bare glob. So
+``Never touch `Dockerfile`.``, `Never touch **Dockerfile**`,
+`Never modify **payment**_methods`, `Never touch ./Dockerfile`,
+`Never touch .\Dockerfile`, `Never touch {Dockerfile}`,
+`Do not edit the [changelog](CHANGELOG.md).`,
+`Never edit [CHANGELOG.md][1]` and `Never edit Dockerfile[^1]` each name
+the file. A dunder name (`__init__.py`) is never emphasis-stripped, and a
+home-directory path (`~/Dockerfile`) names nothing in the repository. The
+word names a changed file when one of its forms is, case-sensitively:
 
 - exactly the file's basename: `.env.local`, `.env.production`,
   `CODEOWNERS`, `Dockerfile`, `Makefile`, `LICENSE`, `id_rsa`,
@@ -99,6 +112,11 @@ backticks, names a changed file when it is, case-sensitively:
   `secrets.json`;
 - a `*.ext` word whose extension ends the basename: `*.pem` names
   `server.pem`.
+
+A slash path written in the item (`src/Dockerfile`, `src\Dockerfile`,
+`config/.env.local.` at the end of a sentence, without the full stop)
+matches as consecutive whole
+path segments, separately from this rule.
 
 Such a word makes the match a path match, so it is never demoted. Nothing
 else about a file name is: a word found inside a longer name (`sync` in
@@ -113,15 +131,16 @@ removed; an underscore inside an identifier (`payment_methods`, `id_rsa`)
 stays. The rule text itself is kept as written, in the contract and in the
 finding.
 
-**The ask never cancels a rule it produced.** in_scope tokens are subtracted
-from each item before matching, as before. From `original_ask`, only the
-sentences with no prohibition marker anywhere in them (no, not, never,
-don't, cannot, won't, avoid and the like) are agreed scope, and even from
-those a token is not subtracted when an out_of_scope item or a constraint
-uses it. So "Add a theme toggle. Keep the change small and never touch
-billing." still blocks `src/billing/invoice.ts`. A bug description that
-extraction reads as a prohibition ("never updated by sync") is not
-cancelled either; delete it from the draft.
+**The ask never cancels a rule.** in_scope tokens are subtracted from each
+item before matching, as before. The ask itself subtracts nothing: a token
+of `original_ask` is subtracted only when no out_of_scope item or
+constraint uses it, and every token drift scores a rule on is one that rule
+uses, so no ask token can ever remove one (the proof is in
+docs/INVARIANTS.md). So "Add a theme toggle. Keep the change small and never
+touch billing." still blocks `src/billing/invoice.ts`. A bug description
+that extraction reads as a prohibition ("never updated by sync") is not
+cancelled either; delete it from the draft. To narrow a rule with agreed
+scope, put the scope in `in_scope`.
 
 A long prose rule cannot be matched lexically by a path: a 1-in-8 overlap
 is none by design. Secrets and `.env` files are vault-guard's job, not a
@@ -255,6 +274,24 @@ opens with a title-case `Given`, and any step with a bold keyword
 (`**Given** x, **When** y, **Then** z`). An upper-case EARS requirement
 ("WHEN x THE SYSTEM SHALL y") is a requirement and is kept, and so is a
 prose line that merely starts with When. Table rows are dropped.
+
+One exception: an explicit prohibition inside Gherkin is kept. A Then, And
+or But step, or a non-step line of a scenario body, that says SHALL NOT,
+MUST NOT, never, do not or don't (straight or curly apostrophe, any
+spacing) is imported without the step keyword, split at semicolons: each
+clause that carries a marker becomes its own `out_of_scope` item, from its
+marker to the clause's first full stop, as if it were a bullet under an Out
+of scope heading, and a clause with no marker is dropped ("Then the system
+SHALL NOT email the file; SHALL NOT upload to the archive bucket" gives
+both items). A comma does not end an item. An expected
+outcome that uses a kept marker is imported too ("Then the customer is
+never charged twice" gives "never charged twice"); reword it or delete the
+item before `freeze`. Every other Gherkin line is dropped, including an
+outcome written with no, cannot, can't, should not, will not, won't, avoid
+or without ("Then no file is downloaded"): write a rule you want enforced
+with one of the kept markers, or under an Out of scope heading. A Given or
+When step is always dropped; when it carries a kept marker, `import-spec`
+warns, naming the file and the step.
 
 A spec with no labelled section at all yields an empty draft: no
 `out_of_scope`, one placeholder `in_scope` item saying so, and one

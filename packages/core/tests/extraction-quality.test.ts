@@ -6,7 +6,7 @@ import { ORIGINAL_ASK_MAX, draftContract, draftContractDetailed } from "../src/e
 import { scoreDrift } from "../src/drift.js";
 import { prohibitedSubject } from "../src/tokenize.js";
 import { suggestPathBudgets } from "../src/path-suggestions.js";
-import { NO_LABELLED_SCOPE_ITEM, importSpecContract } from "../src/spec-bridge.js";
+import { NO_LABELLED_SCOPE_ITEM, importSpecContract, selectLabelledSections } from "../src/spec-bridge.js";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -275,15 +275,18 @@ describe("import-spec reads only labelled scope sections", () => {
   });
 
   // Each shape alone under a labelled heading, so no other rule can hide it.
+  // Every line here would be extracted if it were kept (a "no" or "should
+  // not" is a prohibition in ordinary prose), and none carries one of the
+  // explicit markers a Gherkin line is kept for.
   const gherkinCases: Array<{ name: string; lines: string[]; absent: string }> = [
     {
       name: "a scenario heading and its body",
-      lines: ["### Scenario: manager exports", "The export must not include drafts."],
+      lines: ["### Scenario: manager exports", "The export should not include drafts."],
       absent: "include drafts",
     },
     {
       name: "plain Given, When, Then, And and But steps",
-      lines: ["Given a manager on the report page", "When they never pick a format", "Then no file is downloaded", "And the button never stays enabled", "But never the dialog"],
+      lines: ["Given a manager on the report page", "When they never pick a format", "Then no file is downloaded", "And no button stays enabled", "But no dialog opens"],
       absent: "never",
     },
     {
@@ -293,7 +296,7 @@ describe("import-spec reads only labelled scope sections", () => {
     },
     {
       name: "a Feature block",
-      lines: ["Feature: export", "  Background:", "    The export must not include drafts."],
+      lines: ["Feature: export", "  Background:", "    The export should not include drafts."],
       absent: "include drafts",
     },
     {
@@ -314,6 +317,335 @@ describe("import-spec reads only labelled scope sections", () => {
       expect(imported.contract.in_scope.join("\n")).toContain("CSV export button");
     });
   }
+
+  // 1.9.0 read these as prohibitions and 1.10.0 dropped them with the rest of
+  // the block. A Gherkin line with an explicit prohibition marker (SHALL NOT,
+  // MUST NOT, never, do not, don't) is kept, without its step keyword.
+  const auditScenario = [
+    "# Requirements",
+    "",
+    "## Requirement 1: Export",
+    "",
+    "Scenario: export a report",
+    "  Given a saved report",
+    "  When I export it",
+    "  Then the system SHALL NOT email the file",
+    "  And the exporter must never write to the audit log",
+  ].join("\n");
+
+  it("keeps an explicit prohibition written as a Then or And step, as out_of_scope", () => {
+    const imported = importKiro({ "requirements.md": auditScenario });
+    const out = imported.contract.out_of_scope.join("\n");
+    expect(out).toMatch(/SHALL NOT email the file/);
+    expect(out).toMatch(/never write to the audit log/);
+    expect(out).not.toMatch(/^(?:Then|And)\b/m);
+    const all = JSON.stringify({ ...imported.contract, original_ask: "" }).toLowerCase();
+    expect(all).not.toContain("saved report");
+    expect(all).not.toContain("export it");
+    const drift = scoreDrift({ ...imported.contract, frozen_at: "2026-10-18T00:00:00Z" }, {
+      changedPaths: ["src/email/send.ts"],
+    });
+    expect(drift.categories.scope_creep).toBeGreaterThan(0);
+  });
+
+  it("still imports nothing from a scenario whose steps are all positive", () => {
+    const imported = importKiro({
+      "requirements.md": [
+        "## Requirements",
+        "",
+        "- Add the CSV export button",
+        "",
+        "Scenario: export a report",
+        "  Given a saved report",
+        "  When I export it",
+        "  Then the file is emailed to the owner",
+        "  And the audit log records the export",
+        "  But no copy is kept on the server",
+      ].join("\n"),
+    });
+    const all = JSON.stringify({ ...imported.contract, original_ask: "" }).toLowerCase();
+    expect(all).not.toContain("emailed");
+    expect(all).not.toContain("audit log");
+    // An expected outcome written with "no" is not one of the kept markers.
+    expect(all).not.toContain("copy is kept");
+    expect(imported.contract.out_of_scope).toEqual([]);
+  });
+
+  it("keeps an explicit prohibition in a scenario heading's body and in a bold Then step", () => {
+    const imported = importKiro({
+      "requirements.md": [
+        "## Requirements",
+        "",
+        "- Add the CSV export button",
+        "",
+        "### Scenario: manager exports",
+        "The export must not include drafts.",
+        "",
+        "## Constraints",
+        "",
+        "1. **Given** an empty table, **When** exporting, **Then** the system SHALL NOT write rows",
+      ].join("\n"),
+    });
+    const out = imported.contract.out_of_scope.join("\n");
+    expect(out).toMatch(/must not include drafts/i);
+    expect(out).toMatch(/SHALL NOT write rows/);
+    expect(JSON.stringify(imported.contract).toLowerCase()).not.toContain("empty table");
+  });
+
+  it("drops a Given or When step even when it says never", () => {
+    const imported = importKiro({
+      "requirements.md": [
+        "## Requirements",
+        "",
+        "- Add the CSV export button",
+        "",
+        "Given a user who has never exported",
+        "When they never pick a format",
+        "Then the default format is CSV",
+      ].join("\n"),
+    });
+    expect(JSON.stringify(imported.contract).toLowerCase()).not.toContain("never");
+  });
+
+  it("drops a bold When segment that says never and keeps the Then segment of the same line", () => {
+    const imported = importKiro({
+      "requirements.md": [
+        "## Requirements",
+        "",
+        "- Add the CSV export button",
+        "",
+        "1. **When** the user has never consented, **Then** the system SHALL NOT send push alerts",
+      ].join("\n"),
+    });
+    const all = JSON.stringify(imported.contract).toLowerCase();
+    expect(all).not.toContain("never consented");
+    expect(imported.contract.out_of_scope.join("\n")).toMatch(/SHALL NOT send push alerts/);
+  });
+
+  it("warns, naming the step, when it drops a Given or When step that carries a prohibition marker", () => {
+    const imported = importKiro({
+      "requirements.md": [
+        "## Requirements",
+        "",
+        "- Add the CSV export button",
+        "",
+        "Scenario: consent",
+        "  Given a saved report",
+        "  When the mailer must never send newsletters",
+        "  Then the default format is CSV",
+        "",
+        "1. **When** the user has never consented, **Then** the system SHALL NOT send push alerts",
+      ].join("\n"),
+    });
+    const dropped = imported.warnings.filter((w) => w.includes("not imported as a rule"));
+    expect(dropped).toHaveLength(2);
+    expect(dropped[0]).toContain("When the mailer must never send newsletters");
+    expect(dropped[0]).toContain("requirements.md");
+    expect(dropped[1]).toContain("the user has never consented");
+    // A step with no marker is dropped silently, as before.
+    expect(imported.warnings.join("\n")).not.toContain("a saved report");
+  });
+
+  // A line the Gherkin keep accepts must land in out_of_scope, never in
+  // in_scope, where its tokens would cancel a real out_of_scope item. The
+  // expected kept set is written out here, not derived from the marker
+  // module, so normalizeMarkerText is pinned by the curly and spacing rows.
+  const markerCandidates: Array<[string, boolean]> = [
+    ["SHALL NOT", true], ["shall not", true], ["SHALL  NOT", true], ["MUST NOT", true],
+    ["must\tnot", true], ["must never", true], ["never", true],
+    ["do not", true], ["Do  not", true], ["don't", true],
+    ["don’t", true], ["don‘t", true],
+    ["should not", false], ["cannot", false], ["can't", false], ["will not", false],
+    ["won't", false], ["avoid", false], ["no longer", false],
+  ];
+  // Two shapes: a spec with a bullet list (extraction's clause parser then
+  // reads bullets only) and one with none (it reads every sentence, which is
+  // where a subject in front of the marker became an in_scope item).
+  for (const [marker, explicit, scope] of markerCandidates.flatMap(([m, kept]) => [
+    [m, kept, "- Add the CSV export button"] as const,
+    [m, kept, "Add the CSV export button."] as const,
+  ])) {
+    it(`routes a kept Gherkin Then step with ${JSON.stringify(marker)} to out_of_scope, never to in_scope (${scope.startsWith("-") ? "bullets" : "prose"})`, () => {
+      const spec = [
+        "## Requirements",
+        "",
+        scope,
+        "",
+        "Scenario: digest",
+        "  Given a saved report",
+        // "archive" is an extraction action verb: a subject left in front of
+        // the marker would become an in_scope item of its own.
+        `  Then the archive job ${marker} touch the weekly digest bucket`,
+      ].join("\n");
+      const imported = importKiro({ "requirements.md": spec });
+      const inScope = imported.contract.in_scope.join("\n").toLowerCase();
+      const outOfScope = imported.contract.out_of_scope.join("\n").toLowerCase();
+      // The keep accepts exactly the listed markers, no more and no fewer.
+      expect(selectLabelledSections(spec).text.includes("digest bucket")).toBe(explicit);
+      expect(inScope).not.toContain("digest bucket");
+      expect(inScope).not.toContain("archive");
+      if (explicit) {
+        expect(outOfScope).toContain("touch the weekly digest bucket");
+      } else {
+        expect(outOfScope).not.toContain("digest bucket");
+      }
+    });
+  }
+
+  // The 2026-10-18 review's g3 and g4 specs: several kept lines in a row. In
+  // the second fix round a comma-list capture ran across the newline into the
+  // next kept line, and the But line's own item was deduped away.
+  const g3 = [
+    "# Requirements Document",
+    "",
+    "## Requirements",
+    "",
+    "### Requirement 1: Export",
+    "",
+    "- Add the CSV export button",
+    "",
+    "Scenario: export",
+    "  Given a saved report",
+    "  Then the exporter and the mailer must never write to the audit log",
+    "  And the payments table must never be dropped",
+    "  And the uploader never touches the archive bucket, and the exporter emails the owner",
+    "  And the exporter never retries; the scheduler reruns the nightly job",
+    "  But the uploader do not touch the telemetry bucket",
+    "  Then the system SHALL NOT email the file. The owner receives a download link",
+  ].join("\n");
+  const g4 = [
+    "# Requirements Document",
+    "",
+    "## Requirements",
+    "",
+    "### Requirement 1: Export",
+    "",
+    "- Add the CSV export button",
+    "",
+    "Scenario: export",
+    "  Given a saved report",
+    "  Then the system SHALL NOT email the file",
+    "  And the exporter must never write to the audit log",
+    "  But the uploader do not touch the telemetry bucket",
+    "  And the archiver never compresses the ledger",
+  ].join("\n");
+  const g1 = [
+    "## Requirements",
+    "",
+    "- Add the CSV export button",
+    "",
+    "Scenario: consent",
+    "  Given a saved report",
+    "  But the uploader don’t touch the telemetry bucket",
+  ].join("\n");
+
+  it.each([
+    ["g1 (curly don't)", g1],
+    ["g3 (six kept lines)", g3],
+    ["g4 (four kept lines)", g4],
+  ])("imports each kept Gherkin line as its own out_of_scope item and blocks on it: %s", (_name, spec) => {
+    const imported = importKiro({ "requirements.md": spec });
+    const out = imported.contract.out_of_scope;
+    expect(out.some((item) => /^do(?: not|n't) touch the telemetry bucket$/i.test(item))).toBe(true);
+    // No item runs across two kept lines.
+    for (const item of out) expect(item).not.toMatch(/telemetry.*(?:audit|email|ledger)|(?:audit|archive|ledger).*telemetry/i);
+    // A kept line is an out_of_scope item only, never an acceptance criterion.
+    expect(JSON.stringify(imported.contract.acceptance_criteria)).not.toMatch(/telemetry|audit log/i);
+    const drift = scoreDrift({ ...imported.contract, frozen_at: "2026-10-18T00:00:00Z" }, {
+      changedPaths: ["src/telemetry/bucket.ts"],
+    });
+    expect(drift.action).not.toBe("proceed");
+  });
+
+  it("routes kept Gherkin lines through an Out of scope section, not through prohibition re-extraction", () => {
+    const selected = selectLabelledSections(g4).text.split("\n");
+    const heading = selected.findIndex((line) => /^#{1,6} Out of scope\b/.test(line));
+    expect(heading).toBeGreaterThan(-1);
+    expect(selected.slice(heading + 1)).toEqual([
+      "- SHALL NOT email the file",
+      "- never write to the audit log",
+      "- do not touch the telemetry bucket",
+      "- never compresses the ledger",
+    ]);
+  });
+
+  // The review's g7: every marked clause after a semicolon is its own rule, as
+  // 1.9.0 enforced them; only a marker-less clause is dropped.
+  it.each(["src/audit/log.ts", "src/ledger/service.ts", "src/email/send.ts", "src/archive/bucket.ts"])(
+    "keeps every marked clause of a kept line split at semicolons, so %s blocks",
+    (path) => {
+      const imported = importKiro({
+        "requirements.md": [
+          "# Requirements Document",
+          "",
+          "## Requirements",
+          "",
+          "- Add the CSV export button",
+          "",
+          "Scenario: export",
+          "  Given a saved report",
+          "  Then the exporter must never write to the audit log; it must never call the ledger service",
+          "  And the system SHALL NOT email the file; SHALL NOT upload to the archive bucket",
+          "  And the exporter never retries; the scheduler reruns the nightly job",
+        ].join("\n"),
+      });
+      const out = imported.contract.out_of_scope;
+      expect(out).toEqual(
+        expect.arrayContaining([
+          "never write to the audit log",
+          "never call the ledger service",
+          "SHALL NOT email the file",
+          "SHALL NOT upload to the archive bucket",
+          "never retries",
+        ]),
+      );
+      expect(out.join("\n")).not.toMatch(/scheduler/);
+      const drift = scoreDrift({ ...imported.contract, frozen_at: "2026-10-18T00:00:00Z" }, { changedPaths: [path] });
+      expect(drift.action).not.toBe("proceed");
+    },
+  );
+
+  it("keeps a kept line's marked clauses only, so a following positive clause is not forbidden", () => {
+    const imported = importKiro({ "requirements.md": g3 });
+    const out = imported.contract.out_of_scope.join("\n");
+    expect(out).toMatch(/never retries/);
+    expect(out).not.toMatch(/scheduler reruns/);
+    expect(out).not.toMatch(/owner receives/);
+  });
+
+  it("keeps the 1.10.0 out_of_scope reading of an ask with a mid-sentence don't", () => {
+    const toolbar = draftContract({
+      userText: "Add a mobile toolbar. Users don't see the export button on mobile today.",
+    });
+    const drift = scoreDrift(
+      { ...toolbar, frozen_at: "2026-10-18T00:00:00Z" },
+      { changedPaths: ["src/export/button.ts", "src/mobile/toolbar.ts"] },
+    );
+    expect(drift.action).toBe("proceed");
+    for (const ask of [
+      "Make the importer skip rows that don't parse, and log them to the audit table.",
+      "Add a retry button. Today customers who don't receive the invoice email have to call support.",
+      "Speed up the sync badge, and please don't touch the payments webhook.",
+    ]) {
+      const items = draftContract({ userText: ask }).out_of_scope.map((item) => item.toLowerCase());
+      // No duplicate: no item is contained in another.
+      for (const [i, item] of items.entries()) {
+        expect(items.filter((other, j) => j !== i && other.includes(item))).toEqual([]);
+      }
+    }
+  });
+
+  it("keeps the prohibition on the next line its own item when a comma list ends a line", () => {
+    const draft = draftContract({
+      userText: [
+        "- Add the CSV export button",
+        "never touch the archive bucket, the ledger or the mailer",
+        "do not touch the telemetry bucket",
+      ].join("\n"),
+    });
+    expect(draft.out_of_scope.join("\n")).toMatch(/do not touch the telemetry bucket/);
+    for (const item of draft.out_of_scope) expect(item).not.toMatch(/mailer.*telemetry/);
+  });
 
   it("keeps a prose line that starts with When outside a run of steps", () => {
     const imported = importKiro({
