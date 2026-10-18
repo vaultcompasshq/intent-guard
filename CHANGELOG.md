@@ -7,6 +7,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-10-18
+
+A patch release.
+
 What can newly block you:
 
 - **Rules that name a file in markdown, by a relative or Windows path, by a
