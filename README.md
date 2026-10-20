@@ -214,7 +214,7 @@ reach for first; this is what it runs:
   with:
     fetch-depth: 0
 - run: |
-    npx intent-guard check --project . \
+    npx --yes @vaultcompass/intent-guard@1.10.1 check --project . \
       --base origin/${{ github.base_ref }} \
       --trust-base origin/${{ github.base_ref }}
 ```
