@@ -345,23 +345,33 @@ jobs:
           PACKAGES="@vaultcompass/intent-guard-schema @vaultcompass/intent-guard-core @vaultcompass/intent-guard-skill @vaultcompass/intent-guard"
           FOUND=0
           MISSING=""
-          for i in $(seq 1 60); do
+          #
+          # About 20 minutes (80 attempts, 15 seconds apart). Each package
+          # must serve its version metadata AND its tarball, because
+          # "npm install" fetches the tarballs and the registry has served
+          # the tarball minutes after the metadata.
+          for i in $(seq 1 80); do
             MISSING=""
             for pkg in ${PACKAGES}; do
               if [[ "$(npm view "${pkg}@${VERSION}" version 2>/dev/null)" != "${VERSION}" ]]; then
                 MISSING="${MISSING} ${pkg}"
+                continue
+              fi
+              TARBALL="$(npm view "${pkg}@${VERSION}" dist.tarball 2>/dev/null || true)"
+              if [[ -z "${TARBALL}" ]] || ! curl -sfI -o /dev/null "${TARBALL}"; then
+                MISSING="${MISSING} ${pkg}(tarball)"
               fi
             done
             if [[ -z "${MISSING}" ]]; then
-              echo "All four packages visible on registry."
+              echo "All four packages and their tarballs visible on registry."
               FOUND=1
               break
             fi
-            echo "Waiting for npm registry (attempt ${i}/60), still missing:${MISSING}"
-            sleep 10
+            echo "Waiting for npm registry (attempt ${i}/80), still missing:${MISSING}"
+            sleep 15
           done
           if [[ "${FOUND}" -ne 1 ]]; then
-            echo "::error::Timed out waiting at ${VERSION} for:${MISSING}"
+            echo "::error::Timed out after about 20 minutes waiting at ${VERSION} for:${MISSING}"
             exit 1
           fi
 
