@@ -497,7 +497,7 @@ there is no merge base to diff against. Either check out with `fetch-depth: 0`,
 or fetch the base ref explicitly before running the gate:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
 - run: |
