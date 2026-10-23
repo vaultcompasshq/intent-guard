@@ -1,30 +1,17 @@
-# Intent Guard
+# intent-guard
 
-Intent Guard freezes an approved request as a contract, then checks later
-changes against it. What it reads is the set of paths a change touched: the
+intent-guard fails a commit or pull request that touches files outside the
+task you approved. You write the task down once ("Add CSV export. Do not touch
+billing."), freeze it as a contract, and the gate checks every later change
+against it: an edit to a protected path is blocked, and drift out of scope is
+reported against a threshold. It reads which files a change touched, not what changed inside them: the
 staged paths before a commit, or the paths a branch has changed since it
 forked, together with any free-text signals and the latest user message the
 caller chooses to pass in.
 
-<!-- guardrails-family: shared block, keep it identical in dep-guard, vault-guard, intent-guard and conductor -->
-The Vault & Compass guardrails are three gates over an AI-assisted coding
-session: [dep-guard](https://www.npmjs.com/package/@vaultcompass/dep-guard)
-checks what comes in (hallucinated package names, typosquats, tampered
-lockfile entries),
-[vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) checks
-what goes out (credentials about to be committed), and
-[intent-guard](https://www.npmjs.com/package/@vaultcompass/intent-guard)
-checks the change against what was approved (drift from a frozen intent
-contract, and change budgets). Each one installs, configures and runs on its
-own;
-[conductor](https://www.npmjs.com/package/@vaultcompass/conductor) is the
-optional umbrella that runs them from one policy file, one hook and one
-report, beside two scanners you install yourself:
-[gitleaks](https://github.com/gitleaks/gitleaks) for secrets anywhere in git
-history and [osv-scanner](https://github.com/google/osv-scanner) for known
-vulnerabilities. conductor scans nothing itself and installs nothing that
-is not its own.
-<!-- /guardrails-family -->
+See it run: [conductor-proof pull request
+11](https://github.com/vaultcompasshq/conductor-proof/pull/11) is an edit to a
+path the contract protects. An ordinary job passes it; the gate fails it.
 
 The package is **`@vaultcompass/intent-guard`**, and it installs as
 `npm install --save-dev @vaultcompass/intent-guard` (or
@@ -32,23 +19,8 @@ The package is **`@vaultcompass/intent-guard`**, and it installs as
 `intentguard` also exists on npm; it is a different project and has nothing to
 do with this one, so install the scoped name.
 
-> **Renamed in 1.2.0.** This project shipped as **Conductor** through 1.1.0. The
-> npm packages are now `@vaultcompass/intent-guard`,
-> `@vaultcompass/intent-guard-core`, `@vaultcompass/intent-guard-schema`, and
-> `@vaultcompass/intent-guard-skill`; the binary is `intent-guard`, and the
-> per-command binaries are `intent-guard-check`, `intent-guard-report`, and so
-> on. The old binary names are gone in this release, so a pre-commit hook or
-> agent hook that still calls `conductor-check` needs updating: re-run
-> `intent-guard hook install`. See [the upgrade
-> notes](#upgrading-from-conductor-110).
-
-> **State directory renamed in 1.3.0.** Per-project state now lives in
-> `.intent-guard/`, not `.conductor/`. The old name belongs to a different
-> product in this family, which writes `.guardrails.yaml` and `.guardrails/`
-> into the same repositories, and two similarly named directories from two
-> tools is a trap. An existing `.conductor/` is read as-is with a notice, and
-> renamed to `.intent-guard/` on the first write. If both directories exist,
-> every command fails closed rather than guessing which one is current.
+Formerly published as `@vaultcompass/conductor-cli`; see [Upgrading from
+conductor 1.1.0](#upgrading-from-conductor-110).
 
 Two kinds of finding come out of the gate. The first is drift: the change has
 moved outside what the contract put in scope, into something it put out of
@@ -87,7 +59,7 @@ never what changed inside them, so work that stays within the approved paths
 and does something the contract never sanctioned reads as clean. That is the
 real gap in this design. The `--signals` and `--message` flags soften it
 rather than close it: they are free text supplied by whatever is calling the
-gate, so they are only as honest as the caller. Intent Guard does not plan,
+gate, so they are only as honest as the caller. intent-guard does not plan,
 write code, or review it either. `intent-guard import-spec` imports Spec Kit,
 Kiro, and superpowers artifacts as a draft contract, reading only their
 labelled Scope, Out of scope, Non-goals, Requirements, Constraints and
@@ -98,7 +70,7 @@ and the contract itself is plain YAML any model can read. See
 ```
 User conversation
         |
-   Intent Guard layer    intent contract, drift guard, prompt coach
+   intent-guard layer    intent contract, drift guard, prompt coach
         |
    Coding assistants     planning, TDD, build, review
         |
@@ -123,14 +95,16 @@ User conversation
 | [docs/release/stability-policy.md](./docs/release/stability-policy.md) | What a version number promises |
 | [AGENTS.md](./AGENTS.md) | Rules for agents working in this repository |
 
-## What Intent Guard is / isn't
+## How it compares
 
-| Is | Isn't |
-|----|-------|
-| Governance layer for AI coding sessions | A foundation model or fine-tune |
-| Intent Contract + drift detection | A full autonomous coding agent |
-| User prompt coaching | Replacement for planning, review, or CI |
-| Multi-model (Claude, Codex, Gemini) | Cursor-only or single-vendor lock-in |
+| Tool | What it does | How intent-guard differs |
+|------|--------------|--------------------------|
+| CODEOWNERS | Names who must review a change to a path. | It does not know what the task was, so it cannot say whether a path was in scope for this change. intent-guard checks the paths against the task you approved, and a CODEOWNERS entry for `.intent-guard/**` can protect the contract itself. |
+| Path-filtered required checks | Run a job when files matching a pattern change. | The patterns are fixed in the workflow and the same for every change. A contract is written per task and frozen. |
+| Spec Kit, Kiro | Help you write the spec. | They do not check later changes against it. `intent-guard import-spec` reads their output as a draft contract, and the gate enforces it at commit and on the pull request. |
+
+It does not plan, write code or review it, and it does not read the diff, so
+it is a complement to those, not a replacement.
 
 ## Packages
 
@@ -156,7 +130,7 @@ intent-guard/
 
 The enforcement gate (`intent-guard check`, or `intent-guard-check`) returns a non-zero exit code when no
 frozen contract exists or staged changes drift past a blocking threshold: the
-one place Intent Guard *enforces* rather than *suggests*. Install it with
+one place intent-guard *enforces* rather than *suggests*. Install it with
 `intent-guard hook install` (add `--with-vault-guard` to pair secret scanning), or
 wire the sample hooks
 ([pre-commit.sample](./integrations/git-hooks/pre-commit.sample),
@@ -178,23 +152,25 @@ required for that protection. See the [hook README](./integrations/hooks/README.
 ### Install (npm)
 
 ```bash
-npx @vaultcompass/intent-guard@latest init --project .
-npx @vaultcompass/intent-guard@latest extract --project . --text "Add CSV export. Do not add new API endpoints."
-npx @vaultcompass/intent-guard@latest freeze --project . --approved-by "<you>"
-npx @vaultcompass/intent-guard@latest check --project . --staged
+npm install -g @vaultcompass/intent-guard
+
+intent-guard init --project .
+intent-guard extract --project . --text "Add CSV export. Do not add new API endpoints."
+intent-guard freeze --project . --approved-by "<you>"
+intent-guard check --project . --staged
 ```
 
 Install the pre-commit gate (and optionally pair [vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) secret scanning):
 
 ```bash
-npx @vaultcompass/intent-guard@latest hook install --project . --with-vault-guard
+intent-guard hook install --project . --with-vault-guard
 ```
 
 This writes a self-contained `.git/hooks/pre-commit`; drop `--with-vault-guard` for intent-only enforcement.
 
 ### AI session guardrails
 
-Intent Guard and vault-guard are independent gates for the same workflow:
+intent-guard and vault-guard are independent gates for the same workflow:
 
 | Gate | Tool | Blocks |
 |------|------|--------|
@@ -210,7 +186,7 @@ On CI, pass `--trust-base` as well as `--base`. The
 reach for first; this is what it runs:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
 - run: |
@@ -283,7 +259,7 @@ jobs:
   intent:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0        # required: the base branch has to be present
       - uses: vaultcompasshq/intent-guard@v1.10.1
@@ -351,7 +327,7 @@ Off a `pull_request` event there is no ref to decide `base` from, so set `base`
 or `paths` yourself. The action refuses a run that names neither rather than
 running the gate on an empty path set, which would pass every time.
 
-**There is no SARIF and nothing is uploaded to code scanning.** Intent Guard
+**There is no SARIF and nothing is uploaded to code scanning.** intent-guard
 reports one verdict about a change set rather than per-file findings with line
 numbers, so there is nothing for the security tab to show that the job's own
 pass or fail does not already say. The verdict and its reasons are in the job
@@ -359,7 +335,7 @@ log, under the run step; `json-output` is there for a workflow that wants to
 post them somewhere itself.
 
 To run this gate alongside dep-guard and vault-guard in a single job, use
-[the Conductor action](https://github.com/vaultcompasshq/conductor) instead,
+[the conductor action](https://github.com/vaultcompasshq/conductor) instead,
 which installs and runs all three, and can also run gitleaks and
 osv-scanner beside them from your own install step.
 
@@ -379,11 +355,33 @@ pnpm intent-guard -- report --project . --staged
 pnpm intent-guard -- rules audit --project .
 ```
 
+## Part of the Vault & Compass guardrails
+
+<!-- guardrails-family: shared block, keep it identical in dep-guard, vault-guard, intent-guard and conductor -->
+The Vault & Compass guardrails are three gates over an AI-assisted coding
+session, plus an optional umbrella: [dep-guard](https://www.npmjs.com/package/@vaultcompass/dep-guard)
+checks what comes in (hallucinated package names, typosquats, tampered
+lockfile entries),
+[vault-guard](https://www.npmjs.com/package/@vaultcompass/vault-guard) checks
+what goes out (credentials about to be committed), and
+[intent-guard](https://www.npmjs.com/package/@vaultcompass/intent-guard)
+checks the change against what was approved (drift from a frozen intent
+contract, and change budgets). Each one installs, configures and runs on its
+own;
+[conductor](https://www.npmjs.com/package/@vaultcompass/conductor) is the
+optional umbrella that runs them from one policy file, one hook and one
+report, beside two scanners you install yourself:
+[gitleaks](https://github.com/gitleaks/gitleaks) for secrets anywhere in git
+history and [osv-scanner](https://github.com/google/osv-scanner) for known
+vulnerabilities. conductor scans nothing itself and installs nothing that
+is not its own.
+<!-- /guardrails-family -->
+
 ## Development
 
 ```bash
 pnpm install
-pnpm test      # 523 tests (builds first, then schema + core + skill + cli + examples/integrations)
+pnpm test      # builds first, then schema + core + skill + cli + examples/integrations
 pnpm dogfood:cursor-hooks   # Cursor rule + hook install pass/fail fixture
 pnpm dogfood:claude-hooks   # Claude Code SessionStart/Stop lifecycle fixture
 pnpm build
@@ -419,7 +417,7 @@ pnpm intent-guard -- resume  --project .                    # brief + recent his
 
 Full flags: [docs/cli-reference.md](./docs/cli-reference.md).
 The gate
-(`intent-guard check`, or `intent-guard-check`) is the one place Intent Guard
+(`intent-guard check`, or `intent-guard-check`) is the one place intent-guard
 *enforces* rather than *suggests*:
 wire it via [integrations/git-hooks/pre-commit.sample](./integrations/git-hooks/pre-commit.sample)
 locally, and the [GitHub Action](#github-action) on CI
@@ -427,9 +425,28 @@ locally, and the [GitHub Action](#github-action) on CI
 steps out yourself).
 Use [pre-commit-with-vault-guard.sample](./integrations/git-hooks/pre-commit-with-vault-guard.sample)
 or [conductor-vault-guard-ci.yml.sample](./integrations/github-actions/conductor-vault-guard-ci.yml.sample)
-when you want a separate secret-scanning gate beside Intent Guard.
+when you want a separate secret-scanning gate beside intent-guard.
 
 ## Upgrading from Conductor 1.1.0
+
+**Renamed in 1.2.0.** This project shipped as **Conductor** through 1.1.0. The
+npm packages are now `@vaultcompass/intent-guard`,
+`@vaultcompass/intent-guard-core`, `@vaultcompass/intent-guard-schema`, and
+`@vaultcompass/intent-guard-skill`; the binary is `intent-guard`, and the
+per-command binaries are `intent-guard-check`, `intent-guard-report`, and so
+on. The old binary names are gone in this release, so a pre-commit hook or
+agent hook that still calls `conductor-check` needs updating: re-run
+`intent-guard hook install`.
+
+**State directory renamed in 1.3.0.** Per-project state now lives in
+`.intent-guard/`, not `.conductor/`. The old name belongs to a different
+product in this family, which writes `.guardrails.yaml` and `.guardrails/`
+into the same repositories, and two similarly named directories from two
+tools is a trap. An existing `.conductor/` is read as-is with a notice, and
+renamed to `.intent-guard/` on the first write. If both directories exist,
+every command fails closed rather than guessing which one is current.
+
+The steps:
 
 1. Replace the dependency: `npm uninstall @vaultcompass/conductor-cli` then
    `npm install -D @vaultcompass/intent-guard`. Same for `-core`, `-schema`, and
@@ -479,20 +496,9 @@ Anything reading the frozen contract by path (a CI step, another tool) should
 read `.intent-guard/intent-contract.yaml`. The pre-1.3.0 path was
 `.conductor/intent-contract.yaml`.
 
-> **Upgrade `@vaultcompass/conductor` alongside this.** The published umbrella
-> `@vaultcompass/conductor` 0.2.2 reads the frozen contract from
-> `.conductor/intent-contract.yaml`, so after migration it stops finding one,
-> falls back to spec discovery, and then to a no-contract advisory that passes.
-> The intent gate goes quiet instead of failing, which means an upgrade here
-> silently downgrades it there and nothing in either tool's output says so.
-> `@vaultcompass/conductor` 0.2.3 reads `.intent-guard/intent-contract.yaml`
-> first and `.conductor/intent-contract.yaml` second, so it works either side
-> of the migration. Upgrade it in the same change, or check that the umbrella
-> still reports the intent gate as running.
-
 ## Origin
 
-Intent Guard grew out of repeated intent-drift failures in AI-assisted development workflows: vague prompts expanded scope, long sessions lost the original request, and reviews caught implementation quality more reliably than direction.
+intent-guard grew out of repeated intent-drift failures in AI-assisted development workflows: vague prompts expanded scope, long sessions lost the original request, and reviews caught implementation quality more reliably than direction.
 
 Adopter feedback is a row in [FINDINGS.md](FINDINGS.md). How to change this repository is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
