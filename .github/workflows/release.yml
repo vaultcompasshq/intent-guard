@@ -43,6 +43,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          check-latest: true
           cache: pnpm
 
       # Runs before install, build, test and publish on purpose. This workflow
@@ -222,6 +223,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          check-latest: true
           registry-url: https://registry.npmjs.org
 
       - name: Upgrade npm for OIDC trusted publishing
@@ -326,6 +328,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          check-latest: true
           registry-url: https://registry.npmjs.org
 
       - name: Install published CLI and run init
