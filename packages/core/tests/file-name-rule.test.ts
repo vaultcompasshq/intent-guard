@@ -375,7 +375,10 @@ describe("emphasis inside a word", () => {
 
 // The c5532a3 review's N-a: the multi-word emphasis pattern was cubic in the
 // rule's length (a 13 KB rule took 138 s). Each reading must stay fast on a
-// long adversarial rule.
+// long adversarial rule. The bound is loose on purpose: the deeply nested case
+// takes about 1 s alone but over 7 s on a heavily loaded machine, while the
+// cubic pattern and the uncapped nesting loop it guards against each ran for
+// many minutes, so 15 s still separates the two.
 describe("reading a long adversarial rule stays fast", () => {
   it.each([
     ["repeated underscore pairs", "_a b ".repeat(2700)],
@@ -393,8 +396,8 @@ describe("reading a long adversarial rule stays fast", () => {
     const started = Date.now();
     namesChangedFile(rule, ["Dockerfile"]);
     mentionsChangedBasename(rule, ["Dockerfile"]);
-    expect(Date.now() - started).toBeLessThan(2000);
-  });
+    expect(Date.now() - started).toBeLessThan(15000);
+  }, 30000);
 });
 
 // Property-style: a protected name, wrapped in any combination of the
