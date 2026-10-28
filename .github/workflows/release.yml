@@ -5,6 +5,12 @@ on:
     tags:
       - "v*"
 
+# One release at a time. Never cancel a run mid-publish; queue the next one
+# instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   # Install, build, and test live here, and this job has no id-token.
   # The release job below publishes tarballs this job packed. It does not
@@ -35,10 +41,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 10
+          version: 10.34.7
 
       - uses: actions/setup-node@v7
         with:
@@ -135,8 +143,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Portfolio name guard
         run: pnpm validate:portfolio-names
+
+      - name: Lint (public repository hygiene guard)
+        run: pnpm lint
 
       - name: Test
         run: pnpm test
@@ -212,6 +226,9 @@ jobs:
   release:
     needs: prepare
     runs-on: ubuntu-latest
+    # Approval gate for the publish. The environment is created in the
+    # repository settings and the npm trusted publisher is bound to it.
+    environment: npm-publish
     permissions:
       contents: write
       id-token: write
@@ -219,6 +236,8 @@ jobs:
       action_only: ${{ needs.prepare.outputs.action_only }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -226,9 +245,11 @@ jobs:
           check-latest: true
           registry-url: https://registry.npmjs.org
 
+      # Exact version (11.21.1, published 2026-10-15), so a new npm 11.x
+      # never runs with the OIDC token unreviewed. Bump it deliberately.
       - name: Upgrade npm for OIDC trusted publishing
         if: needs.prepare.outputs.action_only == 'false'
-        run: npm install -g npm@11
+        run: npm install -g npm@11.21.1
 
       - name: Download the packed tarballs
         if: needs.prepare.outputs.action_only == 'false'
@@ -324,6 +345,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:

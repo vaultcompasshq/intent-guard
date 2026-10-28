@@ -34,7 +34,6 @@
   },
   "files": [
     "dist",
-    "src/intent-contract.schema.json",
     "README.md"
   ],
   "scripts": {

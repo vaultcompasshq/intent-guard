@@ -10,10 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 10
+          version: 10.34.7
 
       - uses: actions/setup-node@v7
         with:
@@ -86,6 +88,7 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           # Required. The intent gate measures this branch against its merge
           # base, and a shallow checkout has no merge base to diff against.
           # That gate fails closed rather than checking an empty path set,
@@ -94,7 +97,7 @@ jobs:
 
       - uses: pnpm/action-setup@v6
         with:
-          version: 10
+          version: 10.34.7
 
       - uses: actions/setup-node@v7
         with:
