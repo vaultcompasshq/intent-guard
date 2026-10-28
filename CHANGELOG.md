@@ -7,7 +7,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-A patch release (planned as 1.10.2). It restores the 1.9.0 verdict on
+## [1.10.2] - 2026-10-28
+
+A patch release. It restores the 1.9.0 verdict on
 every way of naming a file that the 2026-10-27 audit and the review of its
 fix measured, except where a ruling keeps a pass (`~/Dockerfile`, and a
 stem in another case such as "billing" against `src/Billing.tsx`). Not

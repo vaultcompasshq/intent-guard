@@ -107,7 +107,7 @@ User conversation
 
 ## Status
 
-**Version:** `1.10.1`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Version:** `1.10.2`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
 **Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
 
 **Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
@@ -214,7 +214,7 @@ reach for first; this is what it runs:
   with:
     fetch-depth: 0
 - run: |
-    npx --yes @vaultcompass/intent-guard@1.10.1 check --project . \
+    npx --yes @vaultcompass/intent-guard@1.10.2 check --project . \
       --base origin/${{ github.base_ref }} \
       --trust-base origin/${{ github.base_ref }}
 ```
@@ -286,14 +286,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0        # required: the base branch has to be present
-      - uses: vaultcompasshq/intent-guard@v1.10.1
+      - uses: vaultcompasshq/intent-guard@v1.10.2
 ```
 
 No `version` input, because the default is the scanner this action tag shipped
 with. The action tag and the installed package can be separate numbers, as
 they were briefly at 1.5.3, an action-only tag that moved the workflow file
-without publishing new packages. `vaultcompasshq/intent-guard@v1.10.1` installs
-`@vaultcompass/intent-guard@1.10.1`: this release moved both together. Read the
+without publishing new packages. `vaultcompasshq/intent-guard@v1.10.2` installs
+`@vaultcompass/intent-guard@1.10.2`: this release moved both together. Read the
 tag as which workflow step you pinned, and check the `version` input default
 below for which package version that tag actually installs.
 
@@ -327,7 +327,7 @@ binary rather than about the change. Run this on `ubuntu-latest` or
 
 | Input | Default | What it does |
 |-------|---------|--------------|
-| `version` | `1.10.1` | Exact version of `@vaultcompass/intent-guard` to install: three dot-separated numbers with no leading zeros, nothing else (the exact pattern is in `action.yml`). A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
+| `version` | `1.10.2` | Exact version of `@vaultcompass/intent-guard` to install: three dot-separated numbers with no leading zeros, nothing else (the exact pattern is in `action.yml`). A dist-tag is refused: with one, the program judging a pull request is whichever the registry served that morning. So is anything npm would read as a path rather than a version, such as a value starting with `.` or ending in `.tgz`. |
 | `project` | `.` | Project root, relative to the workspace. No `..`, no absolute path, no leading `-`. |
 | `base` | *(from the event)* | Ref the changed paths are measured against. On a `pull_request` event, `origin/$GITHUB_BASE_REF`. It decides which paths are judged, never where the rules are read from; the action warns on a run that has one and no trust base. |
 | `paths` | *(empty)* | Explicit comma-separated paths instead of, or as well as, `base`. One line: a newline in the value is refused rather than read as another separator. |
