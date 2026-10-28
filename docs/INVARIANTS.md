@@ -758,42 +758,86 @@ tokens are in it. For an out_of_scope item, the match is demoted to partial
 and not counted only when it has no evidence at all outside the file name: no
 token in that second set, no slash path, no word of the item naming the
 file under the closed rule in `namesChangedFile`
-(`packages/core/src/tokenize.ts:524`: exactly the basename, the basename
+(`packages/core/src/tokenize.ts:613`: exactly the basename, the basename
 without its final extension, or a `*.ext` word, case-sensitive), and no
 whole basename under the safety net `mentionsChangedBasename`
-(`packages/core/src/tokenize.ts:566`, called at
+(`packages/core/src/tokenize.ts:662`, called at
 `packages/core/src/drift.ts:304`).
 
 The closed rule's words come from several readings of the whole item
-(`ruleReadings`, `packages/core/src/tokenize.ts:484`): as written, with
+(`ruleReadings`, `packages/core/src/tokenize.ts:564`): as written, with
 markdown backslash escapes before ASCII punctuation undone
 (`MARKDOWN_ESCAPE_RE`, `packages/core/src/tokenize.ts:317`), and with HTML
 tags removed (every tag, `packages/core/src/tokenize.ts:320`, and separately
 only paired elements, `packages/core/src/tokenize.ts:324`), each also with
 emphasis that spans more than one word removed
-(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:423`, a single linear
+(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:503`, a single linear
 scan per marker; at most `MAX_NESTING_PASSES` layers of nested emphasis or
-HTML elements, `packages/core/src/tokenize.ts:408`). The escape
+HTML elements, `packages/core/src/tokenize.ts:488`). The escape
 is undone before any backslash is read as a slash, so `payment\_methods`
 is payment_methods (1.10.1 read it as the path `payment/_methods`), while
 the as-written reading keeps a real Windows path (`.\Dockerfile`). Each
 word of every reading is compared in every form `wordForms`
-(`packages/core/src/tokenize.ts:390`) reaches: from the word as written,
+(`packages/core/src/tokenize.ts:466`) reaches: from the word as written,
 each single-step reduction in `reductions`
-(`packages/core/src/tokenize.ts:350`) is applied to every form found so far
+(`packages/core/src/tokenize.ts:426`) is applied to every form found so far
 until no new form appears, and every form is a candidate. The reductions
 are: backslashes read as slashes; a markdown link's text and target; a
 leading `./`, `../` or lone `/`; a trailing footnote or reference marker;
 a `*.ext` glob out of its emphasis stars; one layer of paired emphasis
-(`packages/core/src/tokenize.ts:364`); every star, when a star touches a
+(`packages/core/src/tokenize.ts:440`); every star, when a star touches a
 letter or digit, for emphasis inside a word such as `**Docker**file`
-(`packages/core/src/tokenize.ts:370`); and `trimEdges`
-(`packages/core/src/tokenize.ts:338`), which trims every character in the
+(`packages/core/src/tokenize.ts:446`); and `trimEdges`
+(`packages/core/src/tokenize.ts:348`), which trims characters in the
 Unicode punctuation, symbol and format classes (`EDGE_CHAR_RE`,
-`packages/core/src/tokenize.ts:307`) from both ends, except `_`, `/`, `\`,
+`packages/core/src/tokenize.ts:307`) from the ends, except `_`, `/`, `\`,
 a leading `.` or `~` (`packages/core/src/tokenize.ts:312`,
 `packages/core/src/tokenize.ts:313`), and a leading star with a `.` right
-after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:343`).
+after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:360`).
+It gives three forms: the word trimmed all the way at both ends, and the
+word with one character trimmed at the start only or at the end only.
+Because every reduction is applied again to every form, the one-character
+steps reach every partial trim too, each count off the start with each
+count off the end, so a name that itself starts or ends with a symbol
+(`+layout`, `!important`, `init.el~`, `#init.el#`) is still a form of
+`"+layout".` or `(init.el~)`, not only its fully trimmed `layout` (the
+2026-10-28 audit's B1: 1.10.2 trimmed all the way in one step only, and
+SvelteKit route stems in quotes, parens or before a full stop passed where
+1.10.1 blocked). A partial trim sits L + T steps deep, for L trimmable
+characters at the start and T at the end, and the search stops at the
+`MAX_WORD_FORMS` cap of 512 forms per word
+(`packages/core/src/tokenize.ts:327`), which is also what keeps one long
+word linear. Deep wrapping reaches the cap first: in 44e4cd7, `+layout` in
+21 quotes on each side, in 14 parens around backticks, or in 10 `*"` pairs
+passed (the review of 44e4cd7, M1; 1.10.1 blocked the first two). So a word
+whose search stops at the cap with forms still unread is not read as naming
+nothing. `wordForms` reports it, and `namesChangedFile` also tests every
+form that word did reach with `edgeWraps`
+(`packages/core/src/tokenize.ts:409`, called at
+`packages/core/src/tokenize.ts:630`): true when the form is the basename or
+stem with only leading-trimmable characters before it and only
+trailing-trimmable characters after it, the same answer the one-character
+trims give, computed directly in time linear in the word. A name wrapped
+only in edge characters is therefore matched at any depth: `+layout` in 200
+quotes, 100 parens around backticks, 100 `*"` pairs, `+++layout` in 60
+quotes, `[+layout](./x)` in 60 quotes, and `_+layout_` or `__+layout__` in
+200 quotes (the paired underscores come off at depth one) all block.
+
+Cost: each reached form is scanned once, not once per changed path, and
+before any scan a path is rejected unless its basename or stem contains the
+form's core (what the full trim leaves), or, for a form made only of edge
+characters, unless the name is made only of them too. Without that test a
+rule holding one 1 KB symbol word took 47.7 s against 2000 changed paths
+(the re-review of 7a081fc, R2); with it, the test below of that shape takes
+about 240 ms.
+
+The limit that remains, measured (the re-review of 7a081fc, R1): a name
+that needs a footnote or reference marker stripped after a partial trim the
+search never reached. `Do not edit` followed by `+layout[^1]` or
+`+layout[1]` inside N quotes on each side, then a full stop, blocks with N
+= 25 and passes with N = 60, against `src/routes/+layout.svelte`. 1.10.1
+blocked both at any depth. Both are pinned as they stand, so a change in
+either direction shows up as a test diff.
 The trim is a class, never a list of wrappers: curly and low-9 quotes,
 guillemets, CJK corner brackets, `$`, `@`, `#`, an ideographic full stop,
 an ellipsis, a fullwidth or Arabic question mark, a danda and a zero-width
@@ -825,10 +869,10 @@ which is why a leading `~` is never trimmed.
 
 The safety net `mentionsChangedBasename` folds the item and each changed
 basename the same way (NFKC, format characters removed, markdown escapes
-undone, lower case, `packages/core/src/tokenize.ts:552`) and is true when
+undone, lower case, `packages/core/src/tokenize.ts:648`) and is true when
 the whole basename, extension included, occurs with no letter, digit, `_`,
 `-` or path separator on either side and no `.` before it
-(`packages/core/src/tokenize.ts:544`, `packages/core/src/tokenize.ts:574`).
+(`packages/core/src/tokenize.ts:640`, `packages/core/src/tokenize.ts:670`).
 It never matches a basename without its extension, so `billing` against
 `src/Billing.tsx` stays a pass (ruled case-sensitive), and never a name
 behind a path separator (`~/Dockerfile`, `infra/Dockerfile`). It only stops
@@ -943,11 +987,17 @@ not fire` and by `leaves the ruled case-sensitive stem cases a pass in
 drift` for the safety net; by the three property tests (`names the file
 through every pair of wrappers, escaped or not, with a suffix`, `names the
 file inside emphasis that spans the whole rule`, `blocks in drift through
-every single wrapper and suffix`), which wrap ten protected names and four
-`*.ext` globs in every pair of 25 wrappers; by every case of the `a *.ext
-glob beside punctuation, quotes, backticks or parens` group and of `emphasis
-inside a word`; by every case of `reading a long adversarial rule stays
-fast` (each bounded at 2 s); by `leaves an identifier with a trailing
+every single wrapper and suffix`), which wrap 24 protected names and four
+`*.ext` globs in every pair of 25 wrappers (14 of the names, added on
+2026-10-28, start or end with a symbol of their own: `+layout`,
+`+layout.svelte`, `+page.server`, `+page.server.ts`, `!important`,
+`!important.css`, `%env`, `@modal`, `#init.el#`, `$payments`,
+`~$report.docx`, `init.el~`, `notes+` and `migrate!`); by every case of the
+`a *.ext glob beside punctuation, quotes, backticks or parens` group and of
+`emphasis inside a word`; by every case of `reading a long adversarial rule
+stays fast` (each bounded at 15 s, with a 30 s test timeout; see below for
+what that bound does and does not catch) and of `reading time grows linearly
+with the rule's length`; by `leaves an identifier with a trailing
 underscore segment whole` for the `EMPHASIS_RE` lookbehind; and end to end
 by the seven B1 cases and the three glob cases of `extract %j, freeze,
 stage %s: check --staged exits 1`. Mutations run on 2026-10-27 after the
@@ -956,16 +1006,32 @@ only unless named: `trimEdges` trimming a glob's own star again turns 33 red
 (and the three glob end-to-end cases); no intraword star reduction turns
 the 3 `emphasis inside a word` cases red; the old multi-word emphasis regex
 in place of `stripMultiwordOnce` makes the timing tests run for more than
-20 minutes before being killed (each bounded at 2 s); no
-`MAX_NESTING_PASSES` cap on the emphasis passes runs `deeply nested
-emphasis` for more than 5 minutes before being killed; a multi-word close
-that may sit beside its own character turns 2 red; no multi-word emphasis
-strip turns 2 red; `EDGE_CHAR_RE` as the old closed ASCII list turns 21 red.
-Two survivors are recorded, not fixed: the same cap on the HTML element
-passes survives `deeply nested HTML elements` (the run stays near 1 s
-without it), so that cap is unpinned; and dropping the whitespace
+20 minutes before being killed (the bound was 2 s then; the 2026-10-28 audit
+re-measured this row at the 15 s bound: `repeated underscore pairs` took
+328738 ms); no `MAX_NESTING_PASSES` cap on the emphasis passes runs `deeply
+nested emphasis` for more than 5 minutes before being killed; a multi-word
+close that may sit beside its own character turns 2 red; no multi-word
+emphasis strip turns 2 red; `EDGE_CHAR_RE` as the old closed ASCII list
+turns 21 red. One survivor is recorded, not fixed: dropping the whitespace
 requirement of a multi-word pair survives, an equivalent mutant now that
-both readings of single-word emphasis are kept anyway. The rows below were
+both readings of single-word emphasis are kept anyway.
+
+What the 15 s bound catches, as measured on 2026-10-28: the cubic regex and
+the uncapped emphasis loop, each slower by a factor of more than 20. What it
+does not catch: a constant-factor or mildly quadratic slowdown. The deeply
+nested emphasis case takes about 1.3 s, so a tenfold slowdown still passes,
+and the uncapped HTML element loop (`deeply nested HTML elements` near 1 to
+3 s against 33 ms capped) passed it, which left that cap unpinned through
+1.10.2. The release raised the bound from 2 s because the deeply nested case
+ran over 7 s on a heavily loaded machine. The scaling group `reading time
+grows linearly with the rule's length` pins growth instead of a wall-clock
+time: a rule four times as long must take under ten times as long, taking
+the fastest of three runs at each size. Linear measured 4.2 to 5.9 here;
+quadratic is about 16. The HTML element loop without its
+`MAX_NESTING_PASSES` cap measured 23 and turns `deeply nested HTML elements`
+red there, so that cap is now pinned. A quadratic mutant that revisits closes
+(resetting the close cursor per open in `stripMultiwordOnce`) is equivalent on
+these inputs, which never revisit a close, and survives both groups. The rows below were
 measured on c5532a3 before that round and were not re-run, except those
 just listed (that round's `EDGE_CHAR_RE` row was recorded as 19 red; the
 review measured 20 on c5532a3, and with the safety net also removed the two
@@ -986,8 +1052,59 @@ turns 5 red, a leading `~` 2, a leading `_` 3 and a trailing `_` 1; the
 removed as equivalent: a second trim that kept emphasis stars, since
 `stripEmphasisOnce` reads a pair anywhere in a word and the untrimmed form
 is always kept. The 1.10.0 compatibility reduction in `wordForms` (the
-2026-10-27 audit's N4c, an equivalent mutant) is gone with the rewrite: it
+2026-10-27 audit's N4c) went with the rewrite, on the stated ground that it
 trimmed a subset of what `trimEdges` trims, from a form that is still kept.
+That inference was wrong. Trimming a subset of the characters gives a
+different form, not one the wider trim dominates: the old reduction stopped
+at a character it did not list, so `"+layout".` reduced to `+layout`, while
+the 1.10.2 trim went straight on to `layout`. That was the 2026-10-28 audit's
+B1, a block-to-pass against 1.10.1 for SvelteKit route stems. Since then
+`trimEdges` also gives the one-character trims, so every partial trim is a
+form up to the 512-form cap, and past the cap `edgeWraps` finds the same
+partial trims directly (above). Pinned in
+`packages/core/tests/file-name-rule.test.ts` by every case of
+`namesChangedFile reads %s as naming %s` and `blocks in drift: %s against %s`
+in the `a name that itself starts or ends with a symbol (2026-10-28 B1)`
+group (each audit reproduction, plus symbol-ended and symbol-led-and-ended
+names), and by the property tests above. The safety net's right-hand `.`
+(the audit's N3: `Dockerfile.prod` fires the net, and drift still proceeds
+because no token matches) is pinned by both cases of `fires on a right-hand
+dot and a letter, yet drift proceeds: %s against %s`. Mutations run on 2026-10-28 against
+`file-name-rule.test.ts` only: `trimEdges` giving only its full trim (the
+1.10.2 behaviour) turns 31 red; no one-character trim at the start turns 21
+red; none at the end turns 31 red; the safety net refusing a right-hand `.`
+turns 4 red (its two `codeowners.` and soft-hyphen `Makefile.` block cases
+and the two right-hand-dot cases); the HTML element loop uncapped turns the
+HTML scaling case red (ratio 23). Every property case passes with the cap at
+128 and one fails at 32, but that is headroom for the property test's
+shallow wrapping only; deep wrapping is what the cap fallback is for.
+
+The cap fallback (the review of 44e4cd7, M1) is pinned in the same file by
+every case of `names the file: %s` and `blocks in drift: %s` in the `a
+symbol-led name is matched at any wrapping depth (review of 44e4cd7, M1)`
+group, by `names the file: 60 quotes around intraword emphasis`, and by
+`stays closed on a deeply wrapped word that is not the name`. The cap
+itself is pinned by `reads three long symbol words in a child process within
+15 s`, which runs the built module in a child process killed at 15 s,
+because an uncapped search is a synchronous loop the test timeout cannot
+interrupt; and by the two one-word rows of the scaling group. Mutations run
+on 2026-10-28 against `file-name-rule.test.ts` only: no fallback (the
+44e4cd7 behaviour) turns 20 red, the reviewer's three cases among them;
+`edgeWraps` ignoring the trailing side, or the
+leading side, turns `stays closed on a deeply wrapped word that is not the
+name` red; `MAX_WORD_FORMS` at 512000000 turns the child-process test red
+at 15 s (SIGTERM) instead of hanging. The cost precheck is pinned by
+`reads a capped word against 2000 changed paths in well under the timing
+bound` (removing it: 10.7 s against a 5 s bound, red, and every correctness
+test stays green, so it changes cost only) and by `still names an
+all-symbol file past the cap` (an all-edge form always rejected: red). The
+two known limits are pinned by both cases of `known limit: %s blocks at 25
+quotes and passes at 60`, and the underscore cases by both cases of `blocks
+at any depth: %s`. One reviewer option was tried and
+dropped: emitting the full trim with up to two trimmed characters kept at
+each end survived every test with the fallback in place (an equivalent
+mutant), and covers only names with at most two own edge symbols, so the
+fallback alone carries the claim.
 
 The pin in this repository's own CI is pinned by `pins the
 @vaultcompass/intent-guard devDependency to ci.yml's intent-guard-version`

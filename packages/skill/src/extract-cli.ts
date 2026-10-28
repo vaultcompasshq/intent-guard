@@ -96,7 +96,7 @@ function parseArgs(argv: string[]) {
     } else if (arg === "--freeze") {
       console.error(
         "intent-guard-extract --freeze was removed. Extract only writes unfrozen drafts.\n" +
-          "Review the draft, then approve with: intent-guard-freeze --project <root> [--approved-by <name>]",
+          "Review the draft, then approve with: intent-guard freeze --project <root> [--approved-by <name>]",
       );
       process.exit(2);
     } else if (isHelpFlag(arg)) {
@@ -175,7 +175,7 @@ console.log(
     errors: validation.errors,
     written_path: writtenPath,
     frozen: false,
-    next_step: "Review the draft, then approve with: intent-guard-freeze --project <root> [--approved-by <name>]",
+    next_step: "Review the draft, then approve with: intent-guard freeze --project <root> [--approved-by <name>]",
     loaded_constraint_files: loaded.loadedFiles,
     replaced,
     suggested_allowed_paths: suggestedAllowedPaths,

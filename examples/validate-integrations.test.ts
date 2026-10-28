@@ -110,8 +110,43 @@ describe("integration hook samples", () => {
     expect(pairedWorkflow).not.toContain("--name-only");
     expect(pairedWorkflow).toContain(`@vaultcompass/intent-guard@${actionVersion}`);
     expect(pairedWorkflow).not.toMatch(/guard@latest/);
-    expect(pairedWorkflow).toMatch(/@vaultcompass\/vault-guard@\d+\.\d+\.\d+ /);
+    expect(pairedWorkflow).toMatch(/@vaultcompass\/vault-guard@\d+\.\d+\.\d+$/m);
     expect(pairedWorkflow).toContain("scan . --format text");
+    // vault-guard reads .vault-guard.json from the base too, or a pull request
+    // can silence it by editing that file in the commit being judged.
+    expect(pairedWorkflow).toContain('scan . --format text --trust-base "origin/$BASE_REF"');
+  });
+
+  // The 2026-10-28 docs audit's MB-1: npx or pnpm dlx from inside the
+  // checkout lets a .npmrc or a node_modules the pull request carries choose
+  // the program that judges it, the route action.yml closes. Every recipe
+  // that shows a hand-written pull-request job installs outside the checkout,
+  // at an exact version, with no install scripts, calls the binary by
+  // absolute path, and passes the base branch through env.
+  it("installs every gate outside the checkout in the samples and recipes, never by npx or dlx", () => {
+    const samples = [
+      "integrations/github-actions/conductor-drift-ci.yml.sample",
+      "integrations/github-actions/conductor-vault-guard-ci.yml.sample",
+    ];
+    for (const file of samples) {
+      const text = readText(file);
+      expect({ file, dlx: /(pnpm dlx|npx)( --yes)? @vaultcompass\//.test(text) }).toEqual({ file, dlx: false });
+      expect({ file, temp: text.includes("working-directory: ${{ runner.temp }}") }).toEqual({ file, temp: true });
+      expect({ file, install: /npm install -g --ignore-scripts --prefix "\$RUNNER_TEMP\/ig" @vaultcompass\/intent-guard@\d+\.\d+\.\d+$/m.test(text) }).toEqual({ file, install: true });
+      expect({ file, bin: text.includes('"$RUNNER_TEMP/ig/bin/intent-guard" check') }).toEqual({ file, bin: true });
+      // github.base_ref appears only as an env value, never in a script body.
+      const baseRefLines = text.split("\n").filter((line) => line.includes("${{ github.base_ref }}"));
+      expect({ file, count: baseRefLines.length > 0 }).toEqual({ file, count: true });
+      for (const line of baseRefLines) {
+        expect({ file, env: /^\s+BASE_REF: \$\{\{ github\.base_ref \}\}$/.test(line) }).toEqual({ file, env: true });
+      }
+    }
+    const recipes = ["README.md", "docs/cli-reference.md", "integrations/github-actions/README.md"];
+    for (const file of recipes) {
+      const text = readText(file);
+      expect({ file, npx: /npx --yes @vaultcompass\/(intent|vault)-guard/.test(text) }).toEqual({ file, npx: false });
+      expect({ file, inline: /origin\/\$\{\{ github\.base_ref \}\}/.test(text) }).toEqual({ file, inline: false });
+    }
   });
 
   it("pins every intent-guard version in the samples to the action default, and vault-guard to one version", () => {
@@ -124,10 +159,11 @@ describe("integration hook samples", () => {
     const vaultPins: string[] = [];
     for (const file of files) {
       const text = readText(file);
-      // Every reference: the install line, the check step, and the comment
-      // naming the action tag (vaultcompasshq/intent-guard@vX.Y.Z).
+      // Every reference: the install line and the comment naming the action
+      // tag (vaultcompasshq/intent-guard@vX.Y.Z). The check step calls the
+      // installed binary by path, so it carries no version of its own.
       const pins = [...text.matchAll(/intent-guard@(v?)([^\s)`'"]+)/g)].map((m) => m[2]);
-      expect({ file, count: pins.length >= 3 }).toEqual({ file, count: true });
+      expect({ file, count: pins.length >= 2 }).toEqual({ file, count: true });
       for (const pin of pins) expect({ file, pin }).toEqual({ file, pin: actionVersion });
       vaultPins.push(...[...text.matchAll(/vault-guard@([^\s)`'"]+)/g)].map((m) => m[1]));
     }

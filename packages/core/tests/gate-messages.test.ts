@@ -26,8 +26,10 @@ describe("gate guidance never names a removed binary", () => {
     // The substring, not a whole word: conductor-extract, conductor-freeze and
     // every other removed bin start with it.
     expect(message).not.toContain("conductor-");
-    expect(message).toContain("intent-guard-extract");
-    expect(message).toContain("intent-guard-freeze");
+    // The subcommands every install has; a global install does not link the
+    // per-command intent-guard-extract and intent-guard-freeze bins.
+    expect(message).toContain("intent-guard extract");
+    expect(message).toContain("intent-guard freeze");
     // The state directory moved in 1.3.0, and the message points at the new one.
     expect(message).toContain(".intent-guard/intent-contract.yaml");
     expect(message).not.toContain(".conductor/");

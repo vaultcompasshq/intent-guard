@@ -13,9 +13,10 @@ See it run: [conductor-proof pull request
 11](https://github.com/vaultcompasshq/conductor-proof/pull/11) is an edit to a
 path the contract protects. An ordinary job passes it; the gate fails it.
 
-The package is **`@vaultcompass/intent-guard`**, and it installs as
-`npm install --save-dev @vaultcompass/intent-guard` (or
-`pnpm add -D @vaultcompass/intent-guard`). An unrelated package named
+The package is **`@vaultcompass/intent-guard`**. It installs globally with
+`npm install -g @vaultcompass/intent-guard`, as the Quickstart below does, or
+per project with `npm install --save-dev @vaultcompass/intent-guard` (or
+`pnpm add -D @vaultcompass/intent-guard`) and then runs as `npx intent-guard`. An unrelated package named
 `intentguard` also exists on npm; it is a different project and has nothing to
 do with this one, so install the scoped name.
 
@@ -139,7 +140,10 @@ or a CI step from a source checkout.
 
 The agent lifecycle hooks in [integrations/hooks/](./integrations/hooks) need
 `intent-guard-check` 1.8.1 or newer on `PATH` (confirm with
-`intent-guard-check --version`). The hook does not check the gate's version,
+`intent-guard-check --version`). That binary belongs to
+`@vaultcompass/intent-guard-skill`: a global `npm install -g
+@vaultcompass/intent-guard` links only `intent-guard`, so install
+`@vaultcompass/intent-guard-skill` globally too at the same version. The hook does not check the gate's version,
 and with an older gate its result is not valid, because it leaves committed
 and staged changes to the gate's own listing and an older gate lists fewer
 kinds of change. On git 2.31 or newer, replace refs are disabled for every git
@@ -183,17 +187,35 @@ Use `intent-guard doctor` to verify setup, `intent-guard report --staged` for PR
 
 On CI, pass `--trust-base` as well as `--base`. The
 [GitHub Action](#github-action) below passes both for you and is the shape to
-reach for first; this is what it runs:
+reach for first. If you cannot use it (another CI system, or a workflow that
+must run the steps itself), this is the core of what it runs. It leaves out the
+Action's input checks, its npm version floor and its `npm audit signatures`
+step; [action.yml](./action.yml) is the full version.
 
 ```yaml
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0
-- run: |
-    npx --yes @vaultcompass/intent-guard@1.10.2 check --project . \
-      --base origin/${{ github.base_ref }} \
-      --trust-base origin/${{ github.base_ref }}
+# Install outside the checkout, at an exact version, with no install scripts,
+# so a .npmrc or a node_modules the pull request carries cannot choose which
+# program judges it. Never npx or pnpm dlx from inside the checkout.
+- name: Install intent-guard
+  working-directory: ${{ runner.temp }}
+  run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.2
+# The base branch name goes through env, never into the script text.
+- name: Check the pull request
+  working-directory: ${{ runner.temp }}
+  env:
+    BASE_REF: ${{ github.base_ref }}
+  run: |
+    "$RUNNER_TEMP/ig/bin/intent-guard" check --project "$GITHUB_WORKSPACE" \
+      --base "origin/$BASE_REF" \
+      --trust-base "origin/$BASE_REF"
 ```
+
+The binary is called by absolute path: a bare `intent-guard` is looked up on
+`PATH`, and a step that put the checkout's `node_modules/.bin` there first would
+hand the choice back to the head. The `bin/` layout is the Linux and macOS one.
 
 `--base` says which paths are judged. `--trust-base` says where the rules come
 from: the contract, the config and the contracts archive are read from the base
@@ -444,7 +466,9 @@ product in this family, which writes `.guardrails.yaml` and `.guardrails/`
 into the same repositories, and two similarly named directories from two
 tools is a trap. An existing `.conductor/` is read as-is with a notice, and
 renamed to `.intent-guard/` on the first write. If both directories exist,
-every command fails closed rather than guessing which one is current.
+every command fails closed rather than guessing which one is current. Use
+`@vaultcompass/conductor` 0.2.3 or later alongside it: 0.2.2 reads the old
+path, and the intent gate goes quiet instead of failing.
 
 The steps:
 

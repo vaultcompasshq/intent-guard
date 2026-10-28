@@ -7,6 +7,95 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+What can newly block you:
+
+- **A rule naming a file whose name starts or ends with a symbol**, such as
+  SvelteKit's `+layout`, `+server`, `+page.server` and `+error`,
+  `!important` or `init.el~`, written as its stem in quotes, parens or
+  backticks or before a full stop. These blocked in 1.9.0 and 1.10.1,
+  passed in 1.10.2, and block again (first entry under Fixed).
+- **Next.js-style bracket and paren stems**, which no earlier release
+  blocked: `Do not edit "[...slug]".` against `app/[...slug].tsx` and `Do
+  not edit "(group)".` against `app/(group).tsx`. 1.10.1 and 1.10.2 reduced
+  the quoted word to the stem without its brackets. `Do not edit "[id]".`
+  now names `app/[id].tsx` too, but still proceeds, because drift never
+  matches the token "id" on its own.
+- **A symbol-led name inside very deep wrapping**, such as `+layout` in 21
+  quotes on each side or in 14 parens around backticks, which 1.10.1
+  blocked and a pre-release build of this fix passed (first entry under
+  Fixed).
+
+### Fixed
+
+- **The edge trim no longer eats a name's own leading or trailing symbol.**
+  1.10.2 trimmed every punctuation and symbol character from both ends of a
+  word in one step, so `"+layout".` reduced only to `layout` and named
+  nothing, while `src/routes/+layout.svelte` changed. Each of these blocked
+  in 1.9.0 and 1.10.1, passed in 1.10.2, and blocks again: `Do not edit
+  "+layout".`, `Do not edit "+layout"`, `Do not edit (+layout)`, `Do not
+  edit (+server)`, `Do not edit '+server'`, `Do not edit +layout.`,
+  `` Do not edit `+layout`. ``, `` Do not edit `+page.server`. ``,
+  `` Do not edit `+error`. `` and the same with `!important` and `%env`
+  stems. The trim now also gives the word with one character trimmed at the
+  start only or at the end only, and every reduction is applied again to
+  every form, so every partial trim is a candidate as well as the full one.
+  The search over a word's forms stops at 512 forms, which is what keeps one
+  long word fast, and deep wrapping reaches that cap before it reaches the
+  partial trim. A word that hits the cap is no longer read as naming
+  nothing: each form it reached is also tested directly for the name under
+  any number of edge characters, so `+layout` in 200 quotes still blocks.
+  That test runs once per reached form, not once per changed path, and is
+  skipped for any path whose name cannot match, so a long symbol word
+  against 2000 changed paths reads in well under a second. Still a pass, and
+  a block in 1.10.1: `+layout[^1]` or `+layout[1]` inside 60 quotes on each
+  side (25 still blocks), where the footnote or reference marker has to come
+  off a partial trim the search never reached.
+  The property test now also wraps 14 names that start or end with `+`, `!`,
+  `%`, `@`, `#`, `$` or `~`. Reading stays linear in the rule's length: the
+  adversarial timing cases all ran under 1.4 s, a test requires a rule four
+  times as long to read in under ten times the time, and a long symbol word
+  is read in a child process that fails the test at 15 s rather than letting
+  a lost cap hang the suite.
+- **`freeze --help` no longer says an agent cannot self-approve.**
+  `--approved-by` records the name it is given and verifies nothing, so an
+  agent that can run `freeze` can approve its own contract. The help now
+  says so, and points at keeping approval a human step and judging pull
+  requests with `check --trust-base`.
+- **The pull-request recipes install the gate outside the checkout.** The
+  README, `docs/cli-reference.md` and both GitHub Actions samples ran
+  `npx --yes` or `pnpm dlx` from inside the checkout, the route the action
+  closes: a `.npmrc` or `node_modules` the pull request carries could choose
+  the program that judges it. They now install an exact version with `npm
+  install -g --ignore-scripts` into a prefix under the runner temp, call it
+  by absolute path, and pass the base branch through `env`. The paired
+  sample installs vault-guard 1.12.1 (was 1.9.1) the same way and passes it
+  `--trust-base`, so a pull request cannot edit `.vault-guard.json` to
+  silence it. The README no longer calls the recipe "what it runs"; it says
+  what the action adds on top.
+- **Install guidance.** The README's opening line named only `--save-dev`
+  while the Quickstart used `-g`; it now gives both. `intent-guard --help`
+  and the README now say that a global install links only `intent-guard`,
+  so the per-command bins the agent hooks need (`intent-guard-check`) come
+  from installing `@vaultcompass/intent-guard-skill` globally too. The
+  Upgrading section again says to use `@vaultcompass/conductor` 0.2.3 or
+  later. `extract`, the no-contract gate message and the memory index now
+  say `intent-guard extract` and `intent-guard freeze`, which every install
+  has.
+
+### Security
+
+- **Every action in this repository's workflows is pinned by commit SHA.**
+  `release.yml` ran `softprops/action-gh-release@v2` inside the job holding
+  `id-token: write`, and `pnpm/action-setup@v6` in the job that packs the
+  tarballs; `ci.yml` and the rest of `release.yml` used `actions/checkout`
+  and `actions/setup-node` by tag. Each is now a full SHA with its version
+  in a comment, the same SHAs the sibling gates use where they use the same
+  release, and a test fails on any `uses:` pinned by tag, branch or short
+  SHA. The test parses each file as YAML, so no spelling of the key (extra
+  spaces after the dash, `uses :`, a quoted key, a flow mapping) gets past
+  it. `softprops/action-gh-release` moves from v2 to v3.0.3, the release
+  vault-guard runs. pnpm is pinned to 10.28.0 in both workflows.
+
 ## [1.10.2] - 2026-10-28
 
 A patch release. It restores the 1.9.0 verdict on
@@ -17,7 +106,12 @@ restored, and still a pass where 1.9.0 blocked: a plural ("Dockerfiles"), a
 name split by a hyphen at a line break, a name that itself starts and ends
 with an underscore written bare ("_old_payment_" against
 `db/old_payment_.sql`, read as emphasis), and a Gherkin Then step written
-with should not or cannot (now a warning, see below).
+with should not or cannot (now a warning, see below). Corrected after
+release: this list missed a regression 1.10.2 itself introduced. A name that
+starts or ends with a symbol of its own, written as its stem in quotes, parens
+or before a full stop (`Do not edit "+layout".` against
+`src/routes/+layout.svelte`), blocked in 1.9.0 and 1.10.1 and passes in
+1.10.2; see Unreleased.
 
 What can newly block you:
 

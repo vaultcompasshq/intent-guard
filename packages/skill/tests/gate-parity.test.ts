@@ -206,7 +206,7 @@ describe("no-flag gate output is byte-identical to the release before --trust-ba
       status: "blocked",
       exitCode: 1,
       reasons: [
-        "No .intent-guard/intent-contract.yaml found. Draft intent with intent-guard-extract, then approve with intent-guard-freeze before implementing.",
+        "No .intent-guard/intent-contract.yaml found. Draft intent with intent-guard extract, then approve with intent-guard freeze before implementing.",
       ],
       warnings: [],
       contractFound: false,

@@ -130,6 +130,16 @@ describe("subcommand help", () => {
     });
   }
 
+  // The 2026-10-27 audit's F6: --approved-by is a name anyone can type, so the
+  // help must not claim it stops an agent from approving its own contract.
+  it("freeze --help says --approved-by records a name, not that an agent cannot self-approve", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "conductor-help-freeze-"));
+    const res = await run("freeze-cli.js", ["--help"], dir);
+    expect(res.code).toBe(0);
+    expect(res.stdout).not.toMatch(/cannot self-approve/);
+    expect(res.stdout).toMatch(/does not verify/);
+  });
+
   // The two the 2026-09-02 published-artifact run actually caught. Kept as
   // named cases so a regression is legible in the test output.
   it("check --help does not run the gate", async () => {

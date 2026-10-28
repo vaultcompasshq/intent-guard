@@ -38,11 +38,13 @@ copy that runs on a pull request. When `check` is given `--base` without
 contracts archive, it prints a warning naming the file and the missing flag;
 the exit code does not change.
 
-They still fetch the gate with `pnpm dlx` from inside the checkout. The action
-deliberately does not: it installs the pinned version into a prefix under the
-runner temp and calls it from there, so the tree being judged cannot repoint
-the registry with a committed `.npmrc` or hand over its own copy out of
-`node_modules`. A workflow you write yourself should do the same where it can.
+Like the action, they install the pinned version with `npm install -g
+--ignore-scripts` into a prefix under the runner temp, from the runner temp
+rather than the checkout, and call it there by absolute path. So the tree being
+judged cannot repoint the registry with a committed `.npmrc` or hand over its
+own copy out of `node_modules`. Never fetch a gate with `npx` or `pnpm dlx` from
+inside the checkout. What the samples leave out is the action's npm version
+floor and its `npm audit signatures` step; see [action.yml](../../action.yml).
 
 Use these samples when a repository already has a frozen
 `.intent-guard/intent-contract.yaml` and wants CI to fail on blocking drift.
@@ -58,7 +60,7 @@ The sample lets the gate list the pull request's changes itself, from the
 merge base with the base branch, and reads the rules from that same base:
 
 ```bash
-intent-guard check --project . --base "origin/$BASE_REF" --trust-base "origin/$BASE_REF"
+"$RUNNER_TEMP/ig/bin/intent-guard" check --project . --base "origin/$BASE_REF" --trust-base "origin/$BASE_REF"
 ```
 
 `intent-guard check` is the full gate: it scores drift and enforces the contract's
@@ -77,11 +79,15 @@ For Intent Guard plus vault-guard, copy
 .github/workflows/conductor-vault-guard.yml
 ```
 
-That workflow runs the same gate check, then runs:
+That workflow installs `@vaultcompass/vault-guard@1.12.1` the same way, runs
+the same gate check, then runs:
 
 ```bash
-npx --yes @vaultcompass/vault-guard@1.9.1 -- scan . --format text
+"$RUNNER_TEMP/vg/bin/vault-guard" scan . --format text --trust-base "origin/$BASE_REF"
 ```
+
+`--trust-base` reads `.vault-guard.json` from the base branch, so a pull request
+cannot add an allowlist entry that silences its own finding.
 
 The two checks are independent. Intent Guard blocks intent drift; vault-guard
 blocks leaked secrets.
