@@ -446,6 +446,62 @@ describe("import-spec reads only labelled scope sections", () => {
     expect(imported.warnings.join("\n")).not.toContain("a saved report");
   });
 
+  // 2026-10-27 N1: 1.9.0 imported both of these as prohibitions; 1.10.1
+  // drops them with no warning. They stay dropped (should not and cannot
+  // mostly state an outcome), and import-spec now says so.
+  it("warns, naming the step, when it drops a Then or And step written with should not or cannot", () => {
+    const imported = importKiro({
+      "requirements.md": [
+        "## Requirements",
+        "",
+        "- Add the CSV export button",
+        "",
+        "Scenario: export a report",
+        "  Given a user who cannot log in",
+        "  When I export it",
+        "  Then the system should not email the file",
+        "  And the exporter cannot write to the audit log",
+        "  But no copy is kept on the server",
+        "  And the exporter must never call the ledger; it can't retry",
+        "",
+        "1. **Given** a report, **Then** the job should not page anyone",
+      ].join("\n"),
+    });
+    const unkept = imported.warnings.filter((w) => w.includes("reads like a prohibition"));
+    expect(unkept).toHaveLength(4);
+    expect(unkept[0]).toContain("Then the system should not email the file");
+    expect(unkept[0]).toContain("requirements.md");
+    expect(unkept[1]).toContain("And the exporter cannot write to the audit log");
+    expect(unkept[2]).toContain("it can't retry");
+    expect(unkept[3]).toContain("the job should not page anyone");
+    const all = imported.warnings.join("\n");
+    // A Given or When step is never imported, and "no" opens most outcomes:
+    // neither is warned about.
+    expect(all).not.toContain("cannot log in");
+    expect(all).not.toContain("copy is kept");
+    // Still not imported; the marked clause of the mixed line still is.
+    const out = imported.contract.out_of_scope.join("\n");
+    expect(out).not.toMatch(/email the file|audit log|page anyone/);
+    expect(out).toMatch(/never call the ledger/);
+  });
+
+  // 2026-10-27 N4b: without the table-row guard inside a scenario body, a
+  // table cell carrying a marker became an out_of_scope item.
+  it("drops a table row inside a scenario heading's body, even one carrying a marker", () => {
+    const spec = [
+      "## Requirements",
+      "",
+      "- Add the CSV export button",
+      "",
+      "### Scenario: manager exports",
+      "| Field | the export must never include drafts |",
+      "|-------|--------------------------------------|",
+    ].join("\n");
+    expect(selectLabelledSections(spec).text).not.toContain("include drafts");
+    const imported = importKiro({ "requirements.md": spec });
+    expect(imported.contract.out_of_scope.join("\n")).not.toContain("include drafts");
+  });
+
   // A line the Gherkin keep accepts must land in out_of_scope, never in
   // in_scope, where its tokens would cancel a real out_of_scope item. The
   // expected kept set is written out here, not derived from the marker

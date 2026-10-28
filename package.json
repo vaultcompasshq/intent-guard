@@ -1,7 +1,7 @@
 {
   "name": "intent-guard",
   "private": true,
-  "version": "1.10.1",
+  "version": "1.10.2",
   "description": "Intent fidelity for AI-assisted development",
   "license": "MIT",
   "scripts": {
@@ -48,9 +48,9 @@
     }
   },
   "devDependencies": {
-    "@vaultcompass/conductor": "0.13.2",
-    "@vaultcompass/dep-guard": "0.16.1",
-    "@vaultcompass/intent-guard": "1.10.1",
+    "@vaultcompass/conductor": "0.15.0",
+    "@vaultcompass/dep-guard": "0.17.0",
+    "@vaultcompass/intent-guard": "1.10.2",
     "@vaultcompass/intent-guard-schema": "workspace:*",
     "@vaultcompass/vault-guard": "1.12.1",
     "vitest": "^4.1.11",

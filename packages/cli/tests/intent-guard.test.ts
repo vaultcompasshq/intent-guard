@@ -71,7 +71,7 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["--version"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).toBe("1.10.1\n");
+    expect(res.stdout).toBe("1.10.2\n");
     expect(res.stderr).toBe("");
     expect(readdirSync(dir)).toEqual([]);
   });
@@ -80,7 +80,7 @@ describe("intent-guard", () => {
     const dir = tmpProject();
     const res = run(["-v"], dir);
     expect(res.code).toBe(0);
-    expect(res.stdout).toBe("1.10.1\n");
+    expect(res.stdout).toBe("1.10.2\n");
     expect(res.stderr).toBe("");
     expect(readdirSync(dir)).toEqual([]);
   });
@@ -258,6 +258,21 @@ describe("a rule that names a file in markdown blocks a staged edit of that file
   it.each([
     ["Add CSV export to the reports page. Do not edit **CHANGELOG.md**.", "CHANGELOG.md"],
     ["Add CSV export to the reports page. Do not modify **payment**_methods.", "db/payment_methods.sql"],
+    // Blocked in 1.9.0, passed in 1.10.1 (2026-10-27 B1), block again.
+    ["Add CSV export to the reports page. **Never touch the Dockerfile.**", "Dockerfile"],
+    ["Add CSV export to the reports page. *Do not edit CHANGELOG.md.*", "CHANGELOG.md"],
+    // Curly double quotes (U+201C, U+201D), built from code points so this
+    // file stays ASCII.
+    [`Add CSV export to the reports page. Do not edit ${String.fromCodePoint(0x201c)}Makefile${String.fromCodePoint(0x201d)}.`, "Makefile"],
+    [`Add CSV export to the reports page. Do not edit ${String.fromCodePoint(0x201c)}CODEOWNERS${String.fromCodePoint(0x201d)}.`, ".github/CODEOWNERS"],
+    ["Add CSV export to the reports page. Do not modify payment\\_methods.", "db/payment_methods.sql"],
+    ["Add CSV export to the reports page. Do not edit <code>Makefile</code>.", "Makefile"],
+    ["Add CSV export to the reports page. Do not modify __payment_methods__.", "db/payment_methods.sql"],
+    // Blocked in 1.9.0 and 1.10.1, passed on the first B1 fix (its review's
+    // M1: the edge trim took the glob's own star), block again.
+    ["Add CSV export to the reports page. Never commit '*.pem'.", "certs/server.pem"],
+    ["Add CSV export to the reports page. Never commit (*.pem).", "certs/server.pem"],
+    ['Add CSV export to the reports page. Never commit "*.pem" files.', "certs/server.pem"],
   ])("extract %j, freeze, stage %s: check --staged exits 1", (ask, path) => {
     const dir = repo();
     expect(run(["extract", "--project", dir, "--text", ask]).code).toBe(0);
