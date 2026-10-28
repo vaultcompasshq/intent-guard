@@ -529,7 +529,7 @@ or fetch the base ref explicitly before running the gate:
   with:
     fetch-depth: 0
 - run: |
-    npx --yes @vaultcompass/intent-guard@1.10.1 check --project . \
+    npx --yes @vaultcompass/intent-guard@1.10.2 check --project . \
       --base origin/${{ github.base_ref }} \
       --trust-base origin/${{ github.base_ref }}
 ```
@@ -546,7 +546,7 @@ rules come from**. They are independent, and a pull-request run passes both:
 
 ```yaml
 - run: |
-    npx --yes @vaultcompass/intent-guard@1.10.1 check --project . \
+    npx --yes @vaultcompass/intent-guard@1.10.2 check --project . \
       --base origin/${{ github.base_ref }} \
       --trust-base origin/${{ github.base_ref }}
 ```
