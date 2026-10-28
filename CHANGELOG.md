@@ -7,6 +7,98 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+A patch release (planned as 1.10.2). It restores the 1.9.0 verdict on
+every way of naming a file that the 2026-10-27 audit and the review of its
+fix measured, except where a ruling keeps a pass (`~/Dockerfile`, and a
+stem in another case such as "billing" against `src/Billing.tsx`). Not
+restored, and still a pass where 1.9.0 blocked: a plural ("Dockerfiles"), a
+name split by a hyphen at a line break, a name that itself starts and ends
+with an underscore written bare ("_old_payment_" against
+`db/old_payment_.sql`, read as emphasis), and a Gherkin Then step written
+with should not or cannot (now a warning, see below).
+
+What can newly block you:
+
+- **Rules that name a file in typographic quotes, inside emphasis that
+  spans the whole rule, with a markdown escape, in an HTML code tag, as
+  `__name__`, or followed by non-ASCII punctuation**, which blocked in
+  1.9.0, passed in 1.10.0 and 1.10.1, and block again (first entry under
+  Fixed).
+- **A rule that writes a file's whole basename in another case**, such as
+  "Never touch the dockerfile" against `Dockerfile` or "Do not edit
+  codeowners" against `.github/CODEOWNERS`, which blocked in 1.9.0 and
+  passed in 1.10.x (second entry under Fixed).
+- **`__init__.py` in a rule against a changed `init.py`**, which blocked in
+  1.9.0 and passed in 1.10.1 (first entry under Fixed).
+- **Emphasis inside a word**, `**Docker**file` or `Docker*file*`, which
+  blocked in 1.9.0 and passed in 1.10.x (first entry under Fixed).
+
+### Fixed
+
+- **The closed file-name rule reads a name however it is wrapped.** 1.10.1
+  trimmed a closed list of ASCII wrappers from each word, so the way a word
+  processor, a chat client or an emphasis-heavy AGENTS.md writes a rule
+  fell outside it. Each of these blocked in 1.9.0 and passed in 1.10.1, end
+  to end through `extract`, `freeze` and `check`, and blocks again:
+  `**Never touch the Dockerfile.**`, `*Do not edit CHANGELOG.md.*`,
+  `Do not edit "Makefile".` and `Do not edit "CODEOWNERS".` written with
+  curly quotes (U+201C and U+201D, what macOS, Word, Google Docs and Notion
+  type), `Do not modify payment\_methods.` (1.10.1 read the markdown
+  escape as a Windows path, `payment/_methods`), `Do not edit
+  <code>Makefile</code>.` and `Do not modify __payment_methods__.`; and
+  through `scoreDrift`, the same with single curly quotes, guillemets, CJK
+  corner brackets, low-9 quotes, `$`, `@` or `#` in front, an ideographic
+  full stop, an ellipsis, a fullwidth exclamation mark, an Arabic question
+  mark, a danda or a zero-width space after, `` `Dockerfile`* ``,
+  `\_\_init\_\_.py`, `id\_rsa` and a curly-quoted `secrets.json`. The rule
+  no longer grows a list of wrappers. The whole rule is read as written,
+  with markdown backslash escapes undone before any backslash is read as a
+  slash (a backslash before a letter is still a Windows path), with HTML
+  tags removed, and with emphasis that spans several words removed. Each
+  word is then reduced in every way, and every form is compared: among
+  the reductions, every Unicode punctuation, symbol and format character is
+  trimmed from both ends, except `_`, `/`, `\`, a leading `.` or `~`, and
+  the star of a `*.ext` glob, so `'*.pem'.`, `(*.pem).`, a backticked or
+  curly-quoted `*.pem` and `*.sql;` still name `certs/server.pem` and
+  `db/schema.sql`. Stars inside a word (`**Docker**file`) are removed too.
+  `__x__` is both a Python dunder and markdown bold, and nothing in the text
+  says which, so both readings count: `__Makefile__` names `Makefile`, and
+  `__init__.py` names `init.py` again, as it did in 1.9.0 (1.10.1 kept a
+  dunder whole, which is what let `__payment_methods__` pass). The rule is
+  otherwise as closed as before: exact basename, basename without its final
+  extension, or a `*.ext` word, case-sensitive, and `~/Dockerfile` still
+  names nothing. A property test now wraps ten protected names and four
+  `*.ext` globs in every pair of 25 wrappers, escaped and not, and requires
+  each to still name its file, so a new wrapper is a test row rather than
+  another special case. Removing emphasis that spans words is linear in
+  the rule's length, and at most 16 layers of nested emphasis or HTML are
+  removed.
+- **A file's whole basename in a rule is never demoted to file name only.**
+  Under the closed rule is a safety net: when a changed file's whole
+  basename, extension included, appears in the rule as a name of its own,
+  ignoring case, format characters and markdown escapes, the match keeps
+  its full strength. It never matches a basename without its extension
+  ("Do not touch billing" against `src/Billing.tsx` stays a pass, as
+  ruled), a name inside a longer name, or a name behind a path separator.
+  It only stops the file-name-only demotion, which runs on a match the
+  tokens already made, so it never blocks a change 1.9.0 passed.
+- **`import-spec` warns when it drops a Then, And or But step written with
+  should not, shouldn't, cannot, can't or avoid.** 1.9.0 imported "Then the
+  system should not email the file" and "And the exporter cannot write to
+  the audit log" as prohibitions; 1.10.1 drops them, as its entry says, but
+  silently. They stay dropped, since these words mostly state an expected
+  outcome, and each now gets a warning naming the file and the step, like a
+  dropped Given or When step. No and without are still dropped silently.
+
+### Known limits
+
+- **A usage error still exits 1, the code that otherwise means blocked**
+  (the 2026-10-27 audit's N2). `docs/cli-reference.md` documents exit 1 for
+  a usage error, and conductor reads intent-guard's 1 as blocked and 2 as
+  could not run, so moving usage errors to 2 is a change to a documented
+  exit-code contract and is left for a minor release with that umbrella in
+  step. The usage text on stderr tells a usage error from a block.
+
 ## [1.10.1] - 2026-10-18
 
 A patch release.

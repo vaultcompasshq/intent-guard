@@ -289,10 +289,8 @@ export function slashJoinedPathHits(
   return hits;
 }
 
-const LEADING_WRAP_RE = /^[`'"(\[<{]+/;
-const TRAILING_WRAP_RE = /[`'")\]>},;:!?.]+$/;
 // Relative "./" and "../" prefixes, or a lone leading "/", before a name:
-// "./Dockerfile", "../../CHANGELOG.md". Backslashes are slashes by now.
+// "./Dockerfile", "../../CHANGELOG.md".
 const LEADING_PATH_RE = /^(?:\.{1,2}\/)+|^\/(?!\/)/;
 // A footnote, note or reference-link marker after a name: "Dockerfile[^1]",
 // "Dockerfile[1].", "[CHANGELOG.md][1]". Never a whole bracketed word.
@@ -302,65 +300,226 @@ const TRAILING_MARKER_RE = /(?<=[^\s[])\[[^\][]*\][.,;:!?]*$/;
 const LINK_RE = /^(.*)\]\(([^()\s]*)\)(.*)$/;
 // A "*.ext" glob with emphasis stars around it: "*.pem*", "**.pem**".
 const STARRED_GLOB_RE = /^\*+(\.[^./*]+)\*+$/;
-// A dunder name ("__init__.py", "__main__"): its underscores are the name,
-// never emphasis, so it is not reduced to "init.py".
-const DUNDER_RE = /^__\w+__(?:\.\w+)?$/;
+// Any Unicode punctuation, symbol or format character: quotes of every
+// script, sentence marks of every script, "$", "@", "#", backticks, angle
+// brackets, zero-width spaces and soft hyphens. A class, never a list, so a
+// wrapper nobody listed is still trimmed.
+const EDGE_CHAR_RE = /[\p{P}\p{S}\p{Cf}]/u;
+// What the edge trim leaves in place. "_" is part of an identifier
+// (old_payment_, __init__) and only paired emphasis removes it; "/" and "\"
+// belong to paths; a leading "." starts a dotfile (.env); and a leading "~"
+// is a home directory, which names nothing here by ruling (~/Dockerfile).
+const KEEP_LEADING = new Set(["_", "/", "\\", ".", "~"]);
+const KEEP_TRAILING = new Set(["_", "/", "\\"]);
+// A markdown backslash escape: a backslash before ASCII punctuation
+// ("payment\_methods", "\*.pem"). A backslash before anything else is left
+// for the Windows-path reading.
+const MARKDOWN_ESCAPE_RE = /\\([!-/:-@[-`{-~])/g;
+// An HTML tag ("<code>", "</kbd>", "<br/>"). It must open with a letter, so
+// "<./Dockerfile>" (a link target) is not one.
+const HTML_TAG_RE = /<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?\/?>/g;
+// An HTML element with its closing tag ("<code>...</code>"). Removing only
+// paired tags keeps a lone "<Dockerfile>" inside one for the angle-bracket
+// reading.
+const HTML_ELEMENT_RE = /<([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?>(.*?)<\/\1\s*>/g;
+// A cap on the forms one word is reduced through; real words reach a few
+// dozen at most.
+const MAX_WORD_FORMS = 512;
 
 /**
- * Every form a word of a rule takes on its way to the bare name: backslashes
- * become slashes, then leading quotes, backticks, brackets and braces, leading
- * "./" and "../" prefixes or a lone "/", a trailing footnote or reference
- * marker ("[^1]", "[1]"), and trailing punctuation are trimmed, paired emphasis is removed with stripEmphasis, and
- * the two repeat until the word stops changing, so "`Dockerfile`.",
- * "**Dockerfile**", **"Makefile"**, "./Dockerfile", "{Dockerfile}" and
- * "**payment**_methods" all reach the name. A markdown link gives the forms
- * of its text and of its target; a "*.ext" glob wrapped in emphasis stars
- * gives the bare glob. Each intermediate form is kept as a candidate. An
+ * `word` with characters in EDGE_CHAR_RE trimmed from both ends, except
+ * those the KEEP sets name. Emphasis stars are trimmed too; the form before
+ * the trim is kept, and stripEmphasisOnce reads its pairs anywhere in the
+ * word, so a trim never loses a pair ("**payment**_methods"). The one star
+ * the leading trim stops at is the star of a "*.ext" glob, a star with a "."
+ * right after it: "'*.pem'." trims to "*.pem", never to ".pem" (the
+ * c5532a3 review's M1, where no form of the word was the glob any more).
+ */
+function trimEdges(word: string): string {
+  const chars = [...word];
+  let start = 0;
+  let end = chars.length;
+  const trimmable = (c: string, keep: Set<string>): boolean => EDGE_CHAR_RE.test(c) && !keep.has(c);
+  const globStar = (i: number): boolean => chars[i] === "*" && chars[i + 1] === ".";
+  while (start < end && trimmable(chars[start], KEEP_LEADING) && !globStar(start)) start++;
+  while (end > start && trimmable(chars[end - 1], KEEP_TRAILING)) end--;
+  return chars.slice(start, end).join("");
+}
+
+/** The single-step reductions of one form of a word. */
+function reductions(form: string): string[] {
+  const out: string[] = [];
+  // A Windows path is a path: "src\Dockerfile", ".\Dockerfile".
+  if (form.includes("\\")) out.push(form.replace(/\\/g, "/"));
+  const link = form.match(LINK_RE);
+  if (link) out.push(link[1], link[2]);
+  out.push(form.replace(LEADING_PATH_RE, ""));
+  out.push(form.replace(TRAILING_MARKER_RE, ""));
+  out.push(trimEdges(form));
+  const glob = form.match(STARRED_GLOB_RE);
+  if (glob) out.push(`*${glob[1]}`);
+  // One layer of paired emphasis. A dunder ("__init__.py") is also bold
+  // markdown ("__Makefile__"), and the text cannot say which, so this form
+  // and the form it came from are both kept.
+  out.push(stripEmphasisOnce(form));
+  // Emphasis inside a word: CommonMark reads "**Docker**file" and
+  // "Docker*file*" as one word with a bold or italic part, which EMPHASIS_RE
+  // (a pair off word boundaries) does not remove. A star touching a letter
+  // or digit is never part of a file name, so every star goes. Underscores
+  // are not treated this way: inside a word they belong to an identifier.
+  if (/\*[A-Za-z0-9]|[A-Za-z0-9]\*/.test(form)) out.push(form.replace(/\*+/g, ""));
+  return out;
+}
+
+/**
+ * Every form a word of a rule takes on its way to the bare name. From the
+ * word as written, each reduction is applied to each form found so far until
+ * no new form appears, and every form is a candidate: Windows backslashes
+ * read as slashes; a markdown link's text and target; leading "./", "../" or
+ * a lone "/"; a trailing footnote or reference marker; Unicode punctuation,
+ * symbol and format characters trimmed from both ends (EDGE_CHAR_RE, but
+ * never a glob's own star); a "*.ext" glob out of its emphasis stars; one
+ * layer of paired emphasis; and the stars of emphasis inside a word. Every
+ * intermediate form is kept, so a later reduction never discards a form an
+ * earlier one reached; but a name is matched only if some chain of
+ * reductions reaches it exactly, which is what the property tests in
+ * file-name-rule.test.ts check for each protected name and glob. An
  * underscore inside an identifier is never emphasis (EMPHASIS_RE requires a
- * word boundary on both sides), and a dunder name is never emphasis-stripped.
+ * non-alphanumeric character on both sides).
  */
 function wordForms(raw: string): string[] {
-  // A Windows path is a path: "src\Dockerfile", ".\Dockerfile".
-  const word = raw.replace(/\\/g, "/");
-  const link = word.match(LINK_RE);
-  if (link) return [...new Set([...wordForms(link[1]), ...wordForms(link[2])])];
   const forms = new Set<string>();
-  // The 1.10.0 reduction, kept so no word that matched there stops matching.
-  forms.add(raw.replace(/^[`'"(\[<]+/, "").replace(/[`'")\]>,;:!?]+$/, "").replace(/\.$/, ""));
-  let current = word;
-  for (;;) {
-    forms.add(current);
-    const trimmed = current
-      .replace(LEADING_WRAP_RE, "")
-      .replace(TRAILING_MARKER_RE, "")
-      .replace(TRAILING_WRAP_RE, "")
-      .replace(LEADING_PATH_RE, "");
-    forms.add(trimmed);
-    const glob = trimmed.match(STARRED_GLOB_RE);
-    if (glob) forms.add(`*${glob[1]}`);
-    // One layer at a time, so a dunder name inside emphasis is seen whole.
-    const next = DUNDER_RE.test(trimmed) ? trimmed : stripEmphasisOnce(trimmed);
-    if (next === current) break;
-    current = next;
+  const queue = [raw];
+  while (queue.length > 0 && forms.size < MAX_WORD_FORMS) {
+    const form = queue.shift() as string;
+    if (forms.has(form)) continue;
+    forms.add(form);
+    for (const next of reductions(form)) {
+      if (next && !forms.has(next)) queue.push(next);
+    }
   }
   forms.delete("");
   return [...forms];
 }
 
-/** The candidate words of a rule as written, each in every form wordForms reduces it through. */
-function ruleWords(rule: string): string[] {
-  return rule.split(/\s+/).filter(Boolean).flatMap(wordForms);
+const MULTIWORD_EMPHASIS_MARKERS = ["***", "___", "**", "__", "*", "_"];
+// Layers of nested emphasis or HTML elements removed from a whole rule.
+// Real rules nest two or three deep; the cap keeps a crafted rule linear.
+const MAX_NESTING_PASSES = 16;
+
+const isAsciiAlnum = (ch: string): boolean => /[A-Za-z0-9]/.test(ch);
+const isSpace = (ch: string): boolean => /\s/.test(ch);
+
+/**
+ * One pass of `marker` emphasis whose content holds whitespace removed: it
+ * spans words ("**Never touch the Dockerfile.**"). A marker opens off a word
+ * boundary, not beside another of its own character and not before
+ * whitespace, and closes the same way mirrored, so the underscores of
+ * "__init__.py" inside "_Never edit __init__.py_" are not a close. Each open
+ * takes the first valid close after the first whitespace of its content,
+ * which is what a lazy regex would take, found with a single linear scan
+ * (the regex this replaces was cubic in the rule's length).
+ */
+function stripMultiwordOnce(text: string, marker: string): string {
+  const c = marker[0];
+  const n = marker.length;
+  const opens: number[] = [];
+  const closes: number[] = [];
+  for (let i = 0; i + n <= text.length; i++) {
+    if (!text.startsWith(marker, i)) continue;
+    const before = i > 0 ? text[i - 1] : "";
+    const after = i + n < text.length ? text[i + n] : "";
+    if (!(before && (isAsciiAlnum(before) || before === c)) && after && !isSpace(after) && after !== c) {
+      opens.push(i);
+    }
+    if (before && !isSpace(before) && before !== c && !(after && (isAsciiAlnum(after) || after === c))) {
+      closes.push(i);
+    }
+  }
+  if (opens.length === 0 || closes.length === 0) return text;
+  // nextSpace[i]: the first whitespace at or after i, or -1.
+  const nextSpace = new Array<number>(text.length + 1).fill(-1);
+  for (let i = text.length - 1; i >= 0; i--) nextSpace[i] = isSpace(text[i]) ? i : nextSpace[i + 1];
+  let out = "";
+  let last = 0;
+  let ci = 0;
+  for (const open of opens) {
+    if (open < last) continue;
+    const space = nextSpace[open + n];
+    if (space === -1) break;
+    while (ci < closes.length && closes[ci] <= space) ci++;
+    if (ci >= closes.length) break;
+    const close = closes[ci++];
+    out += text.slice(last, open) + text.slice(open + n, close);
+    last = close + n;
+  }
+  return out + text.slice(last);
 }
 
 /**
- * The closed file-name rule. A word of the rule, plain or backticked, names a
- * changed file when it is exactly that file's basename (".env.local",
- * "CODEOWNERS", "Dockerfile", "id_rsa"), or exactly the basename without its
- * final extension ("CHANGELOG" for CHANGELOG.md, ".env" for .env.local,
- * "secrets" for secrets.json), or a "*.ext" word whose extension ends the
- * basename ("*.pem" for server.pem). Case-sensitive. Such a match is a path
- * match, so the file-name tokens it rests on count. Nothing else about a file
- * name is: a bare word found inside a name ("sync" in SyncStatus.tsx) is not.
+ * `text` with emphasis that spans more than one word removed, layer by
+ * layer until stable or MAX_NESTING_PASSES. Single-word emphasis is left to
+ * wordForms, which keeps both readings of a dunder.
+ */
+function stripMultiwordEmphasis(text: string): string {
+  let out = text;
+  for (let pass = 0; pass < MAX_NESTING_PASSES; pass++) {
+    let next = out;
+    for (const marker of MULTIWORD_EMPHASIS_MARKERS) next = stripMultiwordOnce(next, marker);
+    if (next === out) return out;
+    out = next;
+  }
+  return out;
+}
+
+/**
+ * The readings of a whole rule the words are taken from: as written (a
+ * backslash may be a Windows path), with markdown backslash escapes undone
+ * ("payment\_methods" is payment_methods), and with HTML tags removed as
+ * well (every tag, and separately only paired ones); each of those also
+ * with emphasis that spans words removed. The escape is undone before any
+ * backslash is read as a slash, so an escaped underscore never becomes a
+ * path separator.
+ */
+function ruleReadings(rule: string): string[] {
+  const unescaped = rule.replace(MARKDOWN_ESCAPE_RE, "$1");
+  const tagless = unescaped.replace(HTML_TAG_RE, " ");
+  let pairless = unescaped;
+  for (let pass = 0; pass < MAX_NESTING_PASSES; pass++) {
+    const next = pairless.replace(HTML_ELEMENT_RE, " $2 ");
+    if (next === pairless) break;
+    pairless = next;
+  }
+  const readings = new Set<string>();
+  for (const text of [rule, unescaped, tagless, pairless]) {
+    readings.add(text);
+    readings.add(stripMultiwordEmphasis(text));
+  }
+  return [...readings];
+}
+
+/** The candidate words of a rule as written, each in every form wordForms reduces it through. */
+function ruleWords(rule: string): string[] {
+  const words = new Set<string>();
+  for (const reading of ruleReadings(rule)) {
+    for (const word of reading.split(/\s+/)) {
+      if (!word || words.has(word)) continue;
+      for (const form of wordForms(word)) words.add(form);
+    }
+  }
+  return [...words];
+}
+
+/**
+ * The closed file-name rule. A word of the rule names a changed file when
+ * one of its forms (wordForms) is exactly that file's basename
+ * (".env.local", "CODEOWNERS", "Dockerfile", "id_rsa"), or exactly the
+ * basename without its final extension ("CHANGELOG" for CHANGELOG.md, ".env"
+ * for .env.local, "secrets" for secrets.json), or a "*.ext" word whose
+ * extension ends the basename ("*.pem" for server.pem). Case-sensitive. Such
+ * a match is a path match, so the file-name tokens it rests on count.
+ * Nothing else about a file name is: a bare word found inside a name ("sync"
+ * in SyncStatus.tsx) is not.
  */
 export function namesChangedFile(rule: string, changedPaths: string[]): boolean {
   const words = ruleWords(rule);
@@ -373,6 +532,48 @@ export function namesChangedFile(rule: string, changedPaths: string[]): boolean 
     for (const word of words) {
       if (word === base || (stem !== null && word === stem)) return true;
       if (/^\*\.[^./*]+$/.test(word) && base.length > word.length - 1 && base.endsWith(word.slice(1))) return true;
+    }
+  }
+  return false;
+}
+
+// Characters that make a neighbour part of the same name for the safety
+// net: letters, digits, "_", "-" and path separators on either side, and
+// "." on the left (x.Dockerfile is another file; Dockerfile. ends a
+// sentence).
+const NET_NAME_CHAR_RE = /[\p{L}\p{N}_\-/\\]/u;
+
+/** Text folded for the safety net: compatibility forms, no format characters, no markdown escapes, lower case. */
+function foldForNet(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(/\p{Cf}/gu, "")
+    .replace(MARKDOWN_ESCAPE_RE, "$1")
+    .toLowerCase();
+}
+
+/**
+ * A safety net under namesChangedFile: true when a changed file's whole
+ * basename, extension included, appears in the rule as a name of its own,
+ * ignoring case, format characters (a zero-width space, a soft hyphen) and
+ * markdown escapes, whatever punctuation surrounds it. It never matches a
+ * basename without its extension ("billing" is not Billing.tsx: ruled
+ * case-sensitive), a name inside a longer name, or a name behind a path
+ * separator (~/Dockerfile, infra/Dockerfile). drift.ts uses it only to stop
+ * the file-name-only demotion, which runs only on a match the tokens already
+ * made, so it cannot create a block that 1.9.0 did not have.
+ */
+export function mentionsChangedBasename(rule: string, changedPaths: string[]): boolean {
+  const text = foldForNet(rule);
+  for (const path of changedPaths) {
+    const base = foldForNet(path.replace(/\\/g, "/").split("/").pop() ?? "");
+    if (!base) continue;
+    for (let at = text.indexOf(base); at !== -1; at = text.indexOf(base, at + 1)) {
+      const before = at > 0 ? text[at - 1] : "";
+      const after = text.slice(at + base.length, at + base.length + 1);
+      if (before && (NET_NAME_CHAR_RE.test(before) || before === ".")) continue;
+      if (after && NET_NAME_CHAR_RE.test(after)) continue;
+      return true;
     }
   }
   return false;

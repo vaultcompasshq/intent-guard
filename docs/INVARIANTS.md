@@ -53,8 +53,8 @@ else leaves `NPM_OK` at 0. The refusal text is `action.yml:570`: `npm 10.5.2
 or newer`. The remediation is `action.yml:571`: Node 20.13.0 and later, and
 22.1.0 and later, are fine; 22.0.0 ships npm 10.5.1.
 
-README states the same floor at `README.md:291` and the same Node bound at
-`README.md:294` through `README.md:295`. The drift check also pins the
+README states the same floor at `README.md:305` and the same Node bound at
+`README.md:308` through `README.md:309`. The drift check also pins the
 remediation printf at `action.yml:571` as a whole `run:` line.
 
 The drift check pins the four comparison lines (five comparisons) and the
@@ -556,7 +556,7 @@ rest`. At that cap a long spec can lose explicit rules past the twelfth item;
 see the CHANGELOG known limits.
 import-spec keeps heading markers and opens each file with a level-1 heading
 so a section never crosses a file boundary
-(`packages/core/src/spec-bridge.ts:779`). Pinned in
+(`packages/core/src/spec-bridge.ts:819`). Pinned in
 `packages/core/tests/extract-headings.test.ts` (every rule has its own
 `describe`, and `every prohibition the base build kept is still kept` runs the
 2026-10-13 reviewer probe cases against the base build's recorded output) and
@@ -602,22 +602,26 @@ narrower matcher survives`.
 
 ## import-spec never builds a contract from unlabelled text
 
-`selectLabelledSections` (`packages/core/src/spec-bridge.ts:631`) passes on
+`selectLabelledSections` (`packages/core/src/spec-bridge.ts:668`) passes on
 only the lines of labelled sections (`isLabelledScopeHeading`,
 `packages/core/src/extract.ts:602`, over `LABELLED_SCOPE_RE` at
 `packages/core/src/extract.ts:591` and the out-of-scope spellings); every
-other line is dropped (`packages/core/src/spec-bridge.ts:707`), and a file
+other line is dropped (`packages/core/src/spec-bridge.ts:746`), and a file
 with no labelled section contributes nothing
-(`packages/core/src/spec-bridge.ts:766`; pinned by `does not read an
+(`packages/core/src/spec-bridge.ts:805`; pinned by `does not read an
 unlabelled file whole beside a labelled one`). Inside a
-section, table rows (`packages/core/src/spec-bridge.ts:709`) and Gherkin
-scenarios and steps (`packages/core/src/spec-bridge.ts:684`,
-`packages/core/src/spec-bridge.ts:714`) are dropped, except that a Gherkin
-line carrying an explicit prohibition marker is kept (next paragraph). With
+section, table rows (`packages/core/src/spec-bridge.ts:748`, and inside a
+scenario heading's body `packages/core/src/spec-bridge.ts:724`) and Gherkin
+scenarios and steps (`packages/core/src/spec-bridge.ts:723`,
+`packages/core/src/spec-bridge.ts:753`) are dropped, except that a Gherkin
+line carrying an explicit prohibition marker is kept (next paragraph). The
+scenario-body table guard is pinned by `drops a table row inside a scenario
+heading's body, even one carrying a marker` (2026-10-27: keeping table rows
+inside a scenario turns it red; before that test the mutant survived). With
 no labelled section in any file, the draft is emptied to one placeholder
 in_scope item, no out_of_scope and one placeholder acceptance criterion, and
 a warning names the headings looked for
-(`packages/core/src/spec-bridge.ts:830`;
+(`packages/core/src/spec-bridge.ts:884`;
 printed at `packages/skill/src/import-spec-cli.ts:193`). Pinned in
 `packages/core/tests/extraction-quality.test.ts` by `ignores prose outside a
 labelled section, such as a competitor survey` and `yields an empty contract
@@ -626,13 +630,13 @@ and in `packages/skill/tests/extraction-quality-cli.test.ts` by `warns on
 stderr and in JSON, names the headings, and lists the sections it read`.
 
 An explicit prohibition written as a Gherkin line is never dropped.
-`gherkinProhibitions` (`packages/core/src/spec-bridge.ts:579`) keeps a Then,
+`gherkinProhibitions` (`packages/core/src/spec-bridge.ts:611`) keeps a Then,
 And or But step, or a non-step line of a scenario body, when it carries one
 of the markers in `EXPLICIT_PROHIBITION_MARKERS`
 (`packages/core/src/prohibition-markers.ts:14`: SHALL NOT, MUST NOT, never,
 do not, don't), matched after `normalizeMarkerText`
 (`packages/core/src/prohibition-markers.ts:26`: curly apostrophes and
-whitespace runs). `fromMarker` (`packages/core/src/spec-bridge.ts:549`)
+whitespace runs). `fromMarker` (`packages/core/src/spec-bridge.ts:560`)
 normalises the kept line and splits it at semicolons; every clause that
 carries a marker is kept as its own rule, cut at its own first marker, so
 no subject in front of a marker becomes an in_scope item, and a clause with
@@ -641,16 +645,26 @@ kept, which lost "it must never call the ledger service" after a semicolon,
 a rule 1.9.0 enforced (the review's g7). A Given or When step is always dropped, and so is an outcome written
 with no, cannot, can't, should not, will not, won't, avoid or without; a
 dropped Given or When step that carries a marker becomes an import warning
-(`packages/core/src/spec-bridge.ts:795`, added at
-`packages/core/src/spec-bridge.ts:828`). 1.10.0 dropped every Gherkin line,
+(`packages/core/src/spec-bridge.ts:835`, added at
+`packages/core/src/spec-bridge.ts:882`). 1.10.0 dropped every Gherkin line,
 which turned "Then the system SHALL NOT email the file" from a block in
-1.9.0 into a pass.
+1.9.0 into a pass. A dropped Then, And or But step (or scenario body line)
+with a clause that carries should not, shouldn't, cannot, can't or avoid
+(`SOFT_PROHIBITION_RE`, `packages/core/src/prohibition-markers.ts:49`) and
+no kept marker, which 1.9.0 imported, becomes an import warning too
+(`hasUnkeptSoftClause`, `packages/core/src/spec-bridge.ts:596`; message
+`packages/core/src/spec-bridge.ts:849`, added at
+`packages/core/src/spec-bridge.ts:807`). Such a line stays dropped: the
+warning makes the drop visible, it does not import the line. No and without
+are not warned about. Pinned in `packages/core/tests/extraction-quality.test.ts`
+by `warns, naming the step, when it drops a Then or And step written with
+should not or cannot` (2026-10-27: emitting no such warning turns it red).
 
 Kept lines are routed by heading, never by extraction re-reading their
 marker: each file's kept lines are emitted as bullets under a level-1
 `GHERKIN_RULES_HEADING` ("Out of scope",
-`packages/core/src/spec-bridge.ts:577`, emitted at
-`packages/core/src/spec-bridge.ts:732`), the same path a spec's own Out of
+`packages/core/src/spec-bridge.ts:588`, emitted at
+`packages/core/src/spec-bridge.ts:771`), the same path a spec's own Out of
 scope section takes, and `routedItemsFrom` (`packages/core/src/extract.ts:656`)
 keeps each bullet's first sentence. The second fix round instead relied on
 extraction reading the marker again, which needed a mid-sentence don't
@@ -724,7 +738,7 @@ that no acceptance criterion carries a kept line; but no mutation has been
 shown to turn that assertion red on its own, so this stays open.
 
 Path budgets an ask names are suggested only, never written: the
-suggestion is computed at `packages/core/src/spec-bridge.ts:859` and printed
+suggestion is computed at `packages/core/src/spec-bridge.ts:913` and printed
 at `packages/skill/src/extract-cli.ts:149`; pinned by `never writes a
 suggestion into the draft` and `extract prints suggested allowed_paths and
 writes no budget`.
@@ -737,38 +751,95 @@ pre-commit hook runs `check --staged` with no signals
 arguments with `--paths` and no signals (`action.yml:671`, `action.yml:719`),
 so where the gate blocks, a path is the only evidence there is.
 
-`targetTokens` (`packages/core/src/drift.ts:171`) builds a second token set
+`targetTokens` (`packages/core/src/drift.ts:172`) builds a second token set
 without the tokens that come only from a changed file's own name: directory
-segments (`packages/core/src/drift.ts:195`), path-category tokens and signal
+segments (`packages/core/src/drift.ts:196`), path-category tokens and signal
 tokens are in it. For an out_of_scope item, the match is demoted to partial
 and not counted only when it has no evidence at all outside the file name: no
-token in that second set, no slash path, and no word of the item naming the
+token in that second set, no slash path, no word of the item naming the
 file under the closed rule in `namesChangedFile`
-(`packages/core/src/tokenize.ts:365`: exactly the basename, the basename
-without its final extension, or a `*.ext` word, case-sensitive). Each word of
-the item is compared in every form `wordForms`
-(`packages/core/src/tokenize.ts:322`) reduces it through: backslashes made
-slashes, then leading quotes, backticks, brackets and braces, leading `./`
-and `../` prefixes or a lone `/`, a trailing footnote or reference marker,
-and trailing punctuation trimmed, and one layer of paired emphasis removed
-per step,
-repeated until the word stops changing. A markdown link word gives the forms
-of its text and of its target, and a `*.ext` glob wrapped in emphasis stars
-gives the bare glob. So a name written in markdown, by a relative path or
-link, or ending a sentence (`` `Dockerfile`. ``, `**CHANGELOG.md**.`,
-`**payment**_methods`, `./Dockerfile`, `[changelog](CHANGELOG.md)`,
-`{Dockerfile}`, `*.pem*`) names the file. A dunder name (`__init__.py`) is
-never emphasis-stripped, so it names `__init__.py` and never `init.py`. A
+(`packages/core/src/tokenize.ts:524`: exactly the basename, the basename
+without its final extension, or a `*.ext` word, case-sensitive), and no
+whole basename under the safety net `mentionsChangedBasename`
+(`packages/core/src/tokenize.ts:566`, called at
+`packages/core/src/drift.ts:304`).
+
+The closed rule's words come from several readings of the whole item
+(`ruleReadings`, `packages/core/src/tokenize.ts:484`): as written, with
+markdown backslash escapes before ASCII punctuation undone
+(`MARKDOWN_ESCAPE_RE`, `packages/core/src/tokenize.ts:317`), and with HTML
+tags removed (every tag, `packages/core/src/tokenize.ts:320`, and separately
+only paired elements, `packages/core/src/tokenize.ts:324`), each also with
+emphasis that spans more than one word removed
+(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:423`, a single linear
+scan per marker; at most `MAX_NESTING_PASSES` layers of nested emphasis or
+HTML elements, `packages/core/src/tokenize.ts:408`). The escape
+is undone before any backslash is read as a slash, so `payment\_methods`
+is payment_methods (1.10.1 read it as the path `payment/_methods`), while
+the as-written reading keeps a real Windows path (`.\Dockerfile`). Each
+word of every reading is compared in every form `wordForms`
+(`packages/core/src/tokenize.ts:390`) reaches: from the word as written,
+each single-step reduction in `reductions`
+(`packages/core/src/tokenize.ts:350`) is applied to every form found so far
+until no new form appears, and every form is a candidate. The reductions
+are: backslashes read as slashes; a markdown link's text and target; a
+leading `./`, `../` or lone `/`; a trailing footnote or reference marker;
+a `*.ext` glob out of its emphasis stars; one layer of paired emphasis
+(`packages/core/src/tokenize.ts:364`); every star, when a star touches a
+letter or digit, for emphasis inside a word such as `**Docker**file`
+(`packages/core/src/tokenize.ts:370`); and `trimEdges`
+(`packages/core/src/tokenize.ts:338`), which trims every character in the
+Unicode punctuation, symbol and format classes (`EDGE_CHAR_RE`,
+`packages/core/src/tokenize.ts:307`) from both ends, except `_`, `/`, `\`,
+a leading `.` or `~` (`packages/core/src/tokenize.ts:312`,
+`packages/core/src/tokenize.ts:313`), and a leading star with a `.` right
+after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:343`).
+The trim is a class, never a list of wrappers: curly and low-9 quotes,
+guillemets, CJK corner brackets, `$`, `@`, `#`, an ideographic full stop,
+an ellipsis, a fullwidth or Arabic question mark, a danda and a zero-width
+space are all trimmed without being named anywhere. Every intermediate form
+is kept, so no reduction discards a form an earlier one reached. That does
+not make the rule safe by construction: a name matches only if some chain
+of reductions reaches it exactly. The first version of this rewrite
+trimmed a glob's own star along with the quote or bracket in front of it,
+so `'*.pem'.` reached only `.pem` and named nothing, a block-to-pass against
+both 1.9.0 and 1.10.1 that no test caught because the property tests held
+no glob. The property tests now cover four globs, and they, not this
+paragraph, are the evidence. So a name written in markdown, typographic
+quotes, an HTML code tag, by a relative path or link, or ending a sentence
+in any script (`` `Dockerfile`. ``, `**CHANGELOG.md**.`,
+`**payment**_methods`, `**Docker**file`, `'*.pem'.`, `(*.pem).`,
+`./Dockerfile`, `[changelog](CHANGELOG.md)`, `{Dockerfile}`, `*.pem*`,
+the curly-quoted Makefile, `<code>Makefile</code>`, `id\_rsa`,
+`**Never touch the Dockerfile.**`) names the file. A dunder is both a
+Python name and markdown bold, so both readings are kept: `__init__.py`
+names `__init__.py` and also `init.py` (as its `init` token did in 1.9.0),
+and `__Makefile__` names `Makefile`. 1.10.1 never stripped a dunder, which
+made `__payment_methods__` a block-to-pass against 1.9.0. A
 slash fragment reads backslashes as slashes and drops trailing sentence
 punctuation from each segment (`slashJoinedFragments`,
 `packages/core/src/tokenize.ts:234`), so `src\Dockerfile` and
 `src/Dockerfile.` are the path `src/Dockerfile`. A home-directory path
-(`~/Dockerfile`) names nothing, by ruling: it is outside the repository.
-That check is
-`packages/core/src/drift.ts:299`; when there is other evidence, the full
-strength counts, name tokens included (`packages/core/src/drift.ts:305`).
+(`~/Dockerfile`) names nothing, by ruling: it is outside the repository,
+which is why a leading `~` is never trimmed.
+
+The safety net `mentionsChangedBasename` folds the item and each changed
+basename the same way (NFKC, format characters removed, markdown escapes
+undone, lower case, `packages/core/src/tokenize.ts:552`) and is true when
+the whole basename, extension included, occurs with no letter, digit, `_`,
+`-` or path separator on either side and no `.` before it
+(`packages/core/src/tokenize.ts:544`, `packages/core/src/tokenize.ts:574`).
+It never matches a basename without its extension, so `billing` against
+`src/Billing.tsx` stays a pass (ruled case-sensitive), and never a name
+behind a path separator (`~/Dockerfile`, `infra/Dockerfile`). It only stops
+the demotion, which runs only on a match the tokens already made at full
+strength, so it cannot create a block 1.9.0 did not have; it does make
+`dockerfile` against `Dockerfile` and `codeowners` against `CODEOWNERS`
+block again, as they did in 1.9.0. That check is
+`packages/core/src/drift.ts:301`; when there is other evidence, the full
+strength counts, name tokens included (`packages/core/src/drift.ts:308`).
 Constraints are never demoted and keep the 1.9.0 strength
-(`packages/core/src/drift.ts:343`).
+(`packages/core/src/drift.ts:346`).
 
 Matchers are built from `prohibitedSubject`
 (`packages/core/src/tokenize.ts:79`), the rule without its leading negation;
@@ -780,15 +851,15 @@ From `original_ask`, only sentences with no prohibition marker are
 candidates for subtraction (`askScopeSentences`,
 `packages/core/src/extract.ts:106`), and an ask
 token that an out_of_scope item or a constraint uses is never subtracted
-(`packages/core/src/drift.ts:228`).
+(`packages/core/src/drift.ts:229`).
 
 The second guard alone already implies the first, so the sentence filter in
 `askScopeSentences` is defence in depth and has no test of its own. Proof:
 every token drift scores a rule on is a token of `prohibitedSubject` of an
-out_of_scope item or a constraint (`packages/core/src/drift.ts:276`,
-`packages/core/src/drift.ts:331`), and each such token is in `ruleTokens`
-(`packages/core/src/drift.ts:224`). An ask token joins the scope set only
-when no token of `ruleTokens` matches it (`packages/core/src/drift.ts:228`),
+out_of_scope item or a constraint (`packages/core/src/drift.ts:277`,
+`packages/core/src/drift.ts:334`), and each such token is in `ruleTokens`
+(`packages/core/src/drift.ts:225`). An ask token joins the scope set only
+when no token of `ruleTokens` matches it (`packages/core/src/drift.ts:229`),
 and `tokensMatch` is symmetric (`packages/core/src/tokenize.ts:117`), so no
 ask token can match, and subtract, any token a rule is scored on, whether or
 not its sentence was filtered. The scope set has no other reader in
@@ -821,8 +892,8 @@ identifier`, by `never strips an underscore that is part of an identifier`,
 `still names a dunder file whose underscores look like emphasis`, `stays
 closed: case-sensitive, no substring, no other extension` and every case of
 `counts the match in drift, not as file name only`; and end to end in
-`packages/cli/tests/intent-guard.test.ts` by both cases of `extract %j,
-freeze, stage %s: check --staged exits 1`. The two-underscore boundary is
+`packages/cli/tests/intent-guard.test.ts` by the first two cases of
+`extract %j, freeze, stage %s: check --staged exits 1`. The two-underscore boundary is
 pinned by `leaves an identifier with two underscores whole` and `still blocks
 a rule naming a two-underscore directory`. Mutations run on 2026-10-18: a
 single trim-and-strip pass instead of the loop turns both `reduces until the
@@ -838,7 +909,8 @@ The second fix round's forms are pinned in the same file by every case of
 `blocks` and `stays a pass, as in 1.9.0 or closed by rule` (the 2026-10-18
 review's probes, and its negative controls), every case of
 `namesChangedFile reads %s as naming %s`, and `keeps a dunder name whole
-rather than reading its underscores as emphasis`. Mutations run on
+and also reads its underscores as emphasis` (renamed 2026-10-27, when the
+dunder guard below was removed). Mutations run on
 2026-10-18: no leading `./` strip turns `/Dockerfile` and the three `./`
 cases of `namesChangedFile reads` red (the `./` drift cases also block
 through the slash-fragment path); no link handling turns five link cases
@@ -853,7 +925,69 @@ review's cases5): no backslash conversion in `wordForms` turns the `.\` and
 `slashJoinedFragments` turns `src\Dockerfile` red; no trailing-marker strip
 turns the three marker cases of both `blocks` and `namesChangedFile reads`
 red; `LEADING_PATH_RE` without `../` turns the `..\` and `../` cases of
-`namesChangedFile reads` red.
+`namesChangedFile reads` red. Those 2026-10-18 rows ran against the
+1.10.1 loop and its closed trim lists, which the 2026-10-27 rewrite
+replaced; the rows that still name live code are re-run below.
+
+The 2026-10-27 forms (B1 of that audit: the sixth block-to-pass in this
+function) are pinned in `packages/core/tests/file-name-rule.test.ts` by
+every case of `namesChangedFile reads %s as naming %s` and `blocks in
+drift: %s against %s` in the B1 group (each audit reproduction), by `still
+reads a real Windows path, whose backslash is not an escape`, `removes
+emphasis that spans words without reading a dunder's underscores as its
+close`, `removes a lone HTML tag as well as a paired one, and keeps <Name>
+itself`, `never trims the characters that are part of a name` and `keeps
+the dunder form and the emphasis-stripped form as candidates`; by every
+case of `blocks where the closed rule does not read the name` and `does
+not fire` and by `leaves the ruled case-sensitive stem cases a pass in
+drift` for the safety net; by the three property tests (`names the file
+through every pair of wrappers, escaped or not, with a suffix`, `names the
+file inside emphasis that spans the whole rule`, `blocks in drift through
+every single wrapper and suffix`), which wrap ten protected names and four
+`*.ext` globs in every pair of 25 wrappers; by every case of the `a *.ext
+glob beside punctuation, quotes, backticks or parens` group and of `emphasis
+inside a word`; by every case of `reading a long adversarial rule stays
+fast` (each bounded at 2 s); by `leaves an identifier with a trailing
+underscore segment whole` for the `EMPHASIS_RE` lookbehind; and end to end
+by the seven B1 cases and the three glob cases of `extract %j, freeze,
+stage %s: check --staged exits 1`. Mutations run on 2026-10-27 after the
+fix round for the review of c5532a3, each against `file-name-rule.test.ts`
+only unless named: `trimEdges` trimming a glob's own star again turns 33 red
+(and the three glob end-to-end cases); no intraword star reduction turns
+the 3 `emphasis inside a word` cases red; the old multi-word emphasis regex
+in place of `stripMultiwordOnce` makes the timing tests run for more than
+20 minutes before being killed (each bounded at 2 s); no
+`MAX_NESTING_PASSES` cap on the emphasis passes runs `deeply nested
+emphasis` for more than 5 minutes before being killed; a multi-word close
+that may sit beside its own character turns 2 red; no multi-word emphasis
+strip turns 2 red; `EDGE_CHAR_RE` as the old closed ASCII list turns 21 red.
+Two survivors are recorded, not fixed: the same cap on the HTML element
+passes survives `deeply nested HTML elements` (the run stays near 1 s
+without it), so that cap is unpinned; and dropping the whitespace
+requirement of a multi-word pair survives, an equivalent mutant now that
+both readings of single-word emphasis are kept anyway. The rows below were
+measured on c5532a3 before that round and were not re-run, except those
+just listed (that round's `EDGE_CHAR_RE` row was recorded as 19 red; the
+review measured 20 on c5532a3, and with the safety net also removed the two
+curly-quote end-to-end cases go red); no
+markdown unescape turns 6 red (the `id\_rsa` and escaped dunder drift cases
+stay green through the safety net, which unescapes on its own); no tag
+readings at all turns 4 red; no every-tag reading turns the lone-tag test
+red; no paired-element reading turns 2 red; no multi-word emphasis strip
+turns 2 red; no emphasis reduction in `reductions` turns 14 red;
+reinstating the 1.10.1 dunder guard turns 4 red; a multi-word close that
+may sit beside its own character turns 2 red; the safety net removed from
+drift turns its 4 block cases red (and none of the B1 drift cases, so the
+closed rule carries them alone); the net without its path-separator
+boundary turns 3 red; the net case-sensitive turns 3 red; the net without
+its left `.` boundary turns `prod.Dockerfile` red; trimming a leading `.`
+turns 5 red, a leading `~` 2, a leading `_` 3 and a trailing `_` 1; the
+`EMPHASIS_RE` lookbehind removed turns 1 red. One mutant survived and was
+removed as equivalent: a second trim that kept emphasis stars, since
+`stripEmphasisOnce` reads a pair anywhere in a word and the untrimmed form
+is always kept. The 1.10.0 compatibility reduction in `wordForms` (the
+2026-10-27 audit's N4c, an equivalent mutant) is gone with the rewrite: it
+trimmed a subset of what `trimEdges` trims, from a form that is still kept.
 
 The pin in this repository's own CI is pinned by `pins the
 @vaultcompass/intent-guard devDependency to ci.yml's intent-guard-version`
