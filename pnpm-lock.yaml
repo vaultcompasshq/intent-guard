@@ -15,8 +15,8 @@ importers:
   .:
     devDependencies:
       '@vaultcompass/conductor':
-        specifier: 0.13.2
-        version: 0.13.2
+        specifier: 0.15.0
+        version: 0.15.0
       '@vaultcompass/dep-guard':
         specifier: 0.16.1
         version: 0.16.1
@@ -416,8 +416,8 @@ packages:
   '@types/node@22.19.21':
     resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
 
-  '@vaultcompass/conductor@0.13.2':
-    resolution: {integrity: sha512-1gmqrd96ZqRbZR+suxAqwq/WvH1hB4hO1uvbU/8kT9W9A0DbSqG7TJRedhnL1uAL5QYkHc/3rD9A4yWwQHxK8A==}
+  '@vaultcompass/conductor@0.15.0':
+    resolution: {integrity: sha512-hmzUfvI9bXYp9xWN/2LAIwEwHfGYui3YEcE4bO6jLCFQqRSF31kP7SUHOzHJ98ohr7A9ZogW+4ZQtfVNFM+WbA==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -930,7 +930,7 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@vaultcompass/conductor@0.13.2':
+  '@vaultcompass/conductor@0.15.0':
     dependencies:
       ajv: 8.20.0
       commander: 12.1.0
