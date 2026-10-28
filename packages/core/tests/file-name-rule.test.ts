@@ -1,4 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { scoreDrift } from "../src/drift.js";
 import { mentionsChangedBasename, namesChangedFile, stripEmphasis } from "../src/tokenize.js";
@@ -315,10 +319,167 @@ describe("the basename safety net", () => {
     expect(mentionsChangedBasename(rule, [path])).toBe(false);
   });
 
+  // The 2026-10-28 audit's N3. A "." on the right is allowed, since it may end
+  // a sentence, so the net also fires on a longer name that continues after
+  // the dot. That is bounded by the net's contract: it only stops the
+  // demotion, and these tokens never match in the first place.
+  it.each([
+    ["Do not edit Dockerfile.prod", "Dockerfile"],
+    ["Never commit secrets.json.bak", "config/secrets.json"],
+  ])("fires on a right-hand dot and a letter, yet drift proceeds: %s against %s", (rule, path) => {
+    expect(mentionsChangedBasename(rule, [path])).toBe(true);
+    expect(namesChangedFile(rule, [path])).toBe(false);
+    const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+    expect(result.categories.scope_creep).toBe(0);
+    expect(result.action).toBe("proceed");
+  });
+
   it("leaves the ruled case-sensitive stem cases a pass in drift", () => {
     const result = scoreDrift(contractWith(["Do not touch billing"]), { changedPaths: ["src/Billing.tsx"] });
     expect(result.categories.scope_creep).toBe(0);
     expect(result.action).toBe("proceed");
+  });
+});
+
+// The 2026-10-28 audit's B1: the edge trim went straight through a name's own
+// leading symbol, so the stem of a SvelteKit route file ("+layout" for
+// +layout.svelte) inside quotes, parens or before a full stop reduced only
+// to "layout". Each blocked in 1.9.0 and 1.10.1 and passed in 1.10.2.
+const SYMBOL_LED_CASES: Array<[string, string]> = [
+  ['Do not edit "+layout".', "src/routes/+layout.svelte"],
+  ['Do not edit "+layout"', "src/routes/+layout.svelte"],
+  ["Do not edit (+layout)", "src/routes/+layout.svelte"],
+  ["Do not edit (+server)", "src/routes/api/+server.ts"],
+  ["Do not edit '+server'", "src/routes/api/+server.ts"],
+  ["Do not edit +layout.", "src/routes/+layout.svelte"],
+  ["Do not edit `+layout`.", "src/routes/+layout.svelte"],
+  ["Do not edit `+page.server`.", "src/routes/+page.server.ts"],
+  ["Do not edit `+error`.", "src/routes/+error.svelte"],
+  ['Do not edit "!important".', "styles/!important.css"],
+  ["Do not edit (!important).", "styles/!important.css"],
+  ['Do not edit "%env".', "config/%env.yaml"],
+  ["Do not edit `%env`.", "config/%env.yaml"],
+  // Symbol-ended and symbol-led-and-ended names: an editor backup and an
+  // autosave file.
+  ['Do not edit "init.el~".', "lisp/init.el~"],
+  ['Do not edit "#init.el#".', "lisp/#init.el#"],
+  // Next.js-style bracket and paren stems, which newly block: 1.10.1 and
+  // 1.10.2 both reduced '"[...slug]".' to "...slug" (the review of 44e4cd7,
+  // N2). '"[id]".' is named too, but drift never matches the token "id", so
+  // it still proceeds; it is asserted separately below.
+  ['Do not edit "[...slug]".', "app/[...slug].tsx"],
+  ['Do not edit "(group)".', "app/(group).tsx"],
+];
+
+describe("a name that itself starts or ends with a symbol (2026-10-28 B1)", () => {
+  it.each(SYMBOL_LED_CASES)("namesChangedFile reads %s as naming %s", (rule, path) => {
+    expect(namesChangedFile(rule, [path])).toBe(true);
+  });
+
+  it.each(SYMBOL_LED_CASES)("blocks in drift: %s against %s", (rule, path) => {
+    const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+    expect(result.categories.scope_creep).toBeGreaterThan(0);
+    expect(result.action).not.toBe("proceed");
+  });
+
+  it("names [id].tsx, and drift still proceeds because the token id never matches", () => {
+    expect(namesChangedFile('Do not edit "[id]".', ["app/[id].tsx"])).toBe(true);
+    expect(scoreDrift(contractWith(['Do not edit "[id]".']), { changedPaths: ["app/[id].tsx"] }).action).toBe("proceed");
+  });
+});
+
+// The review of 44e4cd7, M1: one-character trims reach a symbol-led name only
+// after L + T steps, so deep wrapping ran the form search into its cap first
+// and the rule passed. The first two blocked in 1.10.1. Wrapping depth must
+// not matter: the review's three measured cases, then deeper ones.
+const q = (n: number, w: string): string => `${'"'.repeat(n)}${w}${'"'.repeat(n)}`;
+const DEEP_CASES: Array<[string, string, string]> = [
+  ["21 quotes", `Do not edit ${q(21, "+layout")}.`, "src/routes/+layout.svelte"],
+  ["14 parens around backticks", `Do not edit ${"(".repeat(14)}\`+layout\`${")".repeat(14)}.`, "src/routes/+layout.svelte"],
+  ["10 star-quote pairs", `Do not edit ${'*"'.repeat(10)}+layout${'"*'.repeat(10)}`, "src/routes/+layout.svelte"],
+  ["200 quotes", `Do not edit ${q(200, "+layout")}.`, "src/routes/+layout.svelte"],
+  ["100 parens around backticks", `Do not edit ${"(".repeat(100)}\`+layout\`${")".repeat(100)}.`, "src/routes/+layout.svelte"],
+  ["100 star-quote pairs", `Do not edit ${'*"'.repeat(100)}+layout${'"*'.repeat(100)}`, "src/routes/+layout.svelte"],
+  ["60 quotes, symbol at both ends", `Do not edit ${q(60, "#init.el#")}.`, "lisp/#init.el#"],
+  ["60 quotes, two own symbols", `Do not edit ${q(60, "++layout")}.`, "src/++layout.svelte"],
+  // Three own symbols at the start: past what the trim keeps at depth one,
+  // so this one is reached only through the cap's fallback.
+  ["60 quotes, three own symbols", `Do not edit ${q(60, "+++layout")}.`, "src/+++layout.svelte"],
+  // Deep wrapping plus one reduction that is not an edge trim.
+  ["60 quotes around a link", `Do not edit ${q(60, "[+layout](./x)")}.`, "src/routes/+layout.svelte"],
+];
+
+describe("a symbol-led name is matched at any wrapping depth (review of 44e4cd7, M1)", () => {
+  it.each(DEEP_CASES)("names the file: %s", (_name, rule, path) => {
+    expect(namesChangedFile(rule, [path])).toBe(true);
+  });
+
+  it.each(DEEP_CASES)("blocks in drift: %s", (_name, rule, path) => {
+    const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+    expect(result.categories.scope_creep).toBeGreaterThan(0);
+    expect(result.action).not.toBe("proceed");
+  });
+
+  // The re-review of 7a081fc, R2: the fallback ran per changed path per form,
+  // so one 1 KB symbol word against 2000 paths took 47.7 s. The fallback now
+  // skips a form that does not contain the name at all.
+  it("reads a capped word against 2000 changed paths in well under the timing bound", () => {
+    // The second word is all edge characters, so every position in it is a
+    // candidate start; only the substring test keeps that from costing the
+    // word's length per form per path.
+    const rule = `Do not edit ${q(500, "+layout")} or ${'"+'.repeat(500)}.`;
+    const paths = Array.from({ length: 2000 }, (_v, i) => `src/p${i}/${"+".repeat(40)}${i}.ts`);
+    const started = Date.now();
+    expect(namesChangedFile(rule, paths)).toBe(false);
+    expect(namesChangedFile(rule, [...paths, "src/routes/+layout.svelte"])).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5000);
+  }, 120000);
+
+  // The precheck's other branch: a word of edge characters only can still
+  // name a file whose name is edge characters only.
+  it("still names an all-symbol file past the cap", () => {
+    expect(namesChangedFile(`Do not edit ${q(60, "##")}.`, ["docs/##.md"])).toBe(true);
+    expect(namesChangedFile(`Do not edit ${q(60, "##")}.`, ["docs/a##.md"])).toBe(false);
+  });
+
+  // The re-review of 7a081fc, R1: the limit the fallback leaves. A footnote
+  // or reference marker must be stripped from a partial trim that lies past
+  // the cap, and edgeWraps cannot see through "[^1]" or "[1]". Each blocks at
+  // 25 quotes on each side and passes at 60; 1.10.1 blocked them at any
+  // depth. Pinned as they are so that a change in either direction shows up.
+  it.each([
+    ["a footnote marker", "+layout[^1]"],
+    ["a reference marker", "+layout[1]"],
+  ])("known limit: %s blocks at 25 quotes and passes at 60", (_name, word) => {
+    const path = ["src/routes/+layout.svelte"];
+    expect(namesChangedFile(`Do not edit ${q(25, word)}.`, path)).toBe(true);
+    expect(namesChangedFile(`Do not edit ${q(60, word)}.`, path)).toBe(false);
+  });
+
+  // The review's other two R1 cases are not a limit here: the paired
+  // underscores are removed at depth one, from the word as written, and
+  // edgeWraps then reads the quotes.
+  it.each([
+    ["underscore emphasis", "_+layout_"],
+    ["underscore bold", "__+layout__"],
+  ])("blocks at any depth: %s", (_name, word) => {
+    const path = ["src/routes/+layout.svelte"];
+    expect(namesChangedFile(`Do not edit ${q(60, word)}.`, path)).toBe(true);
+    expect(namesChangedFile(`Do not edit ${q(200, word)}.`, path)).toBe(true);
+  });
+
+  // Names-only: drift's tokens ("lay", "out") never match this one, deep or
+  // shallow, so only the closed rule is asserted.
+  it("names the file: 60 quotes around intraword emphasis", () => {
+    expect(namesChangedFile(`Do not edit ${q(60, "**+lay**out")}.`, ["src/routes/+layout.svelte"])).toBe(true);
+  });
+
+  // Deep wrapping does not loosen the rule: the name must still be in the
+  // word, and a deeply wrapped word naming nothing still names nothing.
+  it("stays closed on a deeply wrapped word that is not the name", () => {
+    expect(namesChangedFile(`Do not edit ${q(60, "+layouts")}.`, ["src/routes/+layout.svelte"])).toBe(false);
+    expect(namesChangedFile(`Do not edit ${q(60, "x+layout")}.`, ["src/routes/+layout.svelte"])).toBe(false);
+    expect(namesChangedFile(`Do not edit ${q(60, "Docker")}.`, ["Dockerfile"])).toBe(false);
   });
 });
 
@@ -377,8 +538,9 @@ describe("emphasis inside a word", () => {
 // rule's length (a 13 KB rule took 138 s). Each reading must stay fast on a
 // long adversarial rule. The bound is loose on purpose: the deeply nested case
 // takes about 1 s alone but over 7 s on a heavily loaded machine, while the
-// cubic pattern and the uncapped nesting loop it guards against each ran for
-// many minutes, so 15 s still separates the two.
+// cubic pattern and the uncapped emphasis nesting loop it guards against each
+// ran for many minutes, so 15 s still separates the two. It does not catch a
+// constant-factor or mildly quadratic slowdown: the scaling group below does.
 describe("reading a long adversarial rule stays fast", () => {
   it.each([
     ["repeated underscore pairs", "_a b ".repeat(2700)],
@@ -400,6 +562,73 @@ describe("reading a long adversarial rule stays fast", () => {
   }, 30000);
 });
 
+// The 2026-10-28 audit's N1 and N2: an absolute bound cannot tell linear from
+// quadratic on a machine of unknown load, and the uncapped HTML element loop
+// (about 35 times slower on the deeply nested case) passed it. Reading a rule
+// four times as long must take under ten times as long: linear measured 4 to
+// 6 (allocation makes it a little worse than 4), quadratic is about 16, and
+// the uncapped HTML loop measured 23. Each size takes the fastest of three
+// runs, so a load spike during one run does not count.
+describe("reading time grows linearly with the rule's length", () => {
+  const fastest = (rule: string): number => {
+    let best = Infinity;
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now();
+      namesChangedFile(rule, ["Dockerfile"]);
+      mentionsChangedBasename(rule, ["Dockerfile"]);
+      best = Math.min(best, performance.now() - started);
+    }
+    return best;
+  };
+
+  // [name, rule of n layers, n]: n is chosen so the shorter rule takes tens
+  // of milliseconds, well above timer noise.
+  it.each([
+    ["deeply nested emphasis", (n: number) => `${"*_ ".repeat(n)}Dockerfile${" _*".repeat(n)}`, 2500],
+    ["deeply nested HTML elements", (n: number) => `${"<b> ".repeat(n)}Dockerfile${" </b>".repeat(n)}`, 10000],
+    // One word: the per-word form cap is what keeps this linear (the review
+    // of 44e4cd7, N4).
+    ["one long word of quotes", (n: number) => `${'"'.repeat(n)}+layout${'"'.repeat(n)}`, 1000],
+    ["one long word of star-quote pairs", (n: number) => `${'*"'.repeat(n)}+layout${'"*'.repeat(n)}`, 500],
+  ] as Array<[string, (n: number) => string, number]>)("%s", (_name, build, n) => {
+    const small = fastest(build(n));
+    const large = fastest(build(4 * n));
+    expect(large / Math.max(small, 1)).toBeLessThan(10);
+  }, 60000);
+});
+
+// The review of 44e4cd7, N4: without MAX_WORD_FORMS a long symbol word runs
+// for minutes, and a synchronous loop cannot be interrupted by the test
+// timeout, so in-process it shows up as a hang, not a red test. Here the
+// built module reads the words in a child process that is killed at 15 s,
+// so the same regression is a failure. Needs `pnpm build` first, as the root
+// `pnpm test` does.
+describe("a long symbol word cannot hang the reader", () => {
+  it("reads three long symbol words in a child process within 15 s", () => {
+    const built = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "tokenize.js");
+    if (!existsSync(built)) throw new Error("dist not built: run pnpm build before this test");
+    const script = [
+      `import { namesChangedFile } from ${JSON.stringify(pathToFileURL(built).href)};`,
+      `const words = [`,
+      `  "*".repeat(4000) + "a" + "*".repeat(4000),`,
+      `  '"'.repeat(4000) + "+layout" + '"'.repeat(4000),`,
+      `  '*"'.repeat(2000) + "+layout" + '"*'.repeat(2000),`,
+      `];`,
+      `for (const w of words) namesChangedFile("Do not edit " + w, ["src/routes/+layout.svelte"]);`,
+      `process.stdout.write("done");`,
+    ].join("\n");
+    const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    expect({ signal: run.signal, stdout: run.stdout, stderr: run.stderr }).toEqual({
+      signal: null,
+      stdout: "done",
+      stderr: "",
+    });
+  }, 30000);
+});
+
 // Property-style: a protected name, wrapped in any combination of the
 // wrappers people actually write, still names the file. A new wrapper is
 // added here, not as a new special case in wordForms.
@@ -418,6 +647,25 @@ const PROTECTED: Array<[string, string]> = [
   ["payment_methods", "db/payment_methods.sql"],
   [".env", ".env.local"],
   ["__init__.py", "pkg/__init__.py"],
+  // Names that start or end with a symbol of their own (the 2026-10-28
+  // audit's B1): SvelteKit route files by stem and by basename, and one name
+  // led or ended by each of + ! % @ # $ ~.
+  ["+layout", "src/routes/+layout.svelte"],
+  ["+layout.svelte", "src/routes/+layout.svelte"],
+  ["+page.server", "src/routes/+page.server.ts"],
+  ["+page.server.ts", "src/routes/+page.server.ts"],
+  ["!important", "styles/!important.css"],
+  ["!important.css", "styles/!important.css"],
+  ["%env", "config/%env.yaml"],
+  ["@modal", "app/@modal.tsx"],
+  ["#init.el#", "lisp/#init.el#"],
+  ["$payments", "src/$payments.ts"],
+  ["~$report.docx", "docs/~$report.docx"],
+  ["init.el~", "lisp/init.el~"],
+  ["notes+", "docs/notes+.md"],
+  // Not "build!" or "$config": build and config are GENERIC_TOKENS, which
+  // drift never matches on, written any way.
+  ["migrate!", "scripts/migrate!.sh"],
 ];
 
 const escapeMarkdown = (name: string): string => name.replace(/[!-/:-@[-`{-~]/g, (c) => `\\${c}`);

@@ -15,7 +15,10 @@ import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } fro
 const USAGE = `Usage: intent-guard freeze [flags]
 
 Approve and freeze the active draft contract. A non-interactive run must pass
---approved-by: an agent cannot self-approve.
+--approved-by. The name is recorded as given; intent-guard does not verify
+who typed it, so an agent that can run this command can also approve its own
+contract. Keep approval a human step, and judge pull requests with check
+--trust-base so a head-only contract is not the judge.
 
 Flags:
   --project <root>        Project root (default: .)

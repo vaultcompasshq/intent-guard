@@ -528,12 +528,23 @@ or fetch the base ref explicitly before running the gate:
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0
-- run: |
-    npx --yes @vaultcompass/intent-guard@1.10.2 check --project . \
-      --base origin/${{ github.base_ref }} \
-      --trust-base origin/${{ github.base_ref }}
+- name: Install intent-guard
+  working-directory: ${{ runner.temp }}
+  run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.2
+- name: Check the pull request
+  working-directory: ${{ runner.temp }}
+  env:
+    BASE_REF: ${{ github.base_ref }}
+  run: |
+    "$RUNNER_TEMP/ig/bin/intent-guard" check --project "$GITHUB_WORKSPACE" \
+      --base "origin/$BASE_REF" \
+      --trust-base "origin/$BASE_REF"
 ```
 
+Install outside the checkout and call the binary by absolute path: `npx` or
+`pnpm dlx` run from inside the checkout read a `.npmrc` and a `node_modules`
+the pull request carries, so the branch being judged would choose its own
+judge. The base branch name goes through `env`, never into the script text.
 Pass `--trust-base` on every pull-request run; the next section says why.
 
 When `--previous-contract` is provided, JSON includes `crossSessionDrift`;
@@ -544,15 +555,15 @@ this does not change the gate exit code.
 `--base` decides **which paths are judged**. `--trust-base` decides **where the
 rules come from**. They are independent, and a pull-request run passes both:
 
-```yaml
-- run: |
-    npx --yes @vaultcompass/intent-guard@1.10.2 check --project . \
-      --base origin/${{ github.base_ref }} \
-      --trust-base origin/${{ github.base_ref }}
+```bash
+"$RUNNER_TEMP/ig/bin/intent-guard" check --project "$GITHUB_WORKSPACE" \
+  --base "origin/$BASE_REF" \
+  --trust-base "origin/$BASE_REF"
 ```
 
-The `vaultcompasshq/intent-guard` action builds exactly that command line and
-decides both refs from the event, so a workflow using it cannot omit
+The `vaultcompasshq/intent-guard` action builds that command line, installs
+the gate outside the checkout as above (with an npm version floor and
+`npm audit signatures` on top), and decides both refs from the event, so a workflow using it cannot omit
 `--trust-base` by forgetting to type it. See the
 [README](../README.md#github-action).
 
@@ -644,7 +655,8 @@ comparison is on resolved commits, not spellings, so a branch, a tag or a raw
 SHA pointing at the head commit are all refused alike. The realistic way in is
 `--trust-base ${{ github.sha }}`: on a `pull_request` event with the default
 `actions/checkout`, that SHA is the merge commit, which is HEAD. Pass
-`origin/${{ github.base_ref }}` instead. A branch with no commits ahead of its
+`"origin/$BASE_REF"` instead, with `BASE_REF` set from `github.base_ref` in the
+step's `env`. A branch with no commits ahead of its
 base is refused by the same rule, which is not a case this can tell apart.
 
 **A `--trust-base` whose TREE equals the head's is refused too**, exit 2, even

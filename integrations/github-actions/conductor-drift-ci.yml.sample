@@ -15,21 +15,24 @@ jobs:
   intent-guard-drift:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: pnpm
 
+      # Installed outside the checkout, never with npx or pnpm dlx from inside
+      # it: run from the checkout, npm reads a .npmrc the pull request
+      # committed (which can repoint the registry), and npx runs a
+      # node_modules/@vaultcompass/intent-guard the pull request carries. Then
+      # the branch being judged chooses its own judge. --ignore-scripts keeps
+      # any install script from running. The same install the composite
+      # action does, minus its npm version floor and `npm audit signatures`.
       - name: Install Intent Guard
-        run: pnpm dlx @vaultcompass/intent-guard@1.10.2 --version
+        working-directory: ${{ runner.temp }}
+        run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.2
 
       # `check` is the full gate: it scores drift AND enforces the contract's
       # change budget (allowed/protected paths, max files, dependency guard),
@@ -48,7 +51,9 @@ jobs:
       #
       # github.base_ref is passed through env and read as a shell variable,
       # never as ${{ }} inside the run body, so a branch named with a $(...)
-      # or backtick payload is data, not code, when bash sees it.
+      # or backtick payload is data, not code, when bash sees it. The binary
+      # is called by absolute path, not looked up on PATH, so nothing the
+      # checkout put on PATH can stand in for it.
       # Add `--no-require-frozen` only while the base branch does not yet
       # carry a frozen contract; it turns the contract requirement off.
       - name: Check intent + budget
@@ -57,7 +62,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch origin "$BASE_REF"
-          pnpm dlx @vaultcompass/intent-guard@1.10.2 check \
+          "$RUNNER_TEMP/ig/bin/intent-guard" check \
             --project . \
             --base "origin/$BASE_REF" \
             --trust-base "origin/$BASE_REF"

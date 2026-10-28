@@ -16,21 +16,25 @@ jobs:
   guardrails:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: pnpm
 
-      - name: Install Intent Guard
-        run: pnpm dlx @vaultcompass/intent-guard@1.10.2 --version
+      # Both gates are installed outside the checkout, never with npx or pnpm
+      # dlx from inside it: run from the checkout, npm reads a .npmrc the pull
+      # request committed (which can repoint the registry), and npx runs a
+      # copy out of the node_modules the pull request carries. Then the branch
+      # being judged chooses its own judge. --ignore-scripts keeps any install
+      # script from running.
+      - name: Install Intent Guard and Vault Guard
+        working-directory: ${{ runner.temp }}
+        run: |
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.2
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/vg" @vaultcompass/vault-guard@1.12.1
 
       # `check` runs the full gate (drift + change-budget enforcement), matching
       # the pre-commit hook. `drift` is score-only and skips the budget.
@@ -47,17 +51,24 @@ jobs:
       #
       # github.base_ref is passed through env and read as a shell variable,
       # never as ${{ }} inside the run body, so a branch named with a $(...)
-      # or backtick payload is data, not code, when bash sees it.
+      # or backtick payload is data, not code, when bash sees it. Each binary
+      # is called by absolute path, not looked up on PATH.
       - name: Check intent + budget
         shell: bash
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           git fetch origin "$BASE_REF"
-          pnpm dlx @vaultcompass/intent-guard@1.10.2 check \
+          "$RUNNER_TEMP/ig/bin/intent-guard" check \
             --project . \
             --base "origin/$BASE_REF" \
             --trust-base "origin/$BASE_REF"
 
+      # --trust-base reads .vault-guard.json from the base branch too, so a
+      # pull request cannot add an allowlist entry that silences its own leak.
       - name: Check secrets
-        run: npx --yes @vaultcompass/vault-guard@1.9.1 -- scan . --format text
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          "$RUNNER_TEMP/vg/bin/vault-guard" scan . --format text --trust-base "origin/$BASE_REF"

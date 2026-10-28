@@ -254,7 +254,7 @@ export function checkGate(
   if (!contractFound) {
     if (requireFrozen) {
       reasons.push(
-        `No ${STATE_DIR}/intent-contract.yaml found. Draft intent with intent-guard-extract, then approve with intent-guard-freeze before implementing.`,
+        `No ${STATE_DIR}/intent-contract.yaml found. Draft intent with intent-guard extract, then approve with intent-guard freeze before implementing.`,
       );
     }
     // First adoption on the branch. The head's contract is a proposal and is
