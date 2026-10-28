@@ -1,6 +1,6 @@
 # @vaultcompass/intent-guard
 
-Unified CLI for [Intent Guard](https://github.com/vaultcompasshq/intent-guard) -- intent contracts, drift checks, session continuity, and setup diagnostics.
+Unified CLI for [intent-guard](https://github.com/vaultcompasshq/intent-guard) -- intent contracts, drift checks, session continuity, and setup diagnostics.
 
 > Renamed in 1.2.0. This package was published as `@vaultcompass/conductor-cli`
 > through 1.1.0, and the binary was `conductor`. The binary is now
@@ -17,10 +17,11 @@ Unified CLI for [Intent Guard](https://github.com/vaultcompasshq/intent-guard) -
 ## Install
 
 ```bash
-npm install -D @vaultcompass/intent-guard
-# or one-off:
-npx @vaultcompass/intent-guard@latest init --project .
+npm install -g @vaultcompass/intent-guard
 ```
+
+For a single project, use `npm install -D @vaultcompass/intent-guard` and put
+`npx` in front of each command below.
 
 ## Quickstart
 

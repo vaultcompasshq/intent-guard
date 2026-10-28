@@ -6,7 +6,7 @@ The recommended shape is the published composite action, not a hand-written
 workflow:
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
 - uses: vaultcompasshq/intent-guard@v1.10.2
