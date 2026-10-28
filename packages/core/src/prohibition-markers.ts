@@ -37,6 +37,17 @@ export const EXPLICIT_PROHIBITION_SOURCE = EXPLICIT_PROHIBITION_MARKERS.map(esca
 /** An explicit marker anywhere in normalised text, as a whole word or phrase. */
 export const EXPLICIT_PROHIBITION_RE = new RegExp(`\\b(?:${EXPLICIT_PROHIBITION_SOURCE})\\b`, "i");
 
+/**
+ * Markers 1.9.0 read as a prohibition on a Gherkin line that the keep does
+ * not accept: an expected outcome ("Then the user cannot see the button") is
+ * far more often written this way than a rule, so such a line is not
+ * imported, but import-spec warns about it. "no" and "without" are not here:
+ * they open most negative outcomes ("Then no file is downloaded") and a
+ * warning on each would bury the ones that matter. Matched on normalised
+ * text, case-insensitive.
+ */
+export const SOFT_PROHIBITION_RE = /\b(?:should not|shouldn't|cannot|can't|avoid)\b/i;
+
 /** True when `text`, normalised, carries an explicit prohibition marker. */
 export function hasExplicitProhibition(text: string): boolean {
   return EXPLICIT_PROHIBITION_RE.test(normalizeMarkerText(text));

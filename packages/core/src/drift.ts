@@ -9,6 +9,7 @@ import {
 import {
   CONSTRAINT_NOISE_TOKENS,
   discriminatingTokens,
+  mentionsChangedBasename,
   namesChangedFile,
   intersectingTokens,
   matchStrength,
@@ -294,11 +295,13 @@ export function scoreDrift(
     // ("SyncStatus.tsx" against "Do not change sync"), the finding is
     // reported as partial and not counted. Any other evidence (a directory
     // segment, a path category, a slash path, a word of the item that names
-    // the file under the closed rule in namesChangedFile, a signal) and the
-    // full strength counts, name tokens included.
+    // the file under the closed rule in namesChangedFile, the whole basename
+    // under the mentionsChangedBasename safety net, a signal) and the full
+    // strength counts, name tokens included.
     const otherEvidence =
       slashHits.length > 0 ||
       namesChangedFile(item, input.changedPaths ?? []) ||
+      mentionsChangedBasename(item, input.changedPaths ?? []) ||
       (discriminating.size > 0 &&
         outOfScopeTouch(discriminating, beyondName, beyondNameSegs).length > 0);
     const nameOnly = !otherEvidence;

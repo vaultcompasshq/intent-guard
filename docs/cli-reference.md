@@ -88,21 +88,34 @@ it had in 1.9.0, file name included: "Never modify billing" against
 block.
 
 **The closed file-name rule.** This is the rule an author can rely on to
-guard a file by name. Each word of an out_of_scope item is reduced, until
-it stops changing: backslashes become slashes; leading quotes, backticks,
-brackets and braces, leading `./` and `../` prefixes or a lone `/`, a
-trailing footnote or reference marker (`[^1]`, `[1]`), and trailing
-punctuation are trimmed; and one layer of paired emphasis is removed per
-step. A markdown link word gives both its text and its target, and a
-`*.ext` glob wrapped in emphasis stars (`*.pem*`) gives the bare glob. So
-``Never touch `Dockerfile`.``, `Never touch **Dockerfile**`,
-`Never modify **payment**_methods`, `Never touch ./Dockerfile`,
-`Never touch .\Dockerfile`, `Never touch {Dockerfile}`,
-`Do not edit the [changelog](CHANGELOG.md).`,
+guard a file by name. The item is read as written, with markdown backslash
+escapes undone (`payment\_methods` is `payment_methods`; a backslash before
+a letter stays a Windows path), with HTML tags removed, and with emphasis
+that spans several words removed (`**Never touch the Dockerfile.**`). Each
+word of each reading is then reduced in every way, and every form reached
+is compared: backslashes read as slashes; a markdown link word gives both
+its text and its target; a leading `./`, `../` or lone `/`, and a trailing
+footnote or reference marker (`[^1]`, `[1]`) are removed; a `*.ext` glob
+wrapped in emphasis stars (`*.pem*`) gives the bare glob; one layer of
+paired emphasis is removed; and every Unicode punctuation, symbol or format
+character is trimmed from both ends, except `_`, `/`, `\`, a leading `.`
+or `~`, and the star of a `*.ext` glob (a star with a `.` right after it);
+stars inside a word (`**Docker**file`) are removed as well. So curly
+quotes, guillemets, CJK corner brackets, `$`, `@`, `#`, a zero-width space
+and the sentence marks of any script are trimmed without being listed
+anywhere, and `'*.pem'.`, `(*.pem).` or a backticked `*.pem` still names
+`server.pem`. ``Never touch `Dockerfile`.``,
+`Never touch **Dockerfile**`, `Do not edit "Makefile".` in curly quotes,
+`Never modify **payment**_methods`, `Do not modify payment\_methods.`,
+`Do not edit <code>Makefile</code>.`, `*Do not edit CHANGELOG.md.*`,
+`Never touch ./Dockerfile`, `Never touch .\Dockerfile`,
+`Never touch {Dockerfile}`, `Do not edit the [changelog](CHANGELOG.md).`,
 `Never edit [CHANGELOG.md][1]` and `Never edit Dockerfile[^1]` each name
-the file. A dunder name (`__init__.py`) is never emphasis-stripped, and a
-home-directory path (`~/Dockerfile`) names nothing in the repository. The
-word names a changed file when one of its forms is, case-sensitively:
+the file. `__x__` is both a Python dunder and markdown bold, so both
+readings count: `__init__.py` names `__init__.py` and `init.py`, and
+`__Makefile__` names `Makefile`. A home-directory path (`~/Dockerfile`)
+names nothing in the repository. The word names a changed file when one of
+its forms is, case-sensitively:
 
 - exactly the file's basename: `.env.local`, `.env.production`,
   `CODEOWNERS`, `Dockerfile`, `Makefile`, `LICENSE`, `id_rsa`,
@@ -121,6 +134,17 @@ path segments, separately from this rule.
 Such a word makes the match a path match, so it is never demoted. Nothing
 else about a file name is: a word found inside a longer name (`sync` in
 `SyncStatus.tsx`) is not. A `protected_paths` budget is the firmer guard.
+
+Under that rule is a safety net: when a changed file's whole basename,
+extension included, appears in the item as a name of its own, ignoring
+case, format characters and markdown escapes, the match is not demoted
+either. "Never touch the dockerfile" against `Dockerfile` and "Do not edit
+codeowners" against `.github/CODEOWNERS` block, as they did in 1.9.0. A
+basename without its extension is never matched this way ("Do not touch
+billing" against `src/Billing.tsx` stays a pass), nor is a name behind a
+path separator (`~/Dockerfile`, `infra/Dockerfile`). The net only stops
+the demotion of a match the tokens already made, so it never blocks a
+change 1.9.0 passed.
 
 **Matchers are built from what a rule prohibits.** Leading negation markers
 (No, Do not, Don't, Never, Must not, Should not, SHALL NOT, Cannot, Won't,
@@ -291,7 +315,11 @@ outcome written with no, cannot, can't, should not, will not, won't, avoid
 or without ("Then no file is downloaded"): write a rule you want enforced
 with one of the kept markers, or under an Out of scope heading. A Given or
 When step is always dropped; when it carries a kept marker, `import-spec`
-warns, naming the file and the step.
+warns, naming the file and the step. A Then, And or But step (or a
+scenario body line) written with should not, shouldn't, cannot, can't or
+avoid and no kept marker is dropped with a warning naming the file and the
+step, because 1.9.0 imported it as a prohibition; no and without are
+dropped silently, since they open most negative outcomes.
 
 A spec with no labelled section at all yields an empty draft: no
 `out_of_scope`, one placeholder `in_scope` item saying so, and one

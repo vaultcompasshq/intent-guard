@@ -16,7 +16,12 @@ import {
 } from "./extract.js";
 import type { RuleReplacement } from "./constraints.js";
 import { suggestPathBudgets } from "./path-suggestions.js";
-import { EXPLICIT_PROHIBITION_RE, hasExplicitProhibition, normalizeMarkerText } from "./prohibition-markers.js";
+import {
+  EXPLICIT_PROHIBITION_RE,
+  SOFT_PROHIBITION_RE,
+  hasExplicitProhibition,
+  normalizeMarkerText,
+} from "./prohibition-markers.js";
 import { describeBudgetPathIssues, validateBudgetPaths } from "./budget-paths.js";
 
 export type SpecBridgeFormat = "auto" | "spec-kit" | "kiro" | "superpowers";
@@ -532,6 +537,12 @@ interface GherkinLine {
   kept: string[];
   /** Given or When steps that carry a marker and are not imported, for a warning. */
   dropped: string[];
+  /**
+   * Then, And or But steps (or body lines) with a clause that carries only a
+   * marker 1.9.0 read as a prohibition and the keep does not ("should not",
+   * "cannot"), for a warning.
+   */
+  unkept: string[];
 }
 
 /**
@@ -576,30 +587,54 @@ function fromMarker(text: string): string[] {
  */
 export const GHERKIN_RULES_HEADING = "Out of scope";
 
+/**
+ * True when a clause of `body` (split at semicolons, as fromMarker splits)
+ * carries a marker 1.9.0 read as a prohibition but the Gherkin keep does not
+ * (SOFT_PROHIBITION_RE) and no explicit marker. Such a clause is dropped; it
+ * is reported so the drop is not silent.
+ */
+function hasUnkeptSoftClause(body: string): boolean {
+  return normalizeMarkerText(body)
+    .split(";")
+    .some((clause) => SOFT_PROHIBITION_RE.test(clause) && !EXPLICIT_PROHIBITION_RE.test(clause));
+}
+
+/** A Then, And or But body, or a non-step body line: its kept rules, and itself when a soft clause was dropped. */
+function outcomeLine(body: string, label: string): GherkinLine {
+  return {
+    kept: hasExplicitProhibition(body) ? fromMarker(body) : [],
+    dropped: [],
+    unkept: hasUnkeptSoftClause(body) ? [label] : [],
+  };
+}
+
 function gherkinProhibitions(trimmed: string): GherkinLine {
-  const none: GherkinLine = { kept: [], dropped: [] };
-  if (!hasExplicitProhibition(trimmed)) return none;
+  const none: GherkinLine = { kept: [], dropped: [], unkept: [] };
+  if (!hasExplicitProhibition(trimmed) && !hasUnkeptSoftClause(trimmed)) return none;
   if (BOLD_STEP_RE.test(trimmed)) {
     const parts = trimmed.split(new RegExp(BOLD_STEP_SPLIT_RE.source, "gi"));
-    const result: GherkinLine = { kept: [], dropped: [] };
+    const result: GherkinLine = { kept: [], dropped: [], unkept: [] };
     for (let i = 1; i + 1 < parts.length; i += 2) {
       const keyword = parts[i].toLowerCase();
       const body = parts[i + 1].replace(/^[\s,:]+/, "").replace(/[\s,;]+$/, "");
-      if (!hasExplicitProhibition(body)) continue;
       if (keyword === "given" || keyword === "when") {
-        result.dropped.push(`${parts[i]} ${body}`);
+        if (hasExplicitProhibition(body)) result.dropped.push(`${parts[i]} ${body}`);
       } else {
-        result.kept.push(...fromMarker(body));
+        const line = outcomeLine(body, `${parts[i]} ${body}`);
+        result.kept.push(...line.kept);
+        result.unkept.push(...line.unkept);
       }
     }
     return result;
   }
   const step = trimmed.match(PLAIN_STEP_KEYWORD_RE);
   if (step) {
-    if (step[1] === "Given" || step[1] === "When") return { kept: [], dropped: [trimmed] };
-    return { kept: fromMarker(trimmed.slice(step[0].length).trim()), dropped: [] };
+    if (step[1] === "Given" || step[1] === "When") {
+      return hasExplicitProhibition(trimmed) ? { kept: [], dropped: [trimmed], unkept: [] } : none;
+    }
+    return outcomeLine(trimmed.slice(step[0].length).trim(), trimmed);
   }
-  return { kept: fromMarker(trimmed), dropped: [] };
+  return outcomeLine(trimmed, trimmed);
 }
 
 export interface LabelledSpecText {
@@ -609,6 +644,8 @@ export interface LabelledSpecText {
   headings: string[];
   /** Given or When steps with a prohibition marker that were not imported. */
   droppedSteps: string[];
+  /** Then, And or But steps whose "should not" or "cannot" clause was not imported. */
+  unkeptSteps: string[];
 }
 
 /**
@@ -632,11 +669,13 @@ export function selectLabelledSections(content: string): LabelledSpecText {
   const lines: string[] = [];
   const headings: string[] = [];
   const droppedSteps: string[] = [];
+  const unkeptSteps: string[] = [];
   const gherkinRules: string[] = [];
   const keepGherkin = (line: string): void => {
-    const { kept, dropped } = gherkinProhibitions(line);
+    const { kept, dropped, unkept } = gherkinProhibitions(line);
     for (const item of kept) gherkinRules.push(cleanSpecLine(item));
     droppedSteps.push(...dropped);
+    unkeptSteps.push(...unkept);
   };
   let inFence = false;
   // The open labelled section: its heading level (7 for a pseudo-heading).
@@ -731,7 +770,7 @@ export function selectLabelledSections(content: string): LabelledSpecText {
     // level-1 heading (buildImportText) closes this one.
     lines.push(`# ${GHERKIN_RULES_HEADING}`, ...gherkinRules.map((rule) => `- ${rule}`));
   }
-  return { text: lines.join("\n"), headings, droppedSteps };
+  return { text: lines.join("\n"), headings, droppedSteps, unkeptSteps };
 }
 
 /** The single in_scope item of a draft imported from a spec with no labelled section. */
@@ -765,6 +804,7 @@ function buildImportText(
     const selected = selectLabelledSections(file.content);
     if (selected.headings.length === 0) continue;
     droppedSteps.push(...selected.droppedSteps.map((step) => droppedStepWarning(basename(file.path), step)));
+    droppedSteps.push(...selected.unkeptSteps.map((step) => unkeptStepWarning(basename(file.path), step)));
     sections.push(...selected.headings.map((heading) => `${basename(file.path)}: ${heading}`));
     const label =
       file.role === "requirements"
@@ -797,6 +837,20 @@ function droppedStepWarning(file: string, step: string): string {
     `${file}: the Gherkin step "${step}" carries a prohibition marker but was not imported as a rule: ` +
     "Given and When steps set up a scenario and are never imported. If it states a rule, write it as a " +
     "Then step or under an Out of scope heading."
+  );
+}
+
+/**
+ * A Then, And or But step written with "should not", "cannot", "can't" or
+ * "avoid" and no kept marker is dropped (it usually states an expected
+ * outcome), where 1.9.0 imported it as a prohibition. Said out loud, as for
+ * a dropped Given or When step.
+ */
+function unkeptStepWarning(file: string, step: string): string {
+  return (
+    `${file}: the Gherkin step "${step}" reads like a prohibition but was not imported as a rule: ` +
+    "a Gherkin line is imported only when it says SHALL NOT, MUST NOT, never, do not or don't. If it states " +
+    "a rule, reword it with one of those or write it under an Out of scope heading."
   );
 }
 
