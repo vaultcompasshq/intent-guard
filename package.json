@@ -48,11 +48,11 @@
     }
   },
   "devDependencies": {
-    "@vaultcompass/conductor": "0.15.0",
-    "@vaultcompass/dep-guard": "0.17.0",
-    "@vaultcompass/intent-guard": "1.10.2",
+    "@vaultcompass/conductor": "0.16.0",
+    "@vaultcompass/dep-guard": "0.18.0",
+    "@vaultcompass/intent-guard": "1.10.3",
     "@vaultcompass/intent-guard-schema": "workspace:*",
-    "@vaultcompass/vault-guard": "1.12.1",
+    "@vaultcompass/vault-guard": "1.13.0",
     "vitest": "^4.1.11",
     "yaml": "^2.8.0"
   }

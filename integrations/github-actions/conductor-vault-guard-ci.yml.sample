@@ -34,7 +34,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.3
-          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/vg" @vaultcompass/vault-guard@1.12.1
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/vg" @vaultcompass/vault-guard@1.13.0
 
       # `check` runs the full gate (drift + change-budget enforcement), matching
       # the pre-commit hook. `drift` is score-only and skips the budget.
