@@ -79,7 +79,7 @@ For Intent Guard plus vault-guard, copy
 .github/workflows/conductor-vault-guard.yml
 ```
 
-That workflow installs `@vaultcompass/vault-guard@1.12.1` the same way, runs
+That workflow installs `@vaultcompass/vault-guard@1.13.0` the same way, runs
 the same gate check, then runs:
 
 ```bash
