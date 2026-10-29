@@ -42,7 +42,7 @@
     "@vaultcompass/intent-guard-skill": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
+    "@types/node": "^26.6.5",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
   }
