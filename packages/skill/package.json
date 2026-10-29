@@ -1,6 +1,6 @@
 {
   "name": "@vaultcompass/intent-guard-skill",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "type": "module",
   "description": "Superpowers-compatible Intent Guard skills and helper CLIs",
   "license": "MIT",
