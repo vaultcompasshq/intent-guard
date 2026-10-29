@@ -4,7 +4,7 @@ name: Intent Guard and Vault Guard
 # @vaultcompass/intent-guard and @vaultcompass/vault-guard from npm. Pin an
 # exact version rather than @latest, so the gate that judges a pull request
 # changes only when this file does. Prefer the composite action
-# (vaultcompasshq/intent-guard@v1.10.2) where it fits; see README.md here.
+# (vaultcompasshq/intent-guard@v1.10.3) where it fits; see README.md here.
 
 on:
   pull_request:
@@ -33,8 +33,8 @@ jobs:
       - name: Install Intent Guard and Vault Guard
         working-directory: ${{ runner.temp }}
         run: |
-          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.2
-          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/vg" @vaultcompass/vault-guard@1.12.1
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.3
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/vg" @vaultcompass/vault-guard@1.13.0
 
       # `check` runs the full gate (drift + change-budget enforcement), matching
       # the pre-commit hook. `drift` is score-only and skips the budget.

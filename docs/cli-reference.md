@@ -530,7 +530,7 @@ or fetch the base ref explicitly before running the gate:
     fetch-depth: 0
 - name: Install intent-guard
   working-directory: ${{ runner.temp }}
-  run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.2
+  run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.3
 - name: Check the pull request
   working-directory: ${{ runner.temp }}
   env:

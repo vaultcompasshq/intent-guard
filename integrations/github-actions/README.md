@@ -9,7 +9,7 @@ workflow:
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0
-- uses: vaultcompasshq/intent-guard@v1.10.2
+- uses: vaultcompasshq/intent-guard@v1.10.3
 ```
 
 There is no `version` input in that example because the default is the version
@@ -79,7 +79,7 @@ For Intent Guard plus vault-guard, copy
 .github/workflows/conductor-vault-guard.yml
 ```
 
-That workflow installs `@vaultcompass/vault-guard@1.12.1` the same way, runs
+That workflow installs `@vaultcompass/vault-guard@1.13.0` the same way, runs
 the same gate check, then runs:
 
 ```bash
