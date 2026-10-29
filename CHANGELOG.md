@@ -7,6 +7,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.10.3] - 2026-10-28
+
+A security release that closes file-name rule gaps found in the 2026-10-28
+audit.
+
 What can newly block you:
 
 - **A rule naming a file whose name starts or ends with a symbol**, such as
@@ -111,7 +116,7 @@ release: this list missed a regression 1.10.2 itself introduced. A name that
 starts or ends with a symbol of its own, written as its stem in quotes, parens
 or before a full stop (`Do not edit "+layout".` against
 `src/routes/+layout.svelte`), blocked in 1.9.0 and 1.10.1 and passes in
-1.10.2; see Unreleased.
+1.10.2; see 1.10.3.
 
 What can newly block you:
 
