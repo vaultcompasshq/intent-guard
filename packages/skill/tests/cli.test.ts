@@ -134,7 +134,9 @@ describe("conductor-extract", () => {
     ]);
     expect(res.code).toBe(2);
     expect(res.stderr).toMatch(/removed/i);
-    expect(res.stderr).toMatch(/intent-guard-freeze/i);
+    // "intent-guard freeze", which every install has; a global install of
+    // @vaultcompass/intent-guard does not link the intent-guard-freeze bin.
+    expect(res.stderr).toMatch(/intent-guard freeze/i);
     expect(existsSync(join(dir, ".intent-guard", "intent-contract.yaml"))).toBe(false);
   });
 

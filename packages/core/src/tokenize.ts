@@ -327,23 +327,99 @@ const HTML_ELEMENT_RE = /<([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?>(.*?)<\/\1\s*>/g;
 const MAX_WORD_FORMS = 512;
 
 /**
- * `word` with characters in EDGE_CHAR_RE trimmed from both ends, except
- * those the KEEP sets name. Emphasis stars are trimmed too; the form before
- * the trim is kept, and stripEmphasisOnce reads its pairs anywhere in the
- * word, so a trim never loses a pair ("**payment**_methods"). The one star
- * the leading trim stops at is the star of a "*.ext" glob, a star with a "."
- * right after it: "'*.pem'." trims to "*.pem", never to ".pem" (the
- * c5532a3 review's M1, where no form of the word was the glob any more).
+ * The edge trims of `word`: characters in EDGE_CHAR_RE, except those the
+ * KEEP sets name, taken from its ends. Three forms: `word` trimmed all the
+ * way at both ends, and `word` with one character trimmed at the start only
+ * or at the end only. wordForms applies every reduction to every form it
+ * finds, so the one-character steps reach every partial trim as well: each
+ * number of characters off the start combined with each number off the end.
+ * A name that itself starts or ends with a symbol ("+layout", "!important",
+ * "init.el~", "#init.el#") is one of those partial trims, so "+layout" in
+ * '"+layout".' is still reached, never only "layout" (the 2026-10-28
+ * audit's B1). A partial trim sits L + T steps deep, so heavy wrapping can
+ * run the search into MAX_WORD_FORMS first; namesChangedFile then answers
+ * the same question with edgeWraps (the review of 44e4cd7, M1). Emphasis stars are trimmed too; the form before the trim is
+ * kept, and stripEmphasisOnce reads its pairs anywhere in the word, so a
+ * trim never loses a pair ("**payment**_methods"). The one star the leading
+ * trim stops at is the star of a "*.ext" glob, a star with a "." right after
+ * it: "'*.pem'." trims to "*.pem", never to ".pem" (the c5532a3 review's M1,
+ * where no form of the word was the glob any more).
  */
-function trimEdges(word: string): string {
+function trimEdges(word: string): string[] {
   const chars = [...word];
+  const { start, end } = edgeBounds(chars);
+  const out = [chars.slice(start, end).join("")];
+  if (chars.length > 0 && edgeLeading(chars, 0)) out.push(chars.slice(1).join(""));
+  if (chars.length > 0 && edgeTrailing(chars, chars.length - 1)) out.push(chars.slice(0, -1).join(""));
+  return out;
+}
+
+const edgeTrimmable = (c: string, keep: Set<string>): boolean => EDGE_CHAR_RE.test(c) && !keep.has(c);
+/** Whether chars[i] is one the leading trim removes: never a "*.ext" glob's own star. */
+const edgeLeading = (chars: string[], i: number): boolean =>
+  edgeTrimmable(chars[i], KEEP_LEADING) && !(chars[i] === "*" && chars[i + 1] === ".");
+const edgeTrailing = (chars: string[], i: number): boolean => edgeTrimmable(chars[i], KEEP_TRAILING);
+
+/** Where the full edge trim of `chars` starts and ends. */
+function edgeBounds(chars: string[]): { start: number; end: number } {
   let start = 0;
   let end = chars.length;
-  const trimmable = (c: string, keep: Set<string>): boolean => EDGE_CHAR_RE.test(c) && !keep.has(c);
-  const globStar = (i: number): boolean => chars[i] === "*" && chars[i + 1] === ".";
-  while (start < end && trimmable(chars[start], KEEP_LEADING) && !globStar(start)) start++;
-  while (end > start && trimmable(chars[end - 1], KEEP_TRAILING)) end--;
-  return chars.slice(start, end).join("");
+  while (start < end && edgeLeading(chars, start)) start++;
+  while (end > start && edgeTrailing(chars, end - 1)) end--;
+  return { start, end };
+}
+
+/**
+ * Whether some partial edge trim of `word` is exactly `target`: `word` is
+ * `target` with only leading-trimmable characters before it and only
+ * trailing-trimmable characters after it. The same answer the one-character
+ * trims give through wordForms, computed directly in time linear in the
+ * word, for a word whose form search reached MAX_WORD_FORMS. The word is
+ * scanned once (edgeScan) and reused for every changed path, and a cheap
+ * test rejects nearly every path before any scan: the match must contain the
+ * word's core (what the full trim leaves), so the target must contain it;
+ * and a word that is all edge characters can only match a target that is
+ * too. So a capped word against thousands of paths stays cheap (the
+ * re-review of 7a081fc, R2).
+ */
+interface EdgeScan {
+  chars: string[];
+  // Every character before firstKept is leading-trimmable; every character
+  // from lastKept on is trailing-trimmable.
+  firstKept: number;
+  lastKept: number;
+  // chars[firstKept, lastKept), or "" when the two ends overlap and every
+  // character of the word is an edge character.
+  core: string;
+}
+
+function edgeScan(word: string): EdgeScan {
+  const chars = [...word];
+  let firstKept = 0;
+  while (firstKept < chars.length && edgeLeading(chars, firstKept)) firstKept++;
+  let lastKept = chars.length;
+  while (lastKept > 0 && edgeTrailing(chars, lastKept - 1)) lastKept--;
+  const core = firstKept < lastKept ? chars.slice(firstKept, lastKept).join("") : "";
+  return { chars, firstKept, lastKept, core };
+}
+
+/** Whether every character of `text` is in EDGE_CHAR_RE. */
+const allEdge = (text: string): boolean => /^[\p{P}\p{S}\p{Cf}]+$/u.test(text);
+
+function edgeWraps(scan: EdgeScan, target: string, targetAllEdge: boolean): boolean {
+  if (target.length === 0) return false;
+  if (scan.core === "" ? !targetAllEdge : !target.includes(scan.core)) return false;
+  const { chars, firstKept, lastKept } = scan;
+  const t = [...target];
+  if (t.length > chars.length) return false;
+  const from = Math.max(0, lastKept - t.length);
+  const to = Math.min(firstKept, chars.length - t.length);
+  for (let i = from; i <= to; i++) {
+    let same = true;
+    for (let k = 0; k < t.length && same; k++) same = chars[i + k] === t[k];
+    if (same) return true;
+  }
+  return false;
 }
 
 /** The single-step reductions of one form of a word. */
@@ -355,7 +431,7 @@ function reductions(form: string): string[] {
   if (link) out.push(link[1], link[2]);
   out.push(form.replace(LEADING_PATH_RE, ""));
   out.push(form.replace(TRAILING_MARKER_RE, ""));
-  out.push(trimEdges(form));
+  out.push(...trimEdges(form));
   const glob = form.match(STARRED_GLOB_RE);
   if (glob) out.push(`*${glob[1]}`);
   // One layer of paired emphasis. A dunder ("__init__.py") is also bold
@@ -387,7 +463,7 @@ function reductions(form: string): string[] {
  * underscore inside an identifier is never emphasis (EMPHASIS_RE requires a
  * non-alphanumeric character on both sides).
  */
-function wordForms(raw: string): string[] {
+function wordForms(raw: string): { forms: string[]; exhausted: boolean } {
   const forms = new Set<string>();
   const queue = [raw];
   while (queue.length > 0 && forms.size < MAX_WORD_FORMS) {
@@ -398,8 +474,12 @@ function wordForms(raw: string): string[] {
       if (next && !forms.has(next)) queue.push(next);
     }
   }
+  // Stopped by the cap with forms still unread: the search is incomplete,
+  // and namesChangedFile tests each form found with edgeWraps instead of
+  // reading the missing partial trims as "no match".
+  const exhausted = queue.some((form) => form !== "" && !forms.has(form));
   forms.delete("");
-  return [...forms];
+  return { forms: [...forms], exhausted };
 }
 
 const MULTIWORD_EMPHASIS_MARKERS = ["***", "___", "**", "__", "*", "_"];
@@ -499,15 +579,21 @@ function ruleReadings(rule: string): string[] {
 }
 
 /** The candidate words of a rule as written, each in every form wordForms reduces it through. */
-function ruleWords(rule: string): string[] {
+function ruleWords(rule: string): { words: string[]; unfinished: string[] } {
   const words = new Set<string>();
+  // Every form of each word whose search stopped at MAX_WORD_FORMS.
+  const unfinished = new Set<string>();
   for (const reading of ruleReadings(rule)) {
     for (const word of reading.split(/\s+/)) {
       if (!word || words.has(word)) continue;
-      for (const form of wordForms(word)) words.add(form);
+      const { forms, exhausted } = wordForms(word);
+      for (const form of forms) {
+        words.add(form);
+        if (exhausted) unfinished.add(form);
+      }
     }
   }
-  return [...words];
+  return { words: [...words], unfinished: [...unfinished] };
 }
 
 /**
@@ -519,11 +605,15 @@ function ruleWords(rule: string): string[] {
  * extension ends the basename ("*.pem" for server.pem). Case-sensitive. Such
  * a match is a path match, so the file-name tokens it rests on count.
  * Nothing else about a file name is: a bare word found inside a name ("sync"
- * in SyncStatus.tsx) is not.
+ * in SyncStatus.tsx) is not. A word whose form search stopped at
+ * MAX_WORD_FORMS (deep wrapping, a crafted word) is not read as naming
+ * nothing: each form it did reach is also tested with edgeWraps, which finds
+ * the basename or stem under any number of edge characters directly.
  */
 export function namesChangedFile(rule: string, changedPaths: string[]): boolean {
-  const words = ruleWords(rule);
+  const { words, unfinished } = ruleWords(rule);
   if (words.length === 0) return false;
+  const scans = unfinished.map(edgeScan);
   for (const path of changedPaths) {
     const base = path.replace(/\\/g, "/").split("/").pop() ?? "";
     if (!base) continue;
@@ -532,6 +622,12 @@ export function namesChangedFile(rule: string, changedPaths: string[]): boolean 
     for (const word of words) {
       if (word === base || (stem !== null && word === stem)) return true;
       if (/^\*\.[^./*]+$/.test(word) && base.length > word.length - 1 && base.endsWith(word.slice(1))) return true;
+    }
+    if (scans.length === 0) continue;
+    const baseAllEdge = allEdge(base);
+    const stemAllEdge = stem !== null && allEdge(stem);
+    for (const scan of scans) {
+      if (edgeWraps(scan, base, baseAllEdge) || (stem !== null && edgeWraps(scan, stem, stemAllEdge))) return true;
     }
   }
   return false;

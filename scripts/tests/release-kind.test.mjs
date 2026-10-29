@@ -597,8 +597,8 @@ describe(".github/workflows/release.yml wiring", () => {
   // GitHub Release. Everything that publishes or announces a publish is
   // gated.
   const PUBLISH_JOB_STEPS = [
-    "uses:actions/checkout@v7",
-    "uses:actions/setup-node@v7",
+    "uses:actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0",
+    "uses:actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0",
     "Upgrade npm for OIDC trusted publishing",
     "Download the packed tarballs",
     "Publish to npm",
@@ -608,9 +608,9 @@ describe(".github/workflows/release.yml wiring", () => {
 
   // Every step before the decision, in order.
   const STEPS_BEFORE_DECISION = [
-    "uses:actions/checkout@v7",
-    "uses:pnpm/action-setup@v6",
-    "uses:actions/setup-node@v7",
+    "uses:actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0",
+    "uses:pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0",
+    "uses:actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0",
     "Assert the tagged commit is on main",
   ];
 
@@ -622,7 +622,9 @@ describe(".github/workflows/release.yml wiring", () => {
   const STEPS_AFTER_DECISION = [
     "Install",
     "Build",
+    "Typecheck",
     "Portfolio name guard",
+    "Lint (public repository hygiene guard)",
     "Test",
     "Release smoke",
     ...GATED_STEPS,
@@ -650,7 +652,15 @@ describe(".github/workflows/release.yml wiring", () => {
   });
 
   it("runs the code gates on both kinds of release", () => {
-    const ungated = ["Install", "Build", "Portfolio name guard", "Test", "Release smoke"];
+    const ungated = [
+      "Install",
+      "Build",
+      "Typecheck",
+      "Portfolio name guard",
+      "Lint (public repository hygiene guard)",
+      "Test",
+      "Release smoke",
+    ];
     for (const name of ungated) {
       const step = releaseJobSteps().find((s) => s.id === name);
       expect(step).toBeDefined();

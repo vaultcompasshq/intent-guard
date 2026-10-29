@@ -67,7 +67,11 @@ Examples:
   intent-guard drift --ci --contract .intent-guard/intent-contract.yaml --paths src/app/api/export/route.ts
 
 For command flags, see docs/cli-reference.md. Per-command bins such as
-intent-guard-check and intent-guard-resume come from intent-guard-skill.
+intent-guard-check and intent-guard-resume belong to
+@vaultcompass/intent-guard-skill, which this package depends on. A project
+install usually links them into node_modules/.bin as well; a global install
+(npm install -g) links only intent-guard, so install
+@vaultcompass/intent-guard-skill globally too if a hook needs them on PATH.
 
 This tool was published as conductor through 1.1.0. Its project directory kept
 that name until 1.3.0, which renamed it to .intent-guard. An existing

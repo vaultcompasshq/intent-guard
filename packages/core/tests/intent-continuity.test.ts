@@ -132,7 +132,7 @@ describe("intent continuity", () => {
     const index = renderIndex(dir);
 
     expect(index).toContain(
-      "No frozen contract yet -- run intent-guard-extract, review, then intent-guard-freeze",
+      "No frozen contract yet -- run intent-guard extract, review, then intent-guard freeze",
     );
     expect(index).toContain(
       "Loaded from AGENTS.md, CLAUDE.md, GEMINI.md, .cursor/rules when present",

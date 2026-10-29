@@ -31,7 +31,7 @@ export function renderIndex(projectRoot: string): string {
     lines.push(bullet(summarizeContract(active)));
   } else {
     lines.push(
-      "- No frozen contract yet -- run intent-guard-extract, review, then intent-guard-freeze",
+      "- No frozen contract yet -- run intent-guard extract, review, then intent-guard freeze",
     );
   }
 
