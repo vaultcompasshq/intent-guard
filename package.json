@@ -54,6 +54,6 @@
     "@vaultcompass/intent-guard-schema": "workspace:*",
     "@vaultcompass/vault-guard": "1.13.0",
     "vitest": "^4.1.11",
-    "yaml": "^2.8.0"
+    "yaml": "^2.9.1"
   }
 }
