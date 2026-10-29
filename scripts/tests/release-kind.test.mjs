@@ -622,7 +622,9 @@ describe(".github/workflows/release.yml wiring", () => {
   const STEPS_AFTER_DECISION = [
     "Install",
     "Build",
+    "Typecheck",
     "Portfolio name guard",
+    "Lint (public repository hygiene guard)",
     "Test",
     "Release smoke",
     ...GATED_STEPS,
@@ -650,7 +652,15 @@ describe(".github/workflows/release.yml wiring", () => {
   });
 
   it("runs the code gates on both kinds of release", () => {
-    const ungated = ["Install", "Build", "Portfolio name guard", "Test", "Release smoke"];
+    const ungated = [
+      "Install",
+      "Build",
+      "Typecheck",
+      "Portfolio name guard",
+      "Lint (public repository hygiene guard)",
+      "Test",
+      "Release smoke",
+    ];
     for (const name of ungated) {
       const step = releaseJobSteps().find((s) => s.id === name);
       expect(step).toBeDefined();

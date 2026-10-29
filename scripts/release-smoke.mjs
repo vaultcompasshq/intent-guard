@@ -128,6 +128,12 @@ try {
       }
     }
 
+    // Source maps point at ../src, which is never shipped, so they dangle.
+    const maps = [...files].filter((f) => f.endsWith(".map"));
+    if (maps.length > 0) {
+      throw new Error(`${pkg.name}: packed tarball ships source maps: ${maps.join(", ")}`);
+    }
+
     const packedManifest = readPackedManifest(tarball);
     assertNoWorkspaceDeps(pkg.name, packedManifest);
     console.log(`ok ${pkg.name} -> ${tarball}`);
