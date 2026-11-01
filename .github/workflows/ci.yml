@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege by default. build-test needs nothing beyond reading the
+# repository; guardrails states its own grants below, which replace this
+# block for that job.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     runs-on: ubuntu-latest

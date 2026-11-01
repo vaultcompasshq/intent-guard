@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { validateProtectedPathFlag } from "./budget-paths.js";
+import { trimTrailing } from "./linear-text.js";
 
 // Extensions that make a bare token ("README.md", "usage.ts") read as a file.
 const KNOWN_EXTENSION_RE =
@@ -46,7 +47,9 @@ export function suggestPathBudgets(text: string, projectRoot?: string): string[]
   const out: string[] = [];
   for (const raw of text.split(/\s+/)) {
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw.replace(/^[`'"(<[]+/, ""))) continue;
-    const token = raw.replace(/^[`'"(<[]+/, "").replace(/[`'")>\],;:!?]+$/, "").replace(/\.$/, "");
+    // The trailing trim is trimTrailing rather than /[`'")>\],;:!?]+$/,
+    // which is quadratic in a long run of those characters.
+    const token = trimTrailing(raw.replace(/^[`'"(<[]+/, ""), "`'\")>],;:!?").replace(/\.$/, "");
     if (token.length === 0 || !PATH_TOKEN_RE.test(token)) continue;
 
     let glob: string | null = null;
