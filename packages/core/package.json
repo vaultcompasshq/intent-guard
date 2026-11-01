@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@vaultcompass/intent-guard-schema": "workspace:*",
-    "yaml": "^2.8.0"
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
