@@ -720,12 +720,22 @@ describe("conductor-check (enforcement gate)", () => {
     expect(out.drift.action === "soft_block" || out.drift.action === "hard_block").toBe(true);
   });
 
-  it("--no-require-frozen allows missing contract but still scores drift", async () => {
+  it("--no-require-frozen allows a missing contract and says nothing was checked", async () => {
+    // With no contract there is nothing to score drift against, and the
+    // output says so (the 2026-11-01 audit's B2): a skipReason in JSON with
+    // the status still ok, and a skipped line in text, never the ok line.
     const dir = tmpProject();
-    const res = await run("check-cli.js", ["--project", dir, "--no-require-frozen", "--json"]);
+    const res = await run("check-cli.js", ["--project", dir, "--paths", "src/a.ts", "--no-require-frozen", "--json"]);
     expect(res.code).toBe(0);
     const out = JSON.parse(res.stdout);
     expect(out.status).toBe("ok");
+    expect(out.skipReason).toContain("nothing was checked");
+    expect(out.drift).toBeUndefined();
+
+    const text = await run("check-cli.js", ["--project", dir, "--paths", "src/a.ts", "--no-require-frozen"]);
+    expect(text.code).toBe(0);
+    expect(text.stdout.trim().split("\n")[0]).toBe("Intent Guard gate: skipped, no contract to check against");
+    expect(text.stdout).not.toContain("Intent Guard gate: ok");
   });
 
   it("enforces a change budget through the CLI (protected path blocks)", async () => {
