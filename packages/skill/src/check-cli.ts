@@ -279,6 +279,11 @@ if (args.json) {
     console.error("");
     console.error(formatDriftMessage(result.drift));
   }
+} else if (result.skipReason !== undefined) {
+  // Never a check mark: nothing was checked. The JSON status is still ok.
+  console.log("Intent Guard gate: skipped, no contract to check against");
+  for (const line of proposalLines()) console.log(line);
+  for (const line of warningLines()) console.log(line);
 } else {
   console.log("✓ Intent Guard gate: ok");
   for (const line of proposalLines()) console.log(line);
