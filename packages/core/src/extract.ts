@@ -5,6 +5,14 @@ import type {
 } from "@vaultcompass/intent-guard-schema";
 import { scorePrompt } from "./coach.js";
 import { constraintRuleTexts, dedupeRules, type RuleReplacement } from "./constraints.js";
+import {
+  matchAtxHeading,
+  matchBoldHeading,
+  matchBoldLabel,
+  stripTrailingColon,
+  stripTrailingParenthetical,
+  trimTrailing,
+} from "./linear-text.js";
 
 export interface DraftContractInput {
   userText: string;
@@ -185,12 +193,13 @@ const PROHIBITION_RE =
   /\b(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no\s+(?!\S*-)|without)\b/i;
 
 function normalizeItem(text: string): string {
-  return text
+  const collapsed = text
     .replace(/\s+/g, " ")
     .replace(/^[-*]\s+/, "")
     .replace(/^(and|then|also|plus)\s+/i, "")
-    .trim()
-    .replace(/[,:;.\s]+$/, "");
+    .trim();
+  // Not .replace(/[,:;.\s]+$/, ""): quadratic in a long run like ", , , ,".
+  return trimTrailing(collapsed, ",:;.", true);
 }
 
 function uniqueItems(items: string[], max: number): string[] {
@@ -316,8 +325,13 @@ function parseActionClauses(text: string): ParsedClause {
 // verb -- gluing the outer prefix onto it fabricates text that never
 // appeared in the input (e.g. "do not modify do not add new agent
 // capabilities").
-const NEW_CLAUSE_PROHIBITION_RE =
-  /^(?:and|or)\s+(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no)\s+(.+)$/i;
+//
+// The target starts with a non-space character, so the whitespace before it
+// has one way to split. It was "\s+(.+)$", which on a failing match retried
+// every split of that whitespace. The caller trims each part, so the target
+// never was whitespace, and both forms capture the same text.
+export const NEW_CLAUSE_PROHIBITION_RE =
+  /^(?:and|or)\s+(do not|don't|must not|should not|shall not|cannot|can't|never|avoid|no)\s+(\S.*)$/i;
 
 function sentenceContaining(text: string, index: number): string {
   let start = 0;
@@ -531,15 +545,15 @@ type SectionKind = "normal" | "out_of_scope" | "problem";
 
 /** Lowercased heading text with numbering, emphasis, a colon and a trailing parenthetical removed. */
 function headingKey(raw: string): string {
-  return raw
+  const numbered = raw
     .replace(/[*_`]/g, "")
     .replace(/’/g, "'")
     .trim()
-    .replace(/^(?:\d+(?:\.\d+)*\.?|[a-z]\.|section\s+\d+(?:\.\d+)*:?)\s+/i, "")
-    .replace(/\s*\([^)]*\)\s*$/, "")
-    .replace(/\s*:\s*$/, "")
-    .trim()
-    .toLowerCase();
+    .replace(/^(?:\d+(?:\.\d+)*\.?|[a-z]\.|section\s+\d+(?:\.\d+)*:?)\s+/i, "");
+  // stripTrailingParenthetical and stripTrailingColon are
+  // .replace(/\s*\([^)]*\)\s*$/, "") and .replace(/\s*:\s*$/, ""), which
+  // were quadratic in a long run of spaces or of "(".
+  return stripTrailingColon(stripTrailingParenthetical(numbered)).trim().toLowerCase();
 }
 
 // A heading that opens a list of things the spec will not do. "Non-goals",
@@ -603,12 +617,14 @@ export function isLabelledScopeHeading(raw: string): boolean {
   return LABELLED_SCOPE_RE.test(headingKey(raw)) || classifyHeading(raw) === "out_of_scope";
 }
 
-const ATX_HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
-// A line that is nothing but bold text: a pseudo-heading. Nests below every
-// real heading level.
-const BOLD_HEADING_RE = /^(\*\*|__)(.+?)\1\s*:?\s*$/;
-// A bold label followed by text on the same line: "**Out of scope:** X".
-const BOLD_LABEL_RE = /^(\*\*|__)(.+?)\1\s*:?\s+(.+)$/;
+// Headings are read by the scanners in linear-text.ts, each the linear form
+// of a pattern that backtracked polynomially on a long run of spaces:
+// matchAtxHeading is /^(#{1,6})\s+(.+?)\s*#*\s*$/; matchBoldHeading, a line
+// that is nothing but bold text (a pseudo-heading that nests below every real
+// heading level), is /^(\*\*|__)(.+?)\1\s*:?\s*$/; and matchBoldLabel, a bold
+// label followed by text on the same line ("**Out of scope:** X"), is
+// /^(\*\*|__)(.+?)\1\s*:?\s+(.+)$/.
+//
 // A short plain line ending in a colon: "Out of scope for this fix:".
 const COLON_LABEL_RE = /^([A-Za-z][^:]{2,60}):$/;
 const PSEUDO_HEADING_LEVEL = 7;
@@ -823,14 +839,14 @@ export function segmentForExtraction(text: string): SegmentedText {
       stack.pop();
     }
 
-    const atx = line.match(ATX_HEADING_RE);
-    const bold = atx ? null : line.match(BOLD_HEADING_RE);
+    const atx = matchAtxHeading(line);
+    const bold = atx ? null : matchBoldHeading(line);
     const colon =
       atx || bold ? null : line.match(COLON_LABEL_RE);
     const colonOpensList = colon !== null && classifyHeading(colon[1]) === "out_of_scope";
     if (atx || bold || colonOpensList) {
-      const title = atx ? atx[2] : bold ? bold[2] : colon![1];
-      open(atx ? atx[1].length : PSEUDO_HEADING_LEVEL, title, !atx);
+      const title = atx ? atx.title : bold ? bold.title : colon![1];
+      open(atx ? atx.hashes.length : PSEUDO_HEADING_LEVEL, title, !atx);
       // The heading's own words stay in the text, as before, unless it opens
       // an out-of-scope section (or, for prohibitions, a problem section).
       const kind = kindNow();
@@ -840,10 +856,10 @@ export function segmentForExtraction(text: string): SegmentedText {
       continue;
     }
 
-    const label = line.match(BOLD_LABEL_RE);
-    if (label && classifyHeading(label[2]) === "out_of_scope") {
+    const label = matchBoldLabel(line);
+    if (label && classifyHeading(label.label) === "out_of_scope") {
       flush();
-      routedHeading.push(...routedItemsFrom([label[3]]));
+      routedHeading.push(...routedItemsFrom([label.rest]));
       continue;
     }
 

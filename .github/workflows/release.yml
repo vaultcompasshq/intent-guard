@@ -11,6 +11,12 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# Least privilege by default. prepare and release state their own grants
+# below, which replace this block for those jobs; smoke-published only
+# checks out this public repository and reads the public registry.
+permissions:
+  contents: read
+
 jobs:
   # Install, build, and test live here, and this job has no id-token.
   # The release job below publishes tarballs this job packed. It does not

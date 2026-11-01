@@ -4,6 +4,8 @@
 // decide whether a changed path or a free-text signal "touches" an out-of-scope
 // item or a constraint, without hardcoding any particular project's vocabulary.
 
+import { slashFragmentMatches, trimTrailing } from "./linear-text.js";
+
 // Words that carry no scope meaning. Kept small and generic.
 const STOPWORDS = new Set([
   "a", "an", "the", "and", "or", "of", "to", "in", "on", "for", "with",
@@ -228,18 +230,18 @@ export function matchStrength(
   return "none";
 }
 
-const SLASH_FRAGMENT_RE = /[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]*)+/g;
-
 /** Slash-joined path fragments in `text`, as lowercase whole segments. */
 export function slashJoinedFragments(text: string): string[][] {
   const fragments: string[][] = [];
   // A Windows path is a path: "src\Dockerfile" is src/Dockerfile.
-  for (const match of text.replace(/\\/g, "/").matchAll(SLASH_FRAGMENT_RE)) {
+  // slashFragmentMatches is /[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]*)+/g in one
+  // linear pass; the pattern itself retried every position of a long run.
+  for (const match of slashFragmentMatches(text.replace(/\\/g, "/"))) {
     // A segment never ends in sentence punctuation: "src/Dockerfile." at the
     // end of a sentence is the path src/Dockerfile.
-    const segments = match[0]
+    const segments = match
       .split("/")
-      .map((segment) => segment.replace(/[.,;:!?]+$/, "").toLowerCase())
+      .map((segment) => trimTrailing(segment, ".,;:!?").toLowerCase())
       .filter(Boolean);
     if (segments.length === 0) continue;
     fragments.push(segments);

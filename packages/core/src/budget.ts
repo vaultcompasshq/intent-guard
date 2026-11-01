@@ -1,5 +1,6 @@
 import type { ChangeBudget, IntentContract } from "@vaultcompass/intent-guard-schema";
 import { findingFingerprint } from "./fingerprint.js";
+import { trimTrailing } from "./linear-text.js";
 
 export type BudgetRule =
   | "protected_paths"
@@ -61,7 +62,9 @@ export function matchesGlob(rawPath: string, rawGlob: string): boolean {
   // file). This matches how people naturally write `src` or `legacy/` and
   // avoids a protected directory silently failing to protect.
   if (!/[*?]/.test(glob)) {
-    const base = glob.replace(/\/+$/, "");
+    // Not glob.replace(/\/+$/, ""): that retries from every slash of a long
+    // run and is quadratic in it.
+    const base = trimTrailing(glob, "/");
     return path === base || path.startsWith(`${base}/`);
   }
 

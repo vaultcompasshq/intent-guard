@@ -49,7 +49,17 @@ gates:
     enforce: false
     # Handed to this gate unchanged. Keys are its own long flags,
     # without the leading dashes. Example: fail-on: high
-    options: {}
+    #
+    # require-frozen: false is what init writes for a repository with no
+    # intent contract yet, and it reaches the gate as --no-require-frozen.
+    # This repository has none: .gitignore ignores .intent-guard/ and
+    # AGENTS.md keeps active contracts in the consuming repositories. With
+    # the flag, a run with no contract passes with no finding, and once a
+    # contract exists the gate checks drift against it as usual. Without it,
+    # every push to main reported "no contract", which the SARIF upload kept
+    # as a standing code-scanning alert on this file.
+    options:
+      require-frozen: false
 
 report:
   format: text
