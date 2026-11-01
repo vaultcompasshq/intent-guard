@@ -7,6 +7,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.10.4] - 2026-11-01
+
+A fix-forward release from the 2026-11-01 cohesion audit. It restores two
+file-name classes that 1.9.0 blocked and 1.10.3 still passed, says so when
+the gate checked nothing, and corrects a claim in the 1.10.3 entry.
+
 ### Security
 
 - **Linear-time text scanning.** Eleven regular expressions in the core
