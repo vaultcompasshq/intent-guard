@@ -136,7 +136,7 @@ non-ASCII characters literally, and blocks on a backslash` and `passes a staged
 backslash path to the gate through --staged` in
 `examples/validate-integrations.test.ts`.
 
-A newline in a name also has to match `**`. `packages/core/src/budget.ts:92`
+A newline in a name also has to match `**`. `packages/core/src/budget.ts:108`
 builds the glob regexp with the `s` flag, so `.` (from `**`) matches a newline.
 It is the only `RegExp` in `packages/*/src` built from a glob. Pinned by
 `matches ** and * across a path containing a newline` in
@@ -524,7 +524,7 @@ subdirectory, and the paths that must NOT count are pinned in
 ## A trailing `/**` covers the bare directory path
 
 `matchesGlob` compiles a trailing `/**` after a directory as that directory
-OR anything under it (`packages/core/src/budget.ts:79`), because git lists a
+OR anything under it (`packages/core/src/budget.ts:82`), because git lists a
 submodule pointer as the bare path. The slash stays mandatory before anything
 further. Pinned in `packages/core/tests/budget.test.ts` by `matches the bare
 root of a trailing /** (a submodule gitlink path)` and `does not stretch a
@@ -535,22 +535,22 @@ the moved pointer is committed`.
 
 ## Spec extraction is heading-aware
 
-`segmentForExtraction` (`packages/core/src/extract.ts:780`) runs before any
-clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:549`
-and `packages/core/src/extract.ts:551`) route their bullets and sentences to
+`segmentForExtraction` (`packages/core/src/extract.ts:796`) runs before any
+clause is parsed. Out-of-scope headings (`packages/core/src/extract.ts:563`
+and `packages/core/src/extract.ts:565`) route their bullets and sentences to
 `out_of_scope` only. A child heading with no kind of its own is neutral, and a
 classified bold or colon pseudo-heading covers only the list under it
-(`packages/core/src/extract.ts:810`). In a problem section
-(`packages/core/src/extract.ts:560`; Introduction is not one) only explicit
-prohibitions survive (`packages/core/src/extract.ts:690`, applied at
-`packages/core/src/extract.ts:864`). User story lines yield no prohibitions
-(`packages/core/src/extract.ts:869`). Table rows are skipped
-(`packages/core/src/extract.ts:816`). The positive-modal exemption is judged
-per clause (`packages/core/src/extract.ts:696`) and covers only a "with no
-<resource>" phrase (`packages/core/src/extract.ts:717`,
-`packages/core/src/extract.ts:737`). out_of_scope is ranked routed non-goals,
+(`packages/core/src/extract.ts:826`). In a problem section
+(`packages/core/src/extract.ts:574`; Introduction is not one) only explicit
+prohibitions survive (`packages/core/src/extract.ts:706`, applied at
+`packages/core/src/extract.ts:880`). User story lines yield no prohibitions
+(`packages/core/src/extract.ts:885`). Table rows are skipped
+(`packages/core/src/extract.ts:832`). The positive-modal exemption is judged
+per clause (`packages/core/src/extract.ts:712`) and covers only a "with no
+<resource>" phrase (`packages/core/src/extract.ts:733`,
+`packages/core/src/extract.ts:753`). out_of_scope is ranked routed non-goals,
 then explicit prohibitions, then the rest, and capped at the schema's 12
-(`packages/core/src/extract.ts:935`, `packages/core/src/extract.ts:986`);
+(`packages/core/src/extract.ts:951`, `packages/core/src/extract.ts:1002`);
 pinned by `ranks routed non-goals first, then explicit prohibitions, then the
 rest`. At that cap a long spec can lose explicit rules past the twelfth item;
 see the CHANGELOG known limits.
@@ -604,8 +604,8 @@ narrower matcher survives`.
 
 `selectLabelledSections` (`packages/core/src/spec-bridge.ts:668`) passes on
 only the lines of labelled sections (`isLabelledScopeHeading`,
-`packages/core/src/extract.ts:602`, over `LABELLED_SCOPE_RE` at
-`packages/core/src/extract.ts:591` and the out-of-scope spellings); every
+`packages/core/src/extract.ts:616`, over `LABELLED_SCOPE_RE` at
+`packages/core/src/extract.ts:605` and the out-of-scope spellings); every
 other line is dropped (`packages/core/src/spec-bridge.ts:746`), and a file
 with no labelled section contributes nothing
 (`packages/core/src/spec-bridge.ts:805`; pinned by `does not read an
@@ -665,7 +665,7 @@ marker: each file's kept lines are emitted as bullets under a level-1
 `GHERKIN_RULES_HEADING` ("Out of scope",
 `packages/core/src/spec-bridge.ts:588`, emitted at
 `packages/core/src/spec-bridge.ts:771`), the same path a spec's own Out of
-scope section takes, and `routedItemsFrom` (`packages/core/src/extract.ts:656`)
+scope section takes, and `routedItemsFrom` (`packages/core/src/extract.ts:672`)
 keeps each bullet's first sentence. The second fix round instead relied on
 extraction reading the marker again, which needed a mid-sentence don't
 pattern in extraction; that pattern blocked an ask such as "Add a mobile
@@ -674,11 +674,11 @@ toolbar. Users don't see the export button on mobile today." against
 extraction's out_of_scope markers are the 1.10.0 list again.
 
 No out_of_scope capture crosses a line. `expandProhibitionLists`
-(`packages/core/src/extract.ts:357`) reads the list after a prohibition verb
+(`packages/core/src/extract.ts:371`) reads the list after a prohibition verb
 with `[^.!?\n]` and spaces and tabs only; with `[^.!?]` a comma list on one
 line swallowed the prohibition on the next, which was then deduped away
 (the 2026-10-18 review's g3). `extractOutOfScope`
-(`packages/core/src/extract.ts:463`) uses a space-and-tab tail as well, but
+(`packages/core/src/extract.ts:477`) uses a space-and-tab tail as well, but
 that change is defence in depth: its patterns run on `splitSentences`
 output, which is already split at newlines, and restoring `\s` there leaves
 every test green by construction.
@@ -898,7 +898,7 @@ emphasis markers and backticks, never an underscore inside an identifier:
 character on both sides of the markers, so `payment_method_ids` stays whole.
 From `original_ask`, only sentences with no prohibition marker are
 candidates for subtraction (`askScopeSentences`,
-`packages/core/src/extract.ts:106`), and an ask
+`packages/core/src/extract.ts:114`), and an ask
 token that an out_of_scope item or a constraint uses is never subtracted
 (`packages/core/src/drift.ts:229`).
 
