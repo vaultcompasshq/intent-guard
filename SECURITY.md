@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.5.x   | :white_check_mark: |
-| < 1.5   | :x:                |
+| 1.10.x  | :white_check_mark: |
+| < 1.10  | :x:                |
 
 The latest published minor is supported; earlier minors are not patched.
 See [docs/release/stability-policy.md](./docs/release/stability-policy.md)
