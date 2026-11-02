@@ -255,7 +255,10 @@ describe("no-flag gate output is byte-identical to the release before --trust-ba
     });
   });
 
-  it("passes a missing contract under --no-require-frozen exactly as before", async () => {
+  it("passes a missing contract under --no-require-frozen as before, plus a skipReason", async () => {
+    // The one deliberate change to this fence: the 2026-11-01 audit (B2)
+    // added a skipReason saying nothing was checked. The status, every other
+    // field and the exit code are as captured.
     const dir = repo(null, ["docs/usage.md"]);
     const res = await run([
       "--project", dir,
@@ -268,6 +271,8 @@ describe("no-flag gate output is byte-identical to the release before --trust-ba
       status: "ok",
       exitCode: 0,
       reasons: [],
+      skipReason:
+        "No .intent-guard/intent-contract.yaml (or legacy .conductor/intent-contract.yaml) found and require-frozen is off, so there was no contract to check against and nothing was checked.",
       warnings: [],
       contractFound: false,
       contractFrozen: false,

@@ -478,8 +478,20 @@ correct --promote` (which records `source: user-correction`) can block.
 | `--signals "x,y"` | free-text descriptions of what changed (open vocabulary) |
 | `--message "<text>"` | latest user message (pivot detection) |
 | `--previous-contract <id>` | score current changes against an archived prior contract; informational only |
-| `--no-require-frozen` | allow a missing contract (still scores drift) |
+| `--no-require-frozen` | allow a missing or unfrozen contract; see below for what is still checked |
 | `--json` / `--log` | JSON output / append to `drift-log.jsonl` |
+
+`--no-require-frozen` with a contract (frozen or not): drift and the change
+budget are scored against it and block as usual. What the flag turns off is
+the refusal of a missing or unfrozen contract and, in pull-request mode, the
+self-approval and contract-shape refusals, which are reported instead (see
+below). With no contract at all there is nothing to score against, so nothing
+is checked: the gate prints `Intent Guard gate: skipped, no contract to check
+against` (never the ok line) and exits 0. In `--json` the status is still
+`"ok"`, so a consumer that reads only `ok` and `blocked` keeps working, and
+the result carries a `skipReason` saying nothing was checked; no other
+result has that field. `report` prints the reason on a `Skipped:` line
+after `Status: ok`, and `report --json` carries it as `gate.skipReason`.
 
 Exit 0 = ok, 1 = blocked, 2 = could not run: `--base` or `--trust-base` would
 not resolve or its value starts with a single dash such as `-S` (git would read
@@ -530,7 +542,7 @@ or fetch the base ref explicitly before running the gate:
     fetch-depth: 0
 - name: Install intent-guard
   working-directory: ${{ runner.temp }}
-  run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.3
+  run: npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/ig" @vaultcompass/intent-guard@1.10.4
 - name: Check the pull request
   working-directory: ${{ runner.temp }}
   env:

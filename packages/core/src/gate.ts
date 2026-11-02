@@ -20,6 +20,16 @@ import {
 export type GateStatus = "ok" | "blocked";
 
 /**
+ * Why a gate with require-frozen off and no contract checked nothing, carried
+ * as `skipReason` on a result whose status is still "ok" (the 2026-11-01
+ * audit's B2). The status stays "ok" in this release because conductor
+ * 0.16.0 reads only "ok" and "blocked"; a distinct status value waits until
+ * the umbrella accepts one.
+ */
+export const NO_CONTRACT_SKIP_REASON =
+  `No ${STATE_DIR}/intent-contract.yaml (or legacy ${LEGACY_STATE_DIR}/intent-contract.yaml) found and require-frozen is off, so there was no contract to check against and nothing was checked.`;
+
+/**
  * What pull-request mode did, carried on the result so a report never has to
  * work it out again from the inputs.
  */
@@ -47,6 +57,11 @@ export interface GateResult {
   /** Process exit code: 0 when ok, 1 when blocked. */
   exitCode: 0 | 1;
   reasons: string[];
+  /**
+   * Present only when nothing was checked (require-frozen off and no
+   * contract): why. The status is still "ok". Absent on every other result.
+   */
+  skipReason?: string;
   /**
    * Non-blocking notices: present on every result, empty when there is
    * nothing to warn about. Never affects `status` or `exitCode`. Carries a
@@ -261,10 +276,16 @@ export function checkGate(
     // already reported as one; it is deliberately NOT called self-approval,
     // because writing a first contract is the normal way to adopt the tool
     // and naming it an attack would teach people to bypass the gate.
+    //
+    // With require-frozen off nothing is scored, since there is nothing to
+    // score against, and the result says so in skipReason. The status stays
+    // ok and the exit code 0, so a consumer reading only ok and blocked
+    // keeps working.
     return withSummary({
       status: requireFrozen ? ("blocked" as const) : ("ok" as const),
       exitCode: requireFrozen ? (1 as const) : (0 as const),
       reasons,
+      ...(requireFrozen ? {} : { skipReason: NO_CONTRACT_SKIP_REASON }),
       warnings,
       contractFound,
       contractFrozen,

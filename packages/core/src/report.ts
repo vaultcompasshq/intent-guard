@@ -255,6 +255,9 @@ export function renderConductorReportMarkdown(report: ConductorReport): string {
     "# Intent Guard report",
     "",
     `Status: ${report.status}`,
+    // An ok that checked nothing says so on the next line (the 2026-11-01
+    // audit's B2), so the text agrees with the JSON's gate.skipReason.
+    ...(report.gate.skipReason === undefined ? [] : [`Skipped: ${report.gate.skipReason}`]),
     `Recommendation: ${report.recommendation}`,
   ];
 

@@ -23,12 +23,12 @@ red when one of the version-shape lines is replaced by a commented copy` and
 in that file has its own `goes red when this line is replaced by a commented
 copy` test.
 
-The default is `1.10.3` at `action.yml:41`.
+The default is `1.10.4` at `action.yml:41`.
 
 ## On a pull request, `version` may not pin older than this tag's scanner
 
 `IG_TAG_SCANNER_MAJOR`, `IG_TAG_SCANNER_MINOR` and `IG_TAG_SCANNER_PATCH`
-are `1`, `10` and `3` at `action.yml:257` through `action.yml:259`.
+are `1`, `10` and `4` at `action.yml:257` through `action.yml:259`.
 `IG_TAG_SCANNER` is assembled from those three at `action.yml:260`. The
 comparison that refuses an older pin is `action.yml:300` through
 `action.yml:307`, and the error that names both versions is
@@ -84,8 +84,8 @@ is written at `action.yml:596`.
 
 ## The action tag and the installed package can be different numbers
 
-They are not right now: `README.md:289` pins `vaultcompasshq/intent-guard@v1.10.3`,
-and `README.md:295` says that tag installs `@vaultcompass/intent-guard@1.10.3`,
+They are not right now: `README.md:289` pins `vaultcompasshq/intent-guard@v1.10.4`,
+and `README.md:295` says that tag installs `@vaultcompass/intent-guard@1.10.4`,
 because this release moved the action tag and the packages together. They
 diverged briefly at 1.5.3, an action-only tag documented under the
 CHANGELOG heading `[1.5.3] - 2026-09-20` that moved the workflow file without
@@ -93,7 +93,7 @@ publishing new packages; that same section still records that history,
 naming `IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
 version is the `version` input default at `action.yml:41`, the scanner
 constant at `action.yml:257` through `action.yml:260`, and the package
-version `1.10.3` in `package.json:4`, `packages/cli/package.json:3`,
+version `1.10.4` in `package.json:4`, `packages/cli/package.json:3`,
 `packages/core/package.json:3`, `packages/schema/package.json:3` and
 `packages/skill/package.json:3`. Whenever a future action-only tag moves
 `action.yml` without a package release, this section goes stale again the
@@ -508,9 +508,9 @@ same test only requires every `vault-guard@` pin in the paired sample and in
 When a run has `--base` and no `--trust-base`, and the changed set includes
 `.intent-guard/intent-contract.yaml`, `.intent-guard/config.yaml` or a path
 under `.intent-guard/contracts/` (or the legacy `.conductor/` equivalents,
-`packages/core/src/gate.ts:102`), the gate adds a warning naming each file
-and the missing flag (`packages/core/src/gate.ts:172` through
-`packages/core/src/gate.ts:174`, wording at `packages/core/src/gate.ts:122`).
+`packages/core/src/gate.ts:117`), the gate adds a warning naming each file
+and the missing flag (`packages/core/src/gate.ts:187` through
+`packages/core/src/gate.ts:189`, wording at `packages/core/src/gate.ts:137`).
 A warning never changes the status or exit code. Pinned in
 `packages/skill/tests/base-ref.test.ts` by `warns, naming the contract and
 the flag, and keeps the exit code`, `carries the same warning in --json`,
@@ -758,42 +758,47 @@ tokens are in it. For an out_of_scope item, the match is demoted to partial
 and not counted only when it has no evidence at all outside the file name: no
 token in that second set, no slash path, no word of the item naming the
 file under the closed rule in `namesChangedFile`
-(`packages/core/src/tokenize.ts:613`: exactly the basename, the basename
+(`packages/core/src/tokenize.ts:661`: exactly the basename, the basename
 without its final extension, or a `*.ext` word, case-sensitive), and no
 whole basename under the safety net `mentionsChangedBasename`
-(`packages/core/src/tokenize.ts:662`, called at
+(`packages/core/src/tokenize.ts:710`, called at
 `packages/core/src/drift.ts:304`).
 
 The closed rule's words come from several readings of the whole item
-(`ruleReadings`, `packages/core/src/tokenize.ts:564`): as written, with
+(`ruleReadings`, `packages/core/src/tokenize.ts:612`): as written, with
 markdown backslash escapes before ASCII punctuation undone
-(`MARKDOWN_ESCAPE_RE`, `packages/core/src/tokenize.ts:317`), and with HTML
-tags removed (every tag, `packages/core/src/tokenize.ts:320`, and separately
-only paired elements, `packages/core/src/tokenize.ts:324`), each also with
+(`MARKDOWN_ESCAPE_RE`, `packages/core/src/tokenize.ts:354`), and with HTML
+tags removed (every tag, `packages/core/src/tokenize.ts:357`, and separately
+only paired elements, `packages/core/src/tokenize.ts:361`), each also with
 emphasis that spans more than one word removed
-(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:503`, a single linear
+(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:551`, a single linear
 scan per marker; at most `MAX_NESTING_PASSES` layers of nested emphasis or
-HTML elements, `packages/core/src/tokenize.ts:488`). The escape
+HTML elements, `packages/core/src/tokenize.ts:536`). The escape
 is undone before any backslash is read as a slash, so `payment\_methods`
 is payment_methods (1.10.1 read it as the path `payment/_methods`), while
 the as-written reading keeps a real Windows path (`.\Dockerfile`). Each
 word of every reading is compared in every form `wordForms`
-(`packages/core/src/tokenize.ts:466`) reaches: from the word as written,
+(`packages/core/src/tokenize.ts:514`) reaches: from the word as written,
 each single-step reduction in `reductions`
-(`packages/core/src/tokenize.ts:426`) is applied to every form found so far
+(`packages/core/src/tokenize.ts:463`) is applied to every form found so far
 until no new form appears, and every form is a candidate. The reductions
 are: backslashes read as slashes; a markdown link's text and target; a
 leading `./`, `../` or lone `/`; a trailing footnote or reference marker;
 a `*.ext` glob out of its emphasis stars; one layer of paired emphasis
-(`packages/core/src/tokenize.ts:440`); every star, when a star touches a
+(`packages/core/src/tokenize.ts:477`); the same layer with code spans read
+as literal text (`stripEmphasisOutsideCode`,
+`packages/core/src/tokenize.ts:93`, pushed at
+`packages/core/src/tokenize.ts:480`); a trailing possessive `'s` or U+2019
+`s` (`POSSESSIVE_RE`, `packages/core/src/tokenize.ts:108`, applied at
+`packages/core/src/tokenize.ts:486`); every star, when a star touches a
 letter or digit, for emphasis inside a word such as `**Docker**file`
-(`packages/core/src/tokenize.ts:446`); and `trimEdges`
-(`packages/core/src/tokenize.ts:348`), which trims characters in the
+(`packages/core/src/tokenize.ts:492`); and `trimEdges`
+(`packages/core/src/tokenize.ts:385`), which trims characters in the
 Unicode punctuation, symbol and format classes (`EDGE_CHAR_RE`,
-`packages/core/src/tokenize.ts:307`) from the ends, except `_`, `/`, `\`,
-a leading `.` or `~` (`packages/core/src/tokenize.ts:312`,
-`packages/core/src/tokenize.ts:313`), and a leading star with a `.` right
-after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:360`).
+`packages/core/src/tokenize.ts:344`) from the ends, except `_`, `/`, `\`,
+a leading `.` or `~` (`packages/core/src/tokenize.ts:349`,
+`packages/core/src/tokenize.ts:350`), and a leading star with a `.` right
+after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:396`).
 It gives three forms: the word trimmed all the way at both ends, and the
 word with one character trimmed at the start only or at the end only.
 Because every reduction is applied again to every form, the one-character
@@ -806,15 +811,15 @@ SvelteKit route stems in quotes, parens or before a full stop passed where
 1.10.1 blocked). A partial trim sits L + T steps deep, for L trimmable
 characters at the start and T at the end, and the search stops at the
 `MAX_WORD_FORMS` cap of 512 forms per word
-(`packages/core/src/tokenize.ts:327`), which is also what keeps one long
+(`packages/core/src/tokenize.ts:364`), which is also what keeps one long
 word linear. Deep wrapping reaches the cap first: in 44e4cd7, `+layout` in
 21 quotes on each side, in 14 parens around backticks, or in 10 `*"` pairs
 passed (the review of 44e4cd7, M1; 1.10.1 blocked the first two). So a word
 whose search stops at the cap with forms still unread is not read as naming
 nothing. `wordForms` reports it, and `namesChangedFile` also tests every
 form that word did reach with `edgeWraps`
-(`packages/core/src/tokenize.ts:409`, called at
-`packages/core/src/tokenize.ts:630`): true when the form is the basename or
+(`packages/core/src/tokenize.ts:446`, called at
+`packages/core/src/tokenize.ts:678`): true when the form is the basename or
 stem with only leading-trimmable characters before it and only
 trailing-trimmable characters after it, the same answer the one-character
 trims give, computed directly in time linear in the word. A name wrapped
@@ -862,17 +867,17 @@ and `__Makefile__` names `Makefile`. 1.10.1 never stripped a dunder, which
 made `__payment_methods__` a block-to-pass against 1.9.0. A
 slash fragment reads backslashes as slashes and drops trailing sentence
 punctuation from each segment (`slashJoinedFragments`,
-`packages/core/src/tokenize.ts:234`), so `src\Dockerfile` and
+`packages/core/src/tokenize.ts:269`), so `src\Dockerfile` and
 `src/Dockerfile.` are the path `src/Dockerfile`. A home-directory path
 (`~/Dockerfile`) names nothing, by ruling: it is outside the repository,
 which is why a leading `~` is never trimmed.
 
 The safety net `mentionsChangedBasename` folds the item and each changed
 basename the same way (NFKC, format characters removed, markdown escapes
-undone, lower case, `packages/core/src/tokenize.ts:648`) and is true when
+undone, lower case, `packages/core/src/tokenize.ts:691`) and is true when
 the whole basename, extension included, occurs with no letter, digit, `_`,
 `-` or path separator on either side and no `.` before it
-(`packages/core/src/tokenize.ts:640`, `packages/core/src/tokenize.ts:670`).
+(`packages/core/src/tokenize.ts:688`, `packages/core/src/tokenize.ts:718`).
 It never matches a basename without its extension, so `billing` against
 `src/Billing.tsx` stays a pass (ruled case-sensitive), and never a name
 behind a path separator (`~/Dockerfile`, `infra/Dockerfile`). It only stops
@@ -886,10 +891,10 @@ Constraints are never demoted and keep the 1.9.0 strength
 (`packages/core/src/drift.ts:346`).
 
 Matchers are built from `prohibitedSubject`
-(`packages/core/src/tokenize.ts:79`), the rule without its leading negation;
-`stripEmphasis` (`packages/core/src/tokenize.ts:59`) removes only paired
+(`packages/core/src/tokenize.ts:116`), the rule without its leading negation;
+`stripEmphasis` (`packages/core/src/tokenize.ts:61`) removes only paired
 emphasis markers and backticks, never an underscore inside an identifier:
-`EMPHASIS_RE` (`packages/core/src/tokenize.ts:53`) requires a non-alphanumeric
+`EMPHASIS_RE` (`packages/core/src/tokenize.ts:55`) requires a non-alphanumeric
 character on both sides of the markers, so `payment_method_ids` stays whole.
 From `original_ask`, only sentences with no prohibition marker are
 candidates for subtraction (`askScopeSentences`,
@@ -904,7 +909,7 @@ out_of_scope item or a constraint (`packages/core/src/drift.ts:277`,
 `packages/core/src/drift.ts:334`), and each such token is in `ruleTokens`
 (`packages/core/src/drift.ts:225`). An ask token joins the scope set only
 when no token of `ruleTokens` matches it (`packages/core/src/drift.ts:229`),
-and `tokensMatch` is symmetric (`packages/core/src/tokenize.ts:117`), so no
+and `tokensMatch` is symmetric (`packages/core/src/tokenize.ts:154`), so no
 ask token can match, and subtract, any token a rule is scored on, whether or
 not its sentence was filtered. The scope set has no other reader in
 drift.ts. The 2026-10-18 audit's mutant M1 (drop the filter) is therefore
@@ -1069,10 +1074,13 @@ group (each audit reproduction, plus symbol-ended and symbol-led-and-ended
 names), and by the property tests above. The safety net's right-hand `.`
 (the audit's N3: `Dockerfile.prod` fires the net, and drift still proceeds
 because no token matches) is pinned by both cases of `fires on a right-hand
-dot and a letter, yet drift proceeds: %s against %s`. Mutations run on 2026-10-28 against
-`file-name-rule.test.ts` only: `trimEdges` giving only its full trim (the
-1.10.2 behaviour) turns 31 red; no one-character trim at the start turns 21
-red; none at the end turns 31 red; the safety net refusing a right-hand `.`
+dot and a letter, yet drift proceeds: %s against %s`. Mutations re-run on
+2026-11-01 against `file-name-rule.test.ts` only, which has grown since the
+2026-10-28 counts of 31, 21 and 31: `trimEdges` giving only its full trim
+(the 1.10.2 behaviour) turns 62 red (60 before the two 2026-11-01 property
+tests were added, the 2026-11-01 audit's own count); no one-character trim
+at the start turns 51 red; none at the end turns 60 red. Not re-run on
+2026-11-01, so still the 2026-10-28 counts: the safety net refusing a right-hand `.`
 turns 4 red (its two `codeowners.` and soft-hyphen `Makefile.` block cases
 and the two right-hand-dot cases); the HTML element loop uncapped turns the
 HTML scaling case red (ratio 23). Every property case passes with the cap at
@@ -1088,8 +1096,10 @@ itself is pinned by `reads three long symbol words in a child process within
 15 s`, which runs the built module in a child process killed at 15 s,
 because an uncapped search is a synchronous loop the test timeout cannot
 interrupt; and by the two one-word rows of the scaling group. Mutations run
-on 2026-10-28 against `file-name-rule.test.ts` only: no fallback (the
-44e4cd7 behaviour) turns 20 red, the reviewer's three cases among them;
+on 2026-10-28 against `file-name-rule.test.ts` only, and re-run for the
+first one on 2026-11-01: no fallback (the 44e4cd7 behaviour) turns 24 red
+(20 on 2026-10-28, before later tests were added), the reviewer's three
+cases among them;
 `edgeWraps` ignoring the trailing side, or the
 leading side, turns `stays closed on a deeply wrapped word that is not the
 name` red; `MAX_WORD_FORMS` at 512000000 turns the child-process test red
@@ -1127,3 +1137,161 @@ On an ordinary machine npx may run an intent-guard already on PATH or in a
 global install instead, which can be stale; each skill says to check `--version`
 (pinned by `warns that npx may run a stale global copy and says to check the
 version`).
+
+## A possessive and an italic code span reach the bare name
+
+Two classes of name blocked in 1.9.0 and passed in every 1.10 release
+until the 2026-11-01 audit's B1, and the 1.10.2 "Not restored" list named
+neither. Both are now reductions in `reductions`
+(`packages/core/src/tokenize.ts:463`), so each only adds a candidate form
+and never removes one, and the closed rule still needs some form to equal
+a changed file's basename or stem exactly.
+
+- A possessive. `POSSESSIVE_RE` (`packages/core/src/tokenize.ts:108`,
+  applied at `packages/core/src/tokenize.ts:486`) gives the form without a
+  trailing `'s` or U+2019 `s`, after at least one other character, whose
+  apostrophe may close a quote of its own (`'Dockerfile''s`). The form it
+  came from is kept, so a file whose own name ends in `'s` is still read
+  whole. Because every reduction is applied again to every form, the
+  possessive comes off before or after the edge trim, a backtick span, a
+  quote or a paren: `PaymentProcessor's`, `` `router`'s ``, `'+layout's`,
+  `(PaymentProcessor's)` and `PaymentProcessor's.` all reach the stem. A
+  bare trailing apostrophe (`Payments'`) needs no reduction: it is an edge
+  character and `trimEdges` removes it.
+- A code span is literal. `stripEmphasisOutsideCode`
+  (`packages/core/src/tokenize.ts:93`, pushed at
+  `packages/core/src/tokenize.ts:480`) masks each backtick pair with a
+  private-use character, removes one layer of paired emphasis with
+  `EMPHASIS_RE`, and puts each span back with its backticks. So in
+  `` _`__init__`_ `` only the outer underscores are emphasis, the form
+  `` `__init__` `` is reached, and the edge trim takes it to `__init__`.
+  `stripEmphasisOnce`, which removes the backticks first and so pairs the
+  dunder's own underscores, still runs and its forms are kept. A word that
+  already holds a private-use character is left to `stripEmphasisOnce`
+  alone. The exported `stripEmphasis`, which builds the matchers'
+  tokens, is unchanged: `__init__` and `init` tokenize the same.
+
+Neither can create a block that 1.9.0 did not have: `namesChangedFile`
+only stops the file-name-only demotion of a match the tokens already made
+(`packages/core/src/drift.ts:303`). Look-alikes stay a pass: `the router's`
+against `src/routers.ts` or `src/Router.ts`, `the sync's` against
+`src/SyncStatus.tsx`, `` _`init`_ `` and `` `_init_` `` against
+`pkg/__init__.py`.
+
+Pinned in `packages/core/tests/audit-2026-11-01.test.ts` by every case of
+`blocks %j against %s` in the `a possessive name blocks as it did in 1.9.0
+(2026-11-01 audit B1)` and `an italic code span around a dunder blocks as it
+did in 1.9.0 (2026-11-01 audit B1)` groups (each asserts soft_block at 71,
+the published 1.9.0 result), by `never reads a possessive's remainder as a
+name the file does not have`, `only stops a demotion, so a possessive with
+no token match still proceeds`, `still names a file whose own name ends in
+an apostrophe and s`, `keeps the controls that blocked in every release
+blocking`, and every case of `proceeds on %j against %s`; in
+`packages/core/tests/file-name-rule.test.ts` by `names the file with a
+possessive after every wrapper (2026-11-01 audit B1)` and `names the file
+inside an italic code span, underscore-led names included (2026-11-01 audit
+B1)`; and end to end in `packages/cli/tests/audit-2026-11-01.test.ts` by
+`blocks a dunder in an italic code span through extract, freeze and check`
+and `blocks a possessive in a hand-edited contract through drift --ci
+--contract`. Mutations run on 2026-11-01 against
+`audit-2026-11-01.test.ts`, `file-name-rule.test.ts` and `drift.test.ts`:
+no possessive reduction turns 19 red; no code-span reading turns 6 red.
+
+## A gate with no contract and require-frozen off says nothing was checked
+
+With require-frozen off and no contract, `checkGate` scores nothing,
+because there is nothing to score against. It returns status `ok` and exit
+code 0, as before, plus `skipReason` set to `NO_CONTRACT_SKIP_REASON`
+(`packages/core/src/gate.ts:29`, returned at `packages/core/src/gate.ts:285`
+and `packages/core/src/gate.ts:288`), which names both the current and the
+legacy contract path the gate searches. No other result carries
+`skipReason`. `check` prints `Intent Guard gate: skipped, no contract to
+check against` with no check mark, never the ok line, whenever
+`skipReason` is set (`packages/skill/src/check-cli.ts:282`,
+`packages/skill/src/check-cli.ts:284`). `report` prints `Status: ok` and
+then `Skipped:` with the reason (`packages/core/src/report.ts:260`), and
+`report --json` carries it as `gate.skipReason`. With a contract present,
+frozen or not, nothing changed: status `ok` or `blocked` as before, the
+same ok line byte for byte, and no `skipReason` key. With require-frozen
+on, a missing contract still blocks.
+
+The status stays `ok` on purpose. Conductor 0.16.0 reads only `ok` and
+`blocked` from this gate's `status` and raises
+`conductor/gate-output-unparseable` on anything else, and on a push run
+with no base it spawns this gate directly with `--no-require-frozen`, so a
+new status value would break every such run. `GateStatus` is still `"ok" |
+"blocked"` (`packages/core/src/gate.ts:20`). A distinct status waits for an
+umbrella release that accepts it.
+
+Pinned in `packages/core/tests/audit-2026-11-01.test.ts` by `returns status
+ok with a skipReason, exit 0, and nothing scored`, `still blocks a missing
+contract when require-frozen is on, with no skip reason` and `leaves a run
+with a contract present exactly as before, require-frozen on or off`; in
+`packages/core/tests/empty-scope-fail-closed.test.ts` by `returns status ok
+/ exitCode 0 with a skipReason when no contract resolves and requireFrozen
+is false`; in `packages/skill/tests/cli.test.ts` by `--no-require-frozen
+allows a missing contract and says nothing was checked`; in
+`packages/skill/tests/gate-parity.test.ts` by `passes a missing contract
+under --no-require-frozen as before, plus a skipReason`; and in
+`packages/cli/tests/audit-2026-11-01.test.ts` by `prints a skipped line,
+never ok, when there is no contract, and keeps the JSON status ok with a
+skipReason`, `says nothing was checked in the report, text and JSON alike`
+and `prints the same ok line as before when a contract is present`.
+Mutations run on 2026-11-01: no `skipReason` on the result turns 6 of
+those red; the CLI printing the ok line when `skipReason` is set turns 2
+red; the report text without its `Skipped:` line turns 1 red.
+
+## Eleven text scanners are linear and match the patterns they replaced
+
+Eleven regular expressions that backtracked polynomially (CodeQL
+js/polynomial-redos) on text a gate reads from a diff, a spec or an
+agent-written file are single linear passes in
+`packages/core/src/linear-text.ts`: `trimTrailing`
+(`packages/core/src/linear-text.ts:34`) for the segment trim in
+`slashJoinedFragments` (`packages/core/src/tokenize.ts:279`), the token
+trim (`packages/core/src/path-suggestions.ts:52`), the trailing-slash trim
+(`packages/core/src/budget.ts:67`) and the item trim
+(`packages/core/src/extract.ts:202`); `slashFragmentMatches`
+(`packages/core/src/linear-text.ts:71`) for the path-fragment scan
+(`packages/core/src/tokenize.ts:274`); `stripTrailingParenthetical` and
+`stripTrailingColon` (`packages/core/src/linear-text.ts:83`,
+`packages/core/src/linear-text.ts:95`) for the heading-key trims
+(`packages/core/src/extract.ts:556`); `matchAtxHeading`, `matchBoldHeading`
+and `matchBoldLabel` (`packages/core/src/linear-text.ts:102`,
+`packages/core/src/linear-text.ts:136`,
+`packages/core/src/linear-text.ts:156`) for the heading and label patterns
+(`packages/core/src/extract.ts:842`, `packages/core/src/extract.ts:843`,
+`packages/core/src/extract.ts:859`). The eleventh stays a regular
+expression: `NEW_CLAUSE_PROHIBITION_RE`
+(`packages/core/src/extract.ts:333`) now requires its target to start with a
+non-space character, so the whitespace before it splits one way; its only
+caller trims each part first, so it captures what the old pattern did.
+Other patterns that read user text were not changed.
+
+What each one matches is unchanged. `packages/core/tests/linear-text.test.ts`
+runs each scanner against the pattern it replaced on 20,000 generated
+strings per comparison, over alphabets that carry every character the
+pattern treats specially plus line terminators and non-ASCII whitespace:
+`trimTrailing is text.replace(/[chars]+$/, '')`, `slashFragmentMatches is the
+fragment pattern's matchAll`, `stripTrailingParenthetical and
+stripTrailingColon are the headingKey replaces`, the three `matchAtxHeading
+is`, `matchBoldHeading is` and `matchBoldLabel is` tests, and
+`NEW_CLAUSE_PROHIBITION_RE captures what the old pattern did on trimmed
+parts`.
+
+Each is bounded at 2000 ms on a 50,000-character adversarial input shaped
+after its CodeQL alert, in `packages/core/tests/redos-timing.test.ts`
+(`LIMIT_MS`, every test of the `linear-time text scanning on adversarial
+input` group) and by `NEW_CLAUSE_PROHIBITION_RE is linear on a long run of
+spaces before a line separator` in `linear-text.test.ts`. Before the change
+these inputs took 1 to 8 s, and the two heading inputs did not finish.
+
+Mutations: the 2026-11-01 audit measured seven, all red (its mutation table
+rows 1 to 7: an off-by-one loop guard, CR dropped from the line terminators,
+an ASCII-only whitespace set, the parenthetical search from 0, an ATX title
+allowed to be empty, the bold-label rest floor dropped, and the item trim
+put back to `/[,:;.\s]+$/`). Re-run here on 2026-11-01: the off-by-one
+guard in `trimTrailing` turns `trimTrailing is text.replace(/[chars]+$/,
+'')` red, and the old item-trim pattern turns `a bullet item with a long
+run of ', ' before its end (extract.ts normalizeItem)` red at 7661 ms
+against 2000.

@@ -140,6 +140,7 @@ export {
 } from "./tokenize.js";
 export {
   checkGate,
+  NO_CONTRACT_SKIP_REASON,
   type GateResult,
   type GateStatus,
   type CheckGateOptions,

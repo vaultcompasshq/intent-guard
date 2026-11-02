@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { checkGate } from "../src/gate.js";
+import { checkGate, NO_CONTRACT_SKIP_REASON } from "../src/gate.js";
 import { STATE_DIR } from "../src/state-dir.js";
 
 /**
@@ -185,8 +185,8 @@ describe("(c) a legitimate out-of-scope diff is a clean pass, not could-not-run"
   });
 });
 
-describe("(d) advisory mode (requireFrozen: false) with no contract stays ok", () => {
-  it("returns status ok / exitCode 0 when no contract resolves and requireFrozen is false", () => {
+describe("(d) advisory mode (requireFrozen: false) with no contract stays ok and says nothing was checked", () => {
+  it("returns status ok / exitCode 0 with a skipReason when no contract resolves and requireFrozen is false", () => {
     // This pins intended behavior, not a gap. `requireFrozen: false` is
     // advisory mode: consumer teams' documented onboarding runs exactly this
     // (require-frozen: false plus enforce: false), so a repo can adopt
@@ -206,6 +206,10 @@ describe("(d) advisory mode (requireFrozen: false) with no contract stays ok", (
     // provide. This is why intent-guard adds no production check here; this
     // test exists so a future change to this behavior is a deliberate
     // decision, not a silent regression.
+    //
+    // The 2026-11-01 audit (B2) made one such deliberate change: the status
+    // and exit code are unchanged, but the result now carries a skipReason,
+    // because an ok that checked nothing read as a clean verdict.
     const dir = bareProject();
 
     const result = checkGate(dir, {
@@ -216,5 +220,6 @@ describe("(d) advisory mode (requireFrozen: false) with no contract stays ok", (
     expect(result.contractFound).toBe(false);
     expect(result.status).toBe("ok");
     expect(result.exitCode).toBe(0);
+    expect(result.skipReason).toBe(NO_CONTRACT_SKIP_REASON);
   });
 });

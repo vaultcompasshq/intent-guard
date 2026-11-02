@@ -7,6 +7,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.10.4] - 2026-11-01
+
+A fix-forward release from the 2026-11-01 cohesion audit. It restores two
+file-name classes that 1.9.0 blocked and 1.10.3 still passed, says so when
+the gate checked nothing, and corrects a claim in the 1.10.3 entry.
+
 ### Security
 
 - **Linear-time text scanning.** Eleven regular expressions in the core
@@ -49,6 +55,52 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   to the intent gate, as init does for a repository with no contract yet.
   The repository never holds an intent contract, so without the flag every
   push to main reported "no contract", as a standing code-scanning alert.
+- **`check --no-require-frozen` with no contract says nothing was checked.**
+  With no contract there is nothing to score drift against, and nothing was
+  scored, but the gate printed `Intent Guard gate: ok`. It now prints
+  `Intent Guard gate: skipped, no contract to check against`, and `report`
+  prints the reason on a `Skipped:` line after `Status: ok`. The JSON
+  result (`check --json`, and `gate` in `report --json`) gains a
+  `skipReason` field saying nothing was checked; no other result has it.
+  The JSON status is unchanged, still `"ok"`, and so is the exit code, 0,
+  so a consumer that accepts only `ok` and `blocked`, conductor 0.16.0
+  included, keeps working. A distinct status value for this case is
+  planned once the umbrella accepts one. With a contract present the output
+  is unchanged. `docs/cli-reference.md` said the flag "still scores drift"
+  with a missing contract; it now says what the flag does with and without
+  one.
+
+### Fixed
+
+- **A possessive name, and a dunder in an italic code span, name the file
+  again.** Both blocked in 1.9.0 and passed in every 1.10 release, and both
+  were missing from the 1.10.2 "Not restored" list: the 1.10.2 entry's claim
+  that it restored the 1.9.0 verdict on every measured way of naming a file
+  did not cover them. Each of these blocked in 1.9.0, passed in 1.10.1 and
+  1.10.3, and blocks again, so it can newly block you: `Do not change
+  PaymentProcessor's retry logic` (also with U+2019 as the apostrophe, and
+  as `` `PaymentProcessor`'s ``) against `src/PaymentProcessor.ts`, `Do not
+  change the router's middleware` against `src/router.ts`, `Do not change
+  +server's handler` against `src/routes/api/+server.ts`, `Do not change
+  '+layout's imports` against `src/routes/+layout.svelte` (and the same
+  with `-flag` and `__init__`), and `` Never touch _`__init__`_ `` against
+  `pkg/__init__.py`. A trailing `'s` or U+2019 `s` is now one more
+  candidate form of a word, so the word without it names a file only when
+  it is exactly that file's name or stem: `the router's` names `router.ts`,
+  never `routers.ts` or `Router.ts`, and `the sync's` still does not name
+  `SyncStatus.tsx`. Inside a code span the underscores are now read as
+  literal text, so only the underscores outside the backticks are emphasis.
+  The property test now adds a possessive after every wrapper and an italic
+  code span around every protected name. Added to the 1.10.2 "Not
+  restored" list, still a pass where 1.9.0 blocked: emphasis that is not
+  balanced around a code span, with an underscore on one side only
+  (`` _`__init__` `` or `` `__init__`_ `` against `pkg/__init__.py`), and a
+  word that contains a Unicode private-use character, which is not given
+  the code-span reading at all.
+- **The 1.10.3 entry said no earlier release blocked the Next.js bracket and
+  paren stems.** 1.9.0 blocked both (`Do not edit "[...slug]".` and `Do not
+  edit "(group)".`, soft_block at 71, measured against the published
+  1.9.0). The entry now says they were restored.
 
 ## [1.10.3] - 2026-10-28
 
@@ -62,10 +114,11 @@ What can newly block you:
   `!important` or `init.el~`, written as its stem in quotes, parens or
   backticks or before a full stop. These blocked in 1.9.0 and 1.10.1,
   passed in 1.10.2, and block again (first entry under Fixed).
-- **Next.js-style bracket and paren stems**, which no earlier release
-  blocked: `Do not edit "[...slug]".` against `app/[...slug].tsx` and `Do
-  not edit "(group)".` against `app/(group).tsx`. 1.10.1 and 1.10.2 reduced
-  the quoted word to the stem without its brackets. `Do not edit "[id]".`
+- **Next.js-style bracket and paren stems**, restored: they blocked in
+  1.9.0, and 1.10.1 and 1.10.2 passed them: `Do not edit "[...slug]".`
+  against `app/[...slug].tsx` and `Do not edit "(group)".` against
+  `app/(group).tsx`. 1.10.1 and 1.10.2 reduced the quoted word to the stem
+  without its brackets. `Do not edit "[id]".`
   now names `app/[id].tsx` too, but still proceeds, because drift never
   matches the token "id" on its own.
 - **A symbol-led name inside very deep wrapping**, such as `+layout` in 21

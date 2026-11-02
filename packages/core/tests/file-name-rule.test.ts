@@ -757,6 +757,46 @@ describe("a protected name in any combination of wrappers still names the file (
     expect(failures).toEqual([]);
   });
 
+  it("names the file with a possessive after every wrapper (2026-11-01 audit B1)", () => {
+    const failures: string[] = [];
+    for (const [name, path] of PROTECTED) {
+      // A glob has no possessive.
+      if (name.startsWith("*")) continue;
+      for (const [wrapName, wrap] of WRAPS) {
+        if (!applies(wrapName, name)) continue;
+        for (const possessive of ["'s", `${cp(0x2019)}s`]) {
+          for (const suffix of ["", ".", ")."]) {
+            const rule = `Never touch ${wrap(`${name}${possessive}`)}${suffix} config`;
+            const after = `Never touch ${wrap(name)}${possessive}${suffix} config`;
+            for (const written of [rule, after]) {
+              if (!namesChangedFile(written, [path])) failures.push(`${written} / ${path}`);
+            }
+          }
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("names the file inside an italic code span, underscore-led names included (2026-11-01 audit B1)", () => {
+    const failures: string[] = [];
+    const names: Array<[string, string]> = [...PROTECTED, ["__init__", "pkg/__init__.py"], ["__about__", "pkg/__about__.py"]];
+    for (const [name, path] of names) {
+      for (const [, outer] of [
+        ["italic underscore", (w: string) => `_${w}_`],
+        ["bold underscore", (w: string) => `__${w}__`],
+        ["italic star", (w: string) => `*${w}*`],
+        ["bold italic", (w: string) => `**_${w}_**`],
+      ] as Array<[string, (w: string) => string]>) {
+        for (const suffix of ["", ".", ")."]) {
+          const rule = `Never touch ${outer(`\`${name}\``)}${suffix}`;
+          if (!namesChangedFile(rule, [path])) failures.push(`${rule} / ${path}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
   it("blocks in drift through every single wrapper and suffix", () => {
     const failures: string[] = [];
     for (const [name, path] of PROTECTED) {

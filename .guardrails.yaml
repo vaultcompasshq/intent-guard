@@ -54,10 +54,16 @@ gates:
     # intent contract yet, and it reaches the gate as --no-require-frozen.
     # This repository has none: .gitignore ignores .intent-guard/ and
     # AGENTS.md keeps active contracts in the consuming repositories. With
-    # the flag, a run with no contract passes with no finding, and once a
-    # contract exists the gate checks drift against it as usual. Without it,
-    # every push to main reported "no contract", which the SARIF upload kept
-    # as a standing code-scanning alert on this file.
+    # the flag and no contract, nothing is checked and the gate says so: its
+    # text line says skipped, and its JSON keeps status ok, exit 0, with a
+    # skipReason saying nothing was checked. Once a contract exists, drift and
+    # the change budget are scored against it and block as usual, but an
+    # unfrozen contract is accepted, and in pull-request mode a change that
+    # approves its own contract, or turns the contract file into a symlink,
+    # a directory or a deletion or changes its mode, is reported and not
+    # refused. Without the
+    # flag, every push to main reported "no contract", which the SARIF upload
+    # kept as a standing code-scanning alert on this file.
     options:
       require-frozen: false
 

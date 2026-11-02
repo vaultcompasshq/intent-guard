@@ -72,6 +72,41 @@ function stripEmphasisOnce(text: string): string {
   return text.replace(/`/g, "").replace(EMPHASIS_RE, "$2");
 }
 
+// A code span inside one word: a backtick pair around text with no backtick.
+const CODE_SPAN_RE = /`[^`]+`/g;
+// Private-use characters (U+E000 on) stand in for code spans while
+// EMPHASIS_RE runs, so a word that already holds one is left to
+// stripEmphasisOnce.
+const PRIVATE_USE_RE = /\p{Co}/u;
+const PRIVATE_USE_ALL_RE = /\p{Co}/gu;
+const MAX_CODE_SPANS = 0x1900;
+
+/**
+ * One layer of paired emphasis removed from `text` with its code spans left
+ * literal, backticks included, or null when nothing changed. CommonMark reads
+ * the inside of a code span as literal text, so the underscores of
+ * "_`__init__`_" inside the backticks are the name and only the outer pair is
+ * emphasis: this gives "`__init__`", which the edge trim takes to "__init__".
+ * stripEmphasisOnce removes the backticks first and so pairs the dunder's own
+ * underscores (the 2026-11-01 audit's B1); its form is kept as well.
+ */
+function stripEmphasisOutsideCode(text: string): string | null {
+  if (!text.includes("`") || PRIVATE_USE_RE.test(text)) return null;
+  const spans: string[] = [];
+  const masked = text.replace(CODE_SPAN_RE, (span) => {
+    spans.push(span);
+    return String.fromCharCode(0xe000 + spans.length - 1);
+  });
+  if (spans.length === 0 || spans.length > MAX_CODE_SPANS) return null;
+  const stripped = masked.replace(EMPHASIS_RE, "$2");
+  if (stripped === masked) return null;
+  return stripped.replace(PRIVATE_USE_ALL_RE, (c) => spans[c.charCodeAt(0) - 0xe000]);
+}
+
+// A possessive "'s" or U+2019 "s" after at least one other character.
+// The apostrophe may close a quote of its own: "'Dockerfile''s".
+const POSSESSIVE_RE = /(?<=.)['’]s$/u;
+
 /**
  * The thing a rule prohibits: the rule with its list marker, emphasis and
  * leading negation markers removed ("Don't modify billing" -> "modify
@@ -440,6 +475,15 @@ function reductions(form: string): string[] {
   // markdown ("__Makefile__"), and the text cannot say which, so this form
   // and the form it came from are both kept.
   out.push(stripEmphasisOnce(form));
+  // The same layer with code spans read as literal text: "_`__init__`_".
+  const outsideCode = stripEmphasisOutsideCode(form);
+  if (outsideCode !== null) out.push(outsideCode);
+  // A possessive: "PaymentProcessor's", or "router" and U+2019 "s". The form without it is
+  // one more candidate, so it names a file only when it is exactly that
+  // file's basename or stem, and a name that itself ends in "'s" is still
+  // read whole. A bare trailing apostrophe ("Payments'") is already an edge
+  // character, removed by trimEdges.
+  if (POSSESSIVE_RE.test(form)) out.push(form.replace(POSSESSIVE_RE, ""));
   // Emphasis inside a word: CommonMark reads "**Docker**file" and
   // "Docker*file*" as one word with a bold or italic part, which EMPHASIS_RE
   // (a pair off word boundaries) does not remove. A star touching a letter
@@ -457,7 +501,9 @@ function reductions(form: string): string[] {
  * a lone "/"; a trailing footnote or reference marker; Unicode punctuation,
  * symbol and format characters trimmed from both ends (EDGE_CHAR_RE, but
  * never a glob's own star); a "*.ext" glob out of its emphasis stars; one
- * layer of paired emphasis; and the stars of emphasis inside a word. Every
+ * layer of paired emphasis, read both with code spans removed and with code
+ * spans literal; a trailing possessive "'s" or U+2019 "s"; and the stars of
+ * emphasis inside a word. Every
  * intermediate form is kept, so a later reduction never discards a form an
  * earlier one reached; but a name is matched only if some chain of
  * reductions reaches it exactly, which is what the property tests in
