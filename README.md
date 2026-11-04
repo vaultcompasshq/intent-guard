@@ -20,9 +20,6 @@ per project with `npm install --save-dev @vaultcompass/intent-guard` (or
 `intentguard` also exists on npm; it is a different project and has nothing to
 do with this one, so install the scoped name.
 
-Formerly published as `@vaultcompass/conductor-cli`; see [Upgrading from
-conductor 1.1.0](#upgrading-from-conductor-110).
-
 Two kinds of finding come out of the gate. The first is drift: the change has
 moved outside what the contract put in scope, into something it put out of
 scope, or across a constraint the contract recorded. A constraint finding is
@@ -71,19 +68,12 @@ and the contract itself is plain YAML any model can read. See
 ```
 User conversation
         |
-   intent-guard layer    intent contract, drift guard, prompt coach
+   intent-guard layer    intent contract, drift guard
         |
    Coding assistants     planning, TDD, build, review
         |
    Shipped product
 ```
-
-## Status
-
-**Version:** `1.10.4`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
-**Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
-
-**Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
 
 ## Start here
 
@@ -106,50 +96,6 @@ User conversation
 
 It does not plan, write code or review it, and it does not read the diff, so
 it is a complement to those, not a replacement.
-
-## Packages
-
-```
-intent-guard/
-├── packages/
-│   ├── schema/          # @vaultcompass/intent-guard-schema
-│   ├── core/            # @vaultcompass/intent-guard-core incl. history/index
-│   ├── skill/           # Superpowers skills + per-command CLIs
-│   ├── cli/             # unified intent-guard binary
-│   └── memory/          # separate package deferred; file memory lives in core
-├── integrations/
-│   ├── superpowers/     # skills + install script
-│   ├── git-hooks/       # pre-commit gate samples
-│   ├── hooks/           # shared lifecycle hook scripts
-│   ├── codex/           # Codex hooks.json sample
-│   ├── claude-code/     # Claude Code settings sample
-│   ├── github-actions/  # drift CI and optional vault-guard workflow samples
-│   ├── cursor/          # Cursor rule + git hook setup
-│   └── downstream-pipeline/  # design notes
-└── docs/
-```
-
-The enforcement gate (`intent-guard check`, or `intent-guard-check`) returns a non-zero exit code when no
-frozen contract exists or staged changes drift past a blocking threshold: the
-one place intent-guard *enforces* rather than *suggests*. Install it with
-`intent-guard hook install` (add `--with-vault-guard` to pair secret scanning), or
-wire the sample hooks
-([pre-commit.sample](./integrations/git-hooks/pre-commit.sample),
-[vault-guard hook](./integrations/git-hooks/pre-commit-with-vault-guard.sample))
-or a CI step from a source checkout.
-
-The agent lifecycle hooks in [integrations/hooks/](./integrations/hooks) need
-`intent-guard-check` 1.8.1 or newer on `PATH` (confirm with
-`intent-guard-check --version`). That binary belongs to
-`@vaultcompass/intent-guard-skill`: a global `npm install -g
-@vaultcompass/intent-guard` links only `intent-guard`, so install
-`@vaultcompass/intent-guard-skill` globally too at the same version. The hook does not check the gate's version,
-and with an older gate its result is not valid, because it leaves committed
-and staged changes to the gate's own listing and an older gate lists fewer
-kinds of change. On git 2.31 or newer, replace refs are disabled for every git
-call the hook and the CLI make; on an older git only the environment variable
-applies, which repository configuration can override, so git 2.31 or newer is
-required for that protection. See the [hook README](./integrations/hooks/README.md).
 
 ## Quickstart
 
@@ -193,7 +139,7 @@ Action's input checks, its npm version floor and its `npm audit signatures`
 step; [action.yml](./action.yml) is the full version.
 
 ```yaml
-- uses: actions/checkout@v7
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     fetch-depth: 0
 # Install outside the checkout, at an exact version, with no install scripts,
@@ -281,7 +227,7 @@ jobs:
   intent:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0        # required: the base branch has to be present
       - uses: vaultcompasshq/intent-guard@v1.10.4
@@ -341,8 +287,8 @@ verdict nobody produced.
 
 `exit-code` has a fourth value: **empty**, when the run step never reached its
 output lines, which is what a rejected input or a failed install looks like from
-outside. The job still fails -- the report step reads an empty code as
-could-not-run and exits 2 -- but a workflow that branches on this output should
+outside. The job still fails (the report step reads an empty code as
+could-not-run and exits 2), but a workflow that branches on this output should
 treat empty as could-not-run too, rather than as a pass it did not get.
 
 Off a `pull_request` event there is no ref to decide `base` from, so set `base`
@@ -376,6 +322,56 @@ pnpm intent-guard -- check --project . --staged
 pnpm intent-guard -- report --project . --staged
 pnpm intent-guard -- rules audit --project .
 ```
+
+## Status
+
+**Version:** `1.10.4`: stable CLI/API on npm (`@vaultcompass/intent-guard*`); see [docs/release/stability-policy.md](./docs/release/stability-policy.md)  
+**Repository:** https://github.com/vaultcompasshq/intent-guard (public, MIT)
+
+**Packages:** `packages/schema` · `packages/core` · `packages/skill` · `packages/cli`
+
+## Packages
+
+```
+intent-guard/
+├── packages/
+│   ├── schema/          # @vaultcompass/intent-guard-schema
+│   ├── core/            # @vaultcompass/intent-guard-core incl. history/index
+│   ├── skill/           # Superpowers skills + per-command CLIs
+│   └── cli/             # unified intent-guard binary
+├── integrations/
+│   ├── superpowers/     # skills + install script
+│   ├── git-hooks/       # pre-commit gate samples
+│   ├── hooks/           # shared lifecycle hook scripts
+│   ├── codex/           # Codex hooks.json sample
+│   ├── claude-code/     # Claude Code settings sample
+│   ├── github-actions/  # drift CI and optional vault-guard workflow samples
+│   ├── cursor/          # Cursor rule + git hook setup
+│   └── downstream-pipeline/  # design notes
+└── docs/
+```
+
+The enforcement gate (`intent-guard check`, or `intent-guard-check`) returns a non-zero exit code when no
+frozen contract exists or staged changes drift past a blocking threshold: the
+one place intent-guard *enforces* rather than *suggests*. Install it with
+`intent-guard hook install` (add `--with-vault-guard` to pair secret scanning), or
+wire the sample hooks
+([pre-commit.sample](./integrations/git-hooks/pre-commit.sample),
+[vault-guard hook](./integrations/git-hooks/pre-commit-with-vault-guard.sample))
+or a CI step from a source checkout.
+
+The agent lifecycle hooks in [integrations/hooks/](./integrations/hooks) need
+`intent-guard-check` 1.8.1 or newer on `PATH` (confirm with
+`intent-guard-check --version`). That binary belongs to
+`@vaultcompass/intent-guard-skill`: a global `npm install -g
+@vaultcompass/intent-guard` links only `intent-guard`, so install
+`@vaultcompass/intent-guard-skill` globally too at the same version. The hook does not check the gate's version,
+and with an older gate its result is not valid, because it leaves committed
+and staged changes to the gate's own listing and an older gate lists fewer
+kinds of change. On git 2.31 or newer, replace refs are disabled for every git
+call the hook and the CLI make; on an older git only the environment variable
+applies, which repository configuration can override, so git 2.31 or newer is
+required for that protection. See the [hook README](./integrations/hooks/README.md).
 
 ## Part of the Vault & Compass guardrails
 
@@ -519,6 +515,12 @@ delete plus an untracked directory.
 Anything reading the frozen contract by path (a CI step, another tool) should
 read `.intent-guard/intent-contract.yaml`. The pre-1.3.0 path was
 `.conductor/intent-contract.yaml`.
+
+## The old package name
+
+This project was formerly published as `@vaultcompass/conductor-cli`. If you
+still depend on the old package name, see [Upgrading from Conductor
+1.1.0](#upgrading-from-conductor-110).
 
 ## Origin
 
