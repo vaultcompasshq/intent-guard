@@ -112,11 +112,11 @@ inputs:
     default: ''
   require-frozen:
     description: |
-      Set to `false` to let a project without a frozen contract pass instead of
-      blocking. Closed enum: `true` or `false`. The default is `true`, which is
-      the enforcing shape: no frozen contract means nothing has been approved,
-      and passing that is how a repository ends up with a gate that never
-      blocks anything.
+      Set to `false` so a missing contract is reported as nothing checked (exit
+      0) instead of blocking. Closed enum: `true` or `false`. The default is
+      `true`, the enforcing shape: no frozen contract means nothing has been
+      approved, and passing that is how a repository ends up with a gate that
+      never blocks anything.
     required: false
     default: 'true'
   json-output:
@@ -642,6 +642,10 @@ runs:
         IG_TRUST_BASE: ${{ inputs.trust-base }}
         IG_REQUIRE_FROZEN: ${{ inputs.require-frozen }}
         IG_JSON_OUTPUT: ${{ inputs.json-output }}
+        # Where text mode keeps a copy of the gate's stdout, so this step can
+        # tell a run that checked nothing from one that passed. In the runner
+        # temp, never in the checkout.
+        IG_STDOUT_COPY: ${{ runner.temp }}/intent-guard-action-stdout.txt
         # The pull-request test, taken from the EVENT PAYLOAD rather than from
         # whatever environment the job happens to hand this step. Same
         # spelling as the validate step above, which reads the same value for
@@ -754,14 +758,16 @@ runs:
         # take them out of it. In JSON mode the JSON is the whole of stdout,
         # so this redirects rather than tees: a tee of a text banner into a
         # JSON file is how a sibling action in this family broke its own
-        # output.
+        # output. Text mode tees stdout into a copy in the runner temp, so the
+        # skip check below can read it; the log still gets every line.
         set +e
         if [[ -n "${OUT}" ]]; then
           "${IG_BIN}" "${ARGS[@]}" > "${OUT}"
+          CHECK_STATUS=$?
         else
-          "${IG_BIN}" "${ARGS[@]}"
+          "${IG_BIN}" "${ARGS[@]}" | tee "${IG_STDOUT_COPY}"
+          CHECK_STATUS=${PIPESTATUS[0]}
         fi
-        CHECK_STATUS=$?
         set -e
 
         # Published only when there is something in it. A gate that exited
@@ -777,8 +783,26 @@ runs:
           fi
         fi
 
+        # A pass that checked nothing. Exit 0 with a skipReason is how
+        # intent-guard says it found no contract to check against (require-
+        # frozen off); the report step must never call that "gate ok". In JSON
+        # mode the reason is read from the result; in text mode the CLI prints
+        # a fixed skip line exactly when the result carries one. node is the
+        # same interpreter the installed binary's shim already runs under. A
+        # line break in the reason is flattened, so it cannot start another
+        # output line.
+        SKIP_REASON=""
+        if [[ "${CHECK_STATUS}" -eq 0 ]]; then
+          if [[ -n "${RESULT_FILE}" ]]; then
+            SKIP_REASON="$(node -e 'let r; try { r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch { process.exit(0); } if (r && typeof r.skipReason === "string") process.stdout.write(r.skipReason.replace(/[\r\n]+/g, " "));' "${RESULT_FILE}")" || SKIP_REASON=""
+          elif [[ -z "${OUT}" ]] && grep -Fxq 'Intent Guard gate: skipped, no contract to check against' "${IG_STDOUT_COPY}" 2>/dev/null; then
+            SKIP_REASON="no contract to check against"
+          fi
+        fi
+
         echo "exit_code=${CHECK_STATUS}" >> "${GITHUB_OUTPUT}"
         echo "result_file=${RESULT_FILE}" >> "${GITHUB_OUTPUT}"
+        echo "skip_reason=${SKIP_REASON}" >> "${GITHUB_OUTPUT}"
 
         # Deliberately exits 0 here, whatever intent-guard said. The real
         # exit code is re-raised in the last step, which runs with always() so
@@ -802,6 +826,7 @@ runs:
       env:
         IG_EXIT_CODE: ${{ steps.run.outputs.exit_code }}
         IG_RESULT_FILE: ${{ steps.run.outputs.result_file }}
+        IG_SKIP_REASON: ${{ steps.run.outputs.skip_reason }}
       run: |
         set -uo pipefail
 
@@ -828,6 +853,14 @@ runs:
 
         case "${IG_EXIT_CODE}" in
           0)
+            # Exit 0 is also what a run that checked nothing returns, so the
+            # skip reason is read first: "gate ok" on such a run claims a
+            # check that never happened. Still exit 0, because a skip is not a
+            # failure.
+            if [[ -n "${IG_SKIP_REASON}" ]]; then
+              printf 'intent-guard: skipped, nothing was checked. Reason: %s\n' "${IG_SKIP_REASON}"
+              exit 0
+            fi
             echo "intent-guard: gate ok."
             exit 0
             ;;

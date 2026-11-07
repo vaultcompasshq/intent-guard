@@ -25,6 +25,7 @@ import { chmodSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeF
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 import {
   EXACT_SEMVER,
@@ -858,20 +859,62 @@ describe(".github/workflows hardening", () => {
     if (grants === null) return ["missing top-level permissions"];
     const allowed = new Set(["contents: read"]);
     // security-events: write is the SARIF upload grant. It is allowed at
-    // the top only in a workflow that uploads a SARIF log.
-    if (text.includes("upload-sarif")) allowed.add("security-events: write");
+    // the top only in a workflow with a step that uploads a SARIF log: a
+    // parsed uses: of codeql-action/upload-sarif, or of codeql-action/analyze,
+    // which uploads its own. The words in a comment never count.
+    const uploadsSarif = parsedJobs(text).some(({ job }) =>
+      jobSteps(job).some(
+        (step) =>
+          typeof step.uses === "string" &&
+          /^github\/codeql-action\/(?:upload-sarif|analyze)@/.test(step.uses),
+      ),
+    );
+    if (uploadsSarif) allowed.add("security-events: write");
     return grants.filter((grant) => !allowed.has(grant));
   }
 
-  function jobSections(text) {
-    const jobsAt = text.search(/^jobs:[ \t]*$/m);
-    if (jobsAt === -1) return [];
-    const body = text.slice(jobsAt);
-    const starts = [];
-    const re = /^ {2}[A-Za-z0-9_-]+:[ \t]*$/gm;
-    let match;
-    while ((match = re.exec(body)) !== null) starts.push(match.index);
-    return starts.map((start, index) => body.slice(start, starts[index + 1]));
+  // Each job, parsed. Parsing rather than matching text means a comment is
+  // never read as a value and a one-line `run:` is read like a block one
+  // (the 2026-11-06 audit's N3).
+  function parsedJobs(text) {
+    const doc = parseYaml(text) ?? {};
+    return Object.entries(doc.jobs ?? {}).map(([id, job]) => ({ id, job: job ?? {} }));
+  }
+
+  function jobSteps(job) {
+    return Array.isArray(job.steps) ? job.steps.filter((step) => step && typeof step === "object") : [];
+  }
+
+  // Whether one shell command publishes a package: npm with publish after
+  // any flags and their values (npm --provenance publish, npm -w pkg
+  // publish), pnpm publish the same way, and yarn npm publish. A run value
+  // is split into commands on newlines and the shell's ; & | separators,
+  // then into words, so a one-line run: reads like a block one.
+  function commandPublishes(words) {
+    for (let i = 0; i < words.length; i += 1) {
+      const name = words[i].split("/").pop();
+      if (name !== "npm" && name !== "pnpm") continue;
+      if (words.slice(i + 1).includes("publish")) return true;
+    }
+    return false;
+  }
+
+  function runPublishes(run) {
+    return run
+      .split(/[\n;&|]+/)
+      .map((command) => command.trim().split(/\s+/).map((word) => word.replace(/^["']|["']$/g, "")))
+      .some(commandPublishes);
+  }
+
+  function publishesToNpm(job) {
+    return jobSteps(job).some((step) => typeof step.run === "string" && runPublishes(step.run));
+  }
+
+  function environmentName(job) {
+    const env = job.environment;
+    if (typeof env === "string") return env;
+    if (env && typeof env === "object" && typeof env.name === "string") return env.name;
+    return null;
   }
 
   // The value of a uses key, with a trailing version comment removed.
@@ -900,38 +943,41 @@ describe(".github/workflows hardening", () => {
     return /^[0-9a-f]{40}$/.test(ref.slice(at + 1));
   }
 
+  function checkoutSteps(text) {
+    return parsedJobs(text).flatMap(({ id, job }) =>
+      jobSteps(job)
+        .filter((step) => typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"))
+        .map((step) => ({ id, step })),
+    );
+  }
+
+  // Parsed, so `persist-credentials: true # persist-credentials: false`
+  // reads as true. The value must be the boolean false.
   function checkoutStepsMissingCredentialsOff(text) {
-    const lines = text.split("\n");
-    const starts = [];
-    for (let i = 0; i < lines.length; i += 1) {
-      if (/^[ \t]*- (?:name:|uses:)/.test(lines[i])) starts.push(i);
-    }
-    const missing = [];
-    for (let s = 0; s < starts.length; s += 1) {
-      const block = lines.slice(starts[s], starts[s + 1]).join("\n");
-      if (!/uses:[ \t]*['"]?actions\/checkout@/.test(block)) continue;
-      if (!/^.*persist-credentials:[ \t]*false[ \t]*(?:#.*)?$/m.test(block)) {
-        missing.push(lines[starts[s]].trim());
-      }
-    }
-    return missing;
+    return checkoutSteps(text)
+      .filter(({ step }) => step.with?.["persist-credentials"] !== false)
+      .map(({ id, step }) => `${id}: ${step.name ?? step.uses}`);
   }
 
   it("keeps top-level permissions to contents read, plus security-events write only where SARIF is uploaded", () => {
-    for (const name of ["ci.yml", "release.yml"]) {
+    const names = workflowNames();
+    expect(names).toEqual(expect.arrayContaining(["ci.yml", "codeql.yml", "release.yml"]));
+    for (const name of names) {
       const extra = disallowedGrants(readWorkflow(name));
       expect({ name, extra }).toEqual({ name, extra: [] });
     }
   });
 
-  it("puts the job that publishes inside the npm-publish environment", () => {
-    const publishers = jobSections(readWorkflow("release.yml")).filter((job) =>
-      /\n[ \t]*npm publish\s/.test(job),
-    );
-    expect(publishers.length).toBeGreaterThan(0);
-    for (const job of publishers) {
-      expect(job).toMatch(/^ {4}environment:[ \t]*npm-publish[ \t]*$/m);
+  it("puts every job that runs npm publish, in any workflow, inside the npm-publish environment", () => {
+    let total = 0;
+    for (const name of workflowNames()) {
+      for (const { id, job } of parsedJobs(readWorkflow(name))) {
+        if (!publishesToNpm(job)) continue;
+        total += 1;
+        expect({ name, id, environment: environmentName(job) }).toEqual({ name, id, environment: "npm-publish" });
+      }
     }
+    expect(total).toBeGreaterThan(0);
   });
 
   it("pins every action in every workflow to a 40-character commit SHA", () => {
@@ -947,8 +993,7 @@ describe(".github/workflows hardening", () => {
     let total = 0;
     for (const name of workflowNames()) {
       const missing = checkoutStepsMissingCredentialsOff(readWorkflow(name));
-      const present = (readWorkflow(name).match(/actions\/checkout@/g) ?? []).length;
-      total += present;
+      total += checkoutSteps(readWorkflow(name)).length;
       expect({ name, missing }).toEqual({ name, missing: [] });
     }
     expect(total).toBeGreaterThan(0);

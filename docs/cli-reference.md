@@ -999,17 +999,38 @@ it works from an `npx`/npm install.
 |------|---------|
 | `--project <root>` | target project (must contain `.git`) |
 | `--with-vault-guard` | also run `vault-guard scan --staged` in the hook |
-| `--force` | overwrite an existing `pre-commit` hook Intent Guard did not write |
+| `--force` | overwrite an existing `pre-commit` hook Intent Guard did not write, or a managed one edited after install |
 | `--json` / `--human` | output format (default JSON) |
 
-Exits `1` when the target is not a git repo or a foreign hook exists without
-`--force`. Re-installing a managed hook is idempotent. Bypass a single
-commit with `git commit --no-verify`.
+A hook is Intent Guard's own only when its second line, right after the
+shebang, is the managed header `# conductor-managed-pre-commit`. A hook that
+mentions the marker anywhere else is foreign.
+
+Exits `1`, and changes nothing (not the hook file, not `core.hooksPath`), when
+the target is not a git repo, when a foreign hook exists
+(`existing_hook_not_managed`), or when the managed hook was edited after
+install (`managed_hook_edited`): its bytes differ from the script this version
+renders. For an edited hook, pass `--force` to rewrite it (the output and
+`discardedEdits: true` in the JSON say the edits are discarded), or remove the
+edits by hand. Re-installing over an unedited managed hook is idempotent and
+exits `0`, with or without `--with-vault-guard`. A managed hook written by an
+older version that renders differently counts as edited. A managed hook whose
+line endings differ (CRLF, or a leading byte-order mark) is refused the same
+way as `managed_hook_line_endings`; convert it to LF with no byte-order mark,
+or pass `--force`. A hook that cannot be written (a read-only hooks directory
+or hook file, with or without `--force`) is refused as `hook_write_failed`,
+also with nothing changed. Bypass a single commit with `git commit --no-verify`.
 
 When `core.hooksPath` points **outside** this repository (machine-wide hooks),
 install sets local `core.hooksPath=.git/hooks` and writes there so Git actually
-runs the gate without overwriting a shared hooks directory. In-repo custom
-paths such as `.githooks` receive the hook directly.
+runs the gate without overwriting a shared hooks directory. It does so only
+after the ownership check above has passed and the hook has been written; if
+setting `core.hooksPath` fails, the hook file is put back as it was and the
+install is refused as `hooks_path_localize_failed`. The shared directory's hooks then
+no longer run in this repository: the JSON carries `previousHooksPath` (that
+directory, absolute) and `--human` names the shared `pre-commit` that stops
+running. The managed hook does not chain to it. In-repo custom paths such as
+`.githooks` receive the hook directly.
 
 ## intent-guard drift / intent-guard-drift
 

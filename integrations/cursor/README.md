@@ -29,8 +29,10 @@ npx @vaultcompass/intent-guard@latest check --project . --staged
 
 If Git is configured with a global hooks directory (common with vault-guard),
 `intent-guard hook install` sets **local** `core.hooksPath=.git/hooks` and installs
-there so it does not overwrite the shared hooks dir. Repo-local paths such as
-`.githooks` are left alone and receive the hook directly.
+there so it does not overwrite the shared hooks dir. The shared hooks then no
+longer run in this repository, and the install output names the shared
+`pre-commit` that stops running. Repo-local paths such as `.githooks` are left
+alone and receive the hook directly.
 
 ---
 
