@@ -12,7 +12,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - The CI and devDependency gate pins move to dep-guard 0.18.1, intent-guard
   1.10.4 and vault-guard 1.13.1, and the vault-guard integration sample and
   its README now install vault-guard 1.13.1.
-- The CI conductor action pin and the @vaultcompass/conductor devDependency move to 0.17.0.
+- The CI conductor action pin and the @vaultcompass/conductor devDependency move to 0.18.0.
 
 ### Security
 
