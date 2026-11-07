@@ -11,9 +11,12 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-# Least privilege by default. prepare and release state their own grants
-# below, which replace this block for those jobs; smoke-published only
-# checks out this public repository and reads the public registry.
+# Least privilege by default. prepare, release and github-release state
+# their own grants below, which replace this block for those jobs: prepare
+# reads (contents: read), release publishes over OIDC (contents: read,
+# id-token: write), and github-release creates the GitHub Release
+# (contents: write and nothing else). smoke-published only checks out this
+# public repository and reads the public registry.
 permissions:
   contents: read
 
@@ -229,6 +232,13 @@ jobs:
   # prepare packed and does not install this repository's dependencies.
   # npm CLI >= 11.5.1 is required for OIDC. Pin major 11: npm@12 needs a
   # newer Node than this job runs.
+  #
+  # Nothing in this job writes to the repository, so it reads only. The
+  # GitHub Release is cut by github-release below, in a job of its own, so a
+  # failure there can be re-run without re-running this one. A re-run here
+  # does not fail at the publish, which skips a version already on the
+  # registry; it fails at the artifact download once the packed tarballs'
+  # one-day retention has passed.
   release:
     needs: prepare
     runs-on: ubuntu-latest
@@ -236,7 +246,7 @@ jobs:
     # repository settings and the npm trusted publisher is bound to it.
     environment: npm-publish
     permissions:
-      contents: write
+      contents: read
       id-token: write
     outputs:
       action_only: ${{ needs.prepare.outputs.action_only }}
@@ -272,7 +282,7 @@ jobs:
       #
       # Without the check, the first republish returns E403 and, because a run
       # block executes under bash -e, aborts the whole step. The job then fails
-      # and both the GitHub Release step and the smoke-published job are
+      # and both the github-release job and the smoke-published job are
       # skipped, which is a misleading red for a release that is actually fine.
       #
       # The skip is per exact version, so it never hides a real publish failure
@@ -308,6 +318,22 @@ jobs:
           publish_one packages/skill pack-out/skill
           publish_one packages/cli pack-out/cli
 
+  # Cuts the GitHub Release once release has finished, on both kinds of
+  # release. It holds contents: write and nothing else: no id-token, no
+  # environment, no checkout and no install, since the release action
+  # works through the API and both bodies are written inline here. The
+  # classifier outputs come straight from prepare through needs, so the
+  # gates below read the same values the publish job did.
+  #
+  # No job-level "if:" on purpose. Without one the job takes the default
+  # success() and runs only when prepare and release both succeeded, so a
+  # failed publish never gets a Release page announcing it.
+  github-release:
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       # Two Release steps, one per release kind, rather than one step with a
       # computed body. The body is the only difference between them, and it
       # is the part that must not be wrong: "Published ... to npm" appears
