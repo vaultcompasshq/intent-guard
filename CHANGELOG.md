@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.10.5] - 2026-11-07
+
 ### Changed
 
 - The CI and devDependency gate pins move to dep-guard 0.18.2 (the version
@@ -14,6 +16,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   1.13.1, and the vault-guard integration sample and its README now install
   vault-guard 1.13.1.
 - The CI conductor action pin and the @vaultcompass/conductor devDependency move to 0.18.0.
+- The release workflow creates the GitHub Release in its own job,
+  `github-release`, which runs after the publish job succeeds and holds
+  `contents: write` and nothing else. The publish job drops to
+  `contents: read` plus `id-token: write`. A failed Release step can now
+  be re-run on its own, without re-running the publish job, whose artifact
+  download fails once the packed tarballs' one-day retention has passed.
 
 ### Security
 

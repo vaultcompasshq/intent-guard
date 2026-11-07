@@ -23,12 +23,12 @@ red when one of the version-shape lines is replaced by a commented copy` and
 in that file has its own `goes red when this line is replaced by a commented
 copy` test.
 
-The default is `1.10.4` at `action.yml:41`.
+The default is `1.10.5` at `action.yml:41`.
 
 ## On a pull request, `version` may not pin older than this tag's scanner
 
 `IG_TAG_SCANNER_MAJOR`, `IG_TAG_SCANNER_MINOR` and `IG_TAG_SCANNER_PATCH`
-are `1`, `10` and `4` at `action.yml:257` through `action.yml:259`.
+are `1`, `10` and `5` at `action.yml:257` through `action.yml:259`.
 `IG_TAG_SCANNER` is assembled from those three at `action.yml:260`. The
 comparison that refuses an older pin is `action.yml:299` through
 `action.yml:308`, and the error that names both versions is
@@ -84,8 +84,8 @@ is written at `action.yml:596`.
 
 ## The action tag and the installed package can be different numbers
 
-They are not right now: `README.md:233` pins `vaultcompasshq/intent-guard@v1.10.4`,
-and `README.md:239` through `README.md:240` say that tag installs `@vaultcompass/intent-guard@1.10.4`,
+They are not right now: `README.md:233` pins `vaultcompasshq/intent-guard@v1.10.5`,
+and `README.md:239` through `README.md:240` say that tag installs `@vaultcompass/intent-guard@1.10.5`,
 because this release moved the action tag and the packages together. They
 diverged briefly at 1.5.3, an action-only tag documented under the
 CHANGELOG heading `[1.5.3] - 2026-09-20` that moved the workflow file without
@@ -93,7 +93,7 @@ publishing new packages; that same section still records that history,
 naming `IG_TAG_SCANNER` as 1.5.2 on the 1.5.3 tag. The installed
 version is the `version` input default at `action.yml:41`, the scanner
 constant at `action.yml:257` through `action.yml:260`, and the package
-version `1.10.4` in `package.json:4`, `packages/cli/package.json:3`,
+version `1.10.5` in `package.json:4`, `packages/cli/package.json:3`,
 `packages/core/package.json:3`, `packages/schema/package.json:3` and
 `packages/skill/package.json:3`. Whenever a future action-only tag moves
 `action.yml` without a package release, this section goes stale again the
@@ -1293,8 +1293,8 @@ reason is set when that copy holds the CLI's fixed skip line exactly
 instead of `intent-guard: gate ok.` (`action.yml:860` through
 `action.yml:861`). A skip is not a failure, so the step still exits 0,
 matching conductor 0.18.0's nothing-checked verdict. No CLI flag was added:
-the Action installs a published CLI, and the default 1.10.4 already prints
-the skip line and writes `skipReason`.
+the Action installs a published CLI, and 1.10.4, the default when this
+landed, already printed the skip line and wrote `skipReason`.
 
 Pinned in `examples/validate-action.test.ts` by `says skipped, never ok,
 when the run recorded a skip reason (2026-11-06 audit B2)`, and with the
