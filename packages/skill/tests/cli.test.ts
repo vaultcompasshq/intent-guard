@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { execFile } from "node:child_process";
-import { mkdirSync, mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -107,6 +107,132 @@ describe("conductor-hook", () => {
     const res = await run("hook-cli.js", ["install", "--project", dir]);
     expect(res.code).toBe(1);
     expect(JSON.parse(res.stdout).reason).toBe("not_a_git_repo");
+  });
+});
+
+// The 2026-11-06 audit's B3 and N1, through the installed binary.
+describe("hook install names what it changes and refuses before changing anything (2026-11-06 audit B3, N1)", () => {
+  function gitRepo(): string {
+    const dir = tmpProject();
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    return dir;
+  }
+
+  function localHooksPath(dir: string): string {
+    try {
+      return execFileSync("git", ["config", "--local", "--get", "core.hooksPath"], {
+        cwd: dir,
+        encoding: "utf8",
+      }).trim();
+    } catch {
+      return "";
+    }
+  }
+
+  function withSharedHooks(dir: string): string {
+    const shared = mkdtempSync(join(tmpdir(), "shared-hooks-"));
+    writeFileSync(join(shared, "pre-commit"), "#!/bin/sh\necho shared\n", "utf8");
+    execFileSync("git", ["config", "core.hooksPath", shared], { cwd: dir });
+    return shared;
+  }
+
+  it("names the shared pre-commit that no longer runs when it localizes core.hooksPath", async () => {
+    const dir = gitRepo();
+    const shared = withSharedHooks(dir);
+    const res = await run("hook-cli.js", ["install", "--project", dir, "--human"]);
+    expect(res.code).toBe(0);
+    expect(localHooksPath(dir)).toBe(".git/hooks");
+    expect(res.stdout).toContain(join(shared, "pre-commit"));
+    expect(res.stdout).toMatch(/no longer runs?/);
+
+    const again = gitRepo();
+    const sharedAgain = withSharedHooks(again);
+    const json = JSON.parse((await run("hook-cli.js", ["install", "--project", again])).stdout);
+    expect(json.localizedHooksPath).toBe(true);
+    expect(json.previousHooksPath).toBe(sharedAgain);
+  });
+
+  it("refuses over a foreign local hook with core.hooksPath and both hooks unchanged", async () => {
+    const dir = gitRepo();
+    const shared = withSharedHooks(dir);
+    const localHook = join(dir, ".git", "hooks", "pre-commit");
+    mkdirSync(join(dir, ".git", "hooks"), { recursive: true });
+    writeFileSync(localHook, "#!/bin/sh\nnpx lint-staged || exit 1\n", "utf8");
+    const res = await run("hook-cli.js", ["install", "--project", dir]);
+    expect(res.code).toBe(1);
+    expect(JSON.parse(res.stdout).reason).toBe("existing_hook_not_managed");
+    expect(localHooksPath(dir)).toBe(shared);
+    expect(readFileSync(localHook, "utf8")).toBe("#!/bin/sh\nnpx lint-staged || exit 1\n");
+  });
+
+  it("refuses a managed hook edited after install, and --force says the edits are discarded", async () => {
+    const dir = gitRepo();
+    const hook = join(dir, ".git", "hooks", "pre-commit");
+    expect((await run("hook-cli.js", ["install", "--project", dir])).code).toBe(0);
+    const edited = `${readFileSync(hook, "utf8")}npx lint-staged || exit 1\n`;
+    writeFileSync(hook, edited, "utf8");
+
+    const refused = await run("hook-cli.js", ["install", "--project", dir, "--human"]);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/differs from the script this version writes \(edited, or written by an older version\)/);
+    expect(refused.stderr).toContain("--force");
+    expect(readFileSync(hook, "utf8")).toBe(edited);
+
+    const forced = await run("hook-cli.js", ["install", "--project", dir, "--human", "--force"]);
+    expect(forced.code).toBe(0);
+    expect(forced.stdout).toMatch(/edits .*discarded/i);
+    expect(readFileSync(hook, "utf8")).not.toContain("lint-staged");
+  });
+
+  it("reinstalls over an unedited managed hook with exit 0", async () => {
+    const dir = gitRepo();
+    expect((await run("hook-cli.js", ["install", "--project", dir])).code).toBe(0);
+    const again = await run("hook-cli.js", ["install", "--project", dir]);
+    expect(again.code).toBe(0);
+    expect(JSON.parse(again.stdout).installed).toBe(true);
+  });
+
+  it("says the line endings differ, not that the hook is foreign, for a CRLF managed hook (review N-E)", async () => {
+    const dir = gitRepo();
+    const hook = join(dir, ".git", "hooks", "pre-commit");
+    expect((await run("hook-cli.js", ["install", "--project", dir])).code).toBe(0);
+    const crlf = readFileSync(hook, "utf8").replace(/\n/g, "\r\n");
+    writeFileSync(hook, crlf, "utf8");
+    const refused = await run("hook-cli.js", ["install", "--project", dir, "--human"]);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/line endings/);
+    expect(refused.stderr).not.toMatch(/not created by Intent Guard/);
+    expect(readFileSync(hook, "utf8")).toBe(crlf);
+  });
+
+  it("refuses with a plain message and changes nothing when the hooks directory is read-only (review N-A)", async (ctx) => {
+    // Needs chmod to make a directory read-only for this process; as root, or
+    // on a file system that ignores the mode, it cannot, and the test skips.
+    const dir = gitRepo();
+    const shared = withSharedHooks(dir);
+    const hooksDir = join(dir, ".git", "hooks");
+    mkdirSync(hooksDir, { recursive: true });
+    chmodSync(hooksDir, 0o555);
+    try {
+      writeFileSync(join(hooksDir, ".write-probe"), "", "utf8");
+      rmSync(join(hooksDir, ".write-probe"), { force: true });
+      chmodSync(hooksDir, 0o755);
+      ctx.skip("chmod cannot make a directory read-only for this process (root, or a mode-less file system)");
+      return;
+    } catch {
+      // Read-only, as wanted.
+    }
+    try {
+      const res = await run("hook-cli.js", ["install", "--project", dir, "--human"]);
+      expect(res.code).toBe(1);
+      expect(res.stderr).toMatch(/could not be written/i);
+      expect(res.stderr).toMatch(/nothing was changed/i);
+      expect(res.stderr).not.toContain("    at ");
+      expect(localHooksPath(dir)).toBe(shared);
+      expect(existsSync(join(hooksDir, "pre-commit"))).toBe(false);
+    } finally {
+      chmodSync(hooksDir, 0o755);
+    }
   });
 });
 

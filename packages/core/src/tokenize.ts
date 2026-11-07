@@ -97,15 +97,33 @@ function stripEmphasisOutsideCode(text: string): string | null {
     spans.push(span);
     return String.fromCharCode(0xe000 + spans.length - 1);
   });
-  if (spans.length === 0 || spans.length > MAX_CODE_SPANS) return null;
+  // With no pair at all, the lone backtick is literal text too, as in
+  // CommonMark: "_Dockerfile`s_" is an italic possessive (2026-11-06 B1).
+  if (spans.length > MAX_CODE_SPANS) return null;
   const stripped = masked.replace(EMPHASIS_RE, "$2");
   if (stripped === masked) return null;
   return stripped.replace(PRIVATE_USE_ALL_RE, (c) => spans[c.charCodeAt(0) - 0xe000]);
 }
 
-// A possessive "'s" or U+2019 "s" after at least one other character.
+// A possessive "'s" after at least one other character, with the apostrophe
+// written as any glyph people type for one: ASCII, U+2019, U+2018, U+02BC
+// (modifier letter apostrophe), U+00B4 (acute accent), U+2032 (prime),
+// U+FF07 (fullwidth), a backtick, U+201B (reversed-9 quote), U+02B9
+// (modifier prime), U+055A (Armenian apostrophe), U+A78C (saltillo), U+2035
+// (reversed prime), U+FF40 (fullwidth grave), U+02C8 (modifier vertical
+// line), or an ASCII apostrophe with a combining acute (U+0301); and the s
+// in either case, ASCII or fullwidth (U+FF53, U+FF33).
 // The apostrophe may close a quote of its own: "'Dockerfile''s".
-const POSSESSIVE_RE = /(?<=.)['’]s$/u;
+// Built from code points so the source stays ASCII and no glyph is invisible.
+const fromPoints = (...points: number[]): string => String.fromCodePoint(...points);
+const POSSESSIVE_APOSTROPHES = fromPoints(
+  0x27, 0x2019, 0x2018, 0x02bc, 0x00b4, 0x2032, 0xff07, 0x60,
+  0x201b, 0x02b9, 0x055a, 0xa78c, 0x2035, 0xff40, 0x02c8,
+);
+const POSSESSIVE_RE = new RegExp(
+  `(?<=.)(?:[${POSSESSIVE_APOSTROPHES}]|'${fromPoints(0x0301)})[sS${fromPoints(0xff53, 0xff33)}]$`,
+  "u",
+);
 
 /**
  * The thing a rule prohibits: the rule with its list marker, emphasis and
@@ -478,7 +496,8 @@ function reductions(form: string): string[] {
   // The same layer with code spans read as literal text: "_`__init__`_".
   const outsideCode = stripEmphasisOutsideCode(form);
   if (outsideCode !== null) out.push(outsideCode);
-  // A possessive: "PaymentProcessor's", or "router" and U+2019 "s". The form without it is
+  // A possessive: "PaymentProcessor's", "router" and U+2019 "s", or any other
+  // glyph POSSESSIVE_RE accepts, s or S. The form without it is
   // one more candidate, so it names a file only when it is exactly that
   // file's basename or stem, and a name that itself ends in "'s" is still
   // read whole. A bare trailing apostrophe ("Payments'") is already an edge
@@ -502,7 +521,8 @@ function reductions(form: string): string[] {
  * symbol and format characters trimmed from both ends (EDGE_CHAR_RE, but
  * never a glob's own star); a "*.ext" glob out of its emphasis stars; one
  * layer of paired emphasis, read both with code spans removed and with code
- * spans literal; a trailing possessive "'s" or U+2019 "s"; and the stars of
+ * spans literal; a trailing possessive "'s" with any apostrophe glyph in
+ * POSSESSIVE_RE and either case of s; and the stars of
  * emphasis inside a word. Every
  * intermediate form is kept, so a later reduction never discards a form an
  * earlier one reached; but a name is matched only if some chain of

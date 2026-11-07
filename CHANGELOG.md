@@ -22,12 +22,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   esbuild ships an optional platform package, and the suite passes without
   running its install script.
 - The supported-versions table names the latest published minor.
-- Workflow wiring tests now fail a top-level permission grant past
-  `contents: read` (a workflow that uploads SARIF may also grant
-  `security-events: write`), a publish job that is not in the
-  `npm-publish` environment, an action reference that is not a
-  40-character commit SHA, or a checkout that does not set
-  `persist-credentials: false`.
+- Workflow wiring tests now fail, in every workflow under
+  `.github/workflows`, a top-level permission grant past `contents: read`
+  (a workflow with a step that uses CodeQL's `upload-sarif` or `analyze`
+  action may also grant `security-events: write`), a job that publishes a
+  package in any `run:` value, one-line or block (`npm publish` with any
+  flags before `publish`, `pnpm publish` or `yarn npm publish`), outside
+  the `npm-publish` environment, an action reference that is not a
+  40-character commit SHA, or a checkout whose parsed
+  `persist-credentials` is not `false` (a comment never counts).
+
+### Fixed
+
+- A possessive names the file with any apostrophe glyph people type for
+  one (ASCII, U+2019, U+2018, U+02BC, U+00B4, U+2032, U+FF07, a
+  backtick, U+201B, U+02B9, U+055A, U+A78C, U+2035, U+FF40, U+02C8, or
+  an ASCII apostrophe with a combining acute U+0301) and with an
+  uppercase or fullwidth S, as in 1.9.0: `PaymentProcessor's`
+  written with any of them, or `ROUTER'S` against `ROUTER.ts`, blocks
+  again. A lone backtick inside emphasis is read as literal text.
+- The Action no longer says `gate ok` when nothing was checked: with no
+  contract and `require-frozen: false` its last line says the run was
+  skipped and nothing was checked, with the reason, in text and
+  `json-output` mode alike, and the step still exits 0.
+- `hook install` checks that it owns the existing hook before it changes
+  anything, so a refused install leaves both the hook and
+  `core.hooksPath` as they were. When it does localize `core.hooksPath`,
+  the JSON carries `previousHooksPath` and `--human` names the shared
+  hook that no longer runs in the repository. A hook is its own only by
+  the managed header line.
+- `hook install` refuses, with exit 1, to rewrite a managed hook that
+  differs from the script this version writes (edited, or written by an
+  older version), and says how to proceed; `--force` rewrites it and says
+  the edits are discarded. A managed hook whose line endings differ (CRLF
+  or a byte-order mark) is refused with a message that says so and how to
+  fix it. Reinstalling over an unedited hook is unchanged.
+- `hook install` writes the hook before it changes `core.hooksPath`. A
+  hook that cannot be written (a read-only hooks directory or hook file,
+  with or without `--force`) is a refusal with exit 1 and a plain message,
+  and nothing is changed; if `core.hooksPath` then cannot be set, the hook
+  file is put back as it was.
 
 ## [1.10.4] - 2026-11-01
 

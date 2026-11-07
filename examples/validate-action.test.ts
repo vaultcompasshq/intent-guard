@@ -538,6 +538,9 @@ const AMBIENT = new Set([
   "HOME",
   "IFS",
   "BASH_REMATCH",
+  // Set by bash after every pipeline, like BASH_REMATCH after a match: the
+  // run step reads the gate's own status out of it in text mode.
+  "PIPESTATUS",
 ]);
 
 function referencedVariables(script: string): string[] {
@@ -1285,6 +1288,16 @@ describe("action.yml validates its inputs, pinning the gate backward on a pull r
     expect(String(action.inputs?.version?.default ?? "")).toBe(tag);
   });
 
+  it("keeps the README's documented version default equal to the input default (2026-11-06 audit N8)", () => {
+    // The inputs table is where a reader learns which package a tag installs.
+    // Read from the table row itself, so a stale pin there fails here.
+    const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+    const rows = readme.split("\n").filter((line) => line.startsWith("| `version` |"));
+    expect(rows).toHaveLength(1);
+    const documented = /^\| `version` \| `([^`]+)` \|/.exec(rows[0])?.[1];
+    expect(documented).toBe(String(action.inputs?.version?.default ?? ""));
+  });
+
   it("writes the pull-request check accept-only-if, after the version shape check", () => {
     // Stated as text because behaviour cannot see a check that is not there,
     // and because the FAILURE DIRECTION is the point. `[` returns 2 on a
@@ -1362,6 +1375,24 @@ describe("action.yml re-raises the real exit code", () => {
     }
   });
 
+  it("says skipped, never ok, when the run recorded a skip reason (2026-11-06 audit B2)", () => {
+    const harness = makeHarness();
+    harness.context.stepOutputs.run = {
+      exit_code: "0",
+      result_file: "",
+      skip_reason: "no contract to check against",
+    };
+    const skipped = execScript(reportScript, {
+      cwd: cwdForStep("report", harness.context),
+      env: { ...ambientFor(harness, PULL_REQUEST_EVENT), ...envForStep("report", harness.context) },
+    });
+    expect(skipped.status).toBe(0);
+    const lastLine = skipped.stdout.trimEnd().split("\n").pop() ?? "";
+    expect(lastLine).toMatch(/^intent-guard: skipped, nothing was checked/);
+    expect(lastLine).toContain("no contract to check against");
+    expect(skipped.stdout).not.toMatch(/gate ok/);
+  });
+
   it("fails on an empty code rather than reading it as a pass", () => {
     // Empty means the run step never got far enough to record anything: an
     // input failed validation, or the step died. That is not a clean run, and
@@ -1371,5 +1402,113 @@ describe("action.yml re-raises the real exit code", () => {
     expect(missing.status).toBe(2);
     expect(missing.stdout).toMatch(/::error::.*did not run/i);
     expect(missing.stdout).not.toMatch(/blocked/i);
+  });
+});
+
+// The 2026-11-06 audit's B2: the report step printed "intent-guard: gate ok."
+// on a run that checked nothing, and in json-output mode that was the only
+// line in the job log. These run the run step and then the report step with
+// the repository's own built CLI as the gate binary, so the skip the report
+// step detects is the one the real CLI prints or writes, not a fixture's.
+describe("action.yml never reports ok when the gate checked nothing (2026-11-06 audit B2)", () => {
+  const CLI = join(ROOT, "packages/cli/dist/intent-guard.js");
+
+  const FROZEN_CONTRACT = [
+    "contract_id: ic-20261106-aaaaaa",
+    "version: 1.0.0",
+    "original_ask: Update the readme usage docs.",
+    "in_scope:",
+    "  - Update the README usage documentation",
+    "out_of_scope:",
+    "  - Do not change billing",
+    "constraints: []",
+    "acceptance_criteria:",
+    "  - id: ac-1",
+    "    description: README documents one usage example",
+    "    testable: true",
+    'frozen_at: "2026-11-06T00:00:00.000Z"',
+    "frozen_by: user",
+    "approval:",
+    "  approved_by: tester",
+    '  approved_at: "2026-11-06T00:00:00.000Z"',
+    "  method: explicit-flag",
+    "pivot_log: []",
+    "",
+  ].join("\n");
+
+  function parseOutputs(text: string): Record<string, string> {
+    const outputs: Record<string, string> = {};
+    for (const line of text.split("\n")) {
+      const at = line.indexOf("=");
+      if (at > 0) outputs[line.slice(0, at)] = line.slice(at + 1);
+    }
+    return outputs;
+  }
+
+  /** validate is skipped: these inputs are valid, and the point is run plus report. */
+  function runAndReport(
+    overrides: Record<string, string>,
+    contract: string | null,
+  ): { run: GateRun; report: StepResult; outputs: Record<string, string> } {
+    const harness = makeHarness({ paths: "README.md", ...overrides });
+    // The real CLI in place of the recorder the harness planted.
+    writeFileSync(harness.gateBin, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(CLI)} "$@"\n`, "utf8");
+    chmodSync(harness.gateBin, 0o755);
+    if (contract !== null) {
+      mkdirSync(join(harness.workspace, ".intent-guard"), { recursive: true });
+      writeFileSync(join(harness.workspace, ".intent-guard", "intent-contract.yaml"), contract, "utf8");
+    }
+    const run = runGate(harness, PUSH_EVENT);
+    const outputs = parseOutputs(run.outputs);
+    harness.context.stepOutputs.run = outputs;
+    const report = execScript(reportScript, {
+      cwd: cwdForStep("report", harness.context),
+      env: { ...ambientFor(harness, PUSH_EVENT), ...envForStep("report", harness.context) },
+    });
+    return { run, report, outputs };
+  }
+
+  const lastLine = (text: string): string => text.trimEnd().split("\n").pop() ?? "";
+
+  it("says skipped in text mode, with the CLI's own skip line still in the log", () => {
+    const { run, report, outputs } = runAndReport({ "require-frozen": "false" }, null);
+    expect(run.stdout).toContain("Intent Guard gate: skipped, no contract to check against");
+    expect(outputs.exit_code).toBe("0");
+    expect(outputs.skip_reason).not.toBe("");
+    expect(report.status).toBe(0);
+    expect(lastLine(report.stdout)).toMatch(/^intent-guard: skipped, nothing was checked/);
+    expect(report.stdout).not.toMatch(/gate ok/);
+  });
+
+  it("says skipped in json-output mode, naming the JSON result's own skipReason", () => {
+    const { run, report, outputs } = runAndReport(
+      { "require-frozen": "false", "json-output": "out/result.json" },
+      null,
+    );
+    const result = JSON.parse(readFileSync(join(run.harness.workspace, "out/result.json"), "utf8"));
+    expect(typeof result.skipReason).toBe("string");
+    expect(outputs.skip_reason).toBe(result.skipReason);
+    expect(report.status).toBe(0);
+    expect(lastLine(report.stdout)).toMatch(/^intent-guard: skipped, nothing was checked/);
+    expect(lastLine(report.stdout)).toContain(result.skipReason);
+    expect(report.stdout).not.toMatch(/gate ok/);
+  });
+
+  it("still says gate ok when a frozen contract was checked, in both modes", () => {
+    for (const overrides of [{}, { "json-output": "out/result.json" }]) {
+      for (const requireFrozen of ["true", "false"]) {
+        const { report, outputs } = runAndReport({ ...overrides, "require-frozen": requireFrozen }, FROZEN_CONTRACT);
+        expect([overrides, requireFrozen, outputs.exit_code, outputs.skip_reason]).toEqual([overrides, requireFrozen, "0", ""]);
+        expect(lastLine(report.stdout)).toBe("intent-guard: gate ok.");
+      }
+    }
+  });
+
+  it("still blocks a missing contract when require-frozen is on, and says nothing of a skip", () => {
+    const { report, outputs } = runAndReport({}, null);
+    expect(outputs.exit_code).toBe("1");
+    expect(outputs.skip_reason).toBe("");
+    expect(report.status).toBe(1);
+    expect(report.stdout).not.toMatch(/skipped/);
   });
 });

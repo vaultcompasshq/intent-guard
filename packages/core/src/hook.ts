@@ -4,6 +4,8 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -21,7 +23,10 @@ export const CONDUCTOR_HOOK_MARKER = "conductor-managed-pre-commit";
 export interface InstallHookOptions {
   /** Also run vault-guard secret scanning in the generated hook. */
   withVaultGuard?: boolean;
-  /** Overwrite an existing pre-commit hook that Intent Guard did not write. */
+  /**
+   * Overwrite an existing pre-commit hook that Intent Guard did not write, or
+   * a managed one that was edited after install.
+   */
   force?: boolean;
   /**
    * When `core.hooksPath` points outside this repository (e.g. a machine-wide
@@ -38,6 +43,66 @@ export interface InstallHookResult {
   withVaultGuard: boolean;
   /** True when install rewrote local core.hooksPath to `.git/hooks`. */
   localizedHooksPath?: boolean;
+  /**
+   * Set with localizedHooksPath: the hooks directory core.hooksPath pointed
+   * at before, as an absolute path. Its hooks no longer run in this
+   * repository.
+   */
+  previousHooksPath?: string;
+  /**
+   * True when --force rewrote a managed hook that had been edited after
+   * install, so the edits are gone.
+   */
+  discardedEdits?: boolean;
+}
+
+/**
+ * Whether a hook file is one this tool wrote: its second line, right after
+ * the shebang, is the managed marker header exactly. A marker anywhere else
+ * (a comment in a hand-written hook that mentions it) does not count.
+ */
+function isManagedHook(contents: string): boolean {
+  const lines = contents.split("\n");
+  return lines[0]?.startsWith("#!") === true && lines[1] === `# ${CONDUCTOR_HOOK_MARKER}`;
+}
+
+/**
+ * Whether a managed hook is exactly what this version renders, with or
+ * without vault-guard. Anything else was edited after install, or written by
+ * an older version, and is never rewritten without --force.
+ */
+function isUneditedManagedHook(contents: string): boolean {
+  return contents === renderPreCommitHook(false) || contents === renderPreCommitHook(true);
+}
+
+/**
+ * Put a hook file back as it was before install touched it: its old bytes
+ * and mode, or no file at all when there was none. Best effort: install
+ * reports its own failure either way.
+ */
+function restoreHook(hookPath: string, previous: { bytes: Buffer; mode: number } | null): void {
+  try {
+    if (previous === null) {
+      rmSync(hookPath, { force: true });
+    } else {
+      writeFileSync(hookPath, previous.bytes);
+      chmodSync(hookPath, previous.mode);
+    }
+  } catch {
+    // Nothing more can be done from here.
+  }
+}
+
+/**
+ * Whether a hook is a managed one whose only visible difference is its line
+ * endings or a byte-order mark: the header is there, read with CRLF turned
+ * to LF and a leading BOM dropped. Still refused, under its own reason, so
+ * the message can say what actually differs.
+ */
+function hasManagedHeaderWithOtherLineEndings(contents: string): boolean {
+  const bom = String.fromCodePoint(0xfeff);
+  const normalized = (contents.startsWith(bom) ? contents.slice(bom.length) : contents).replace(/\r\n/g, "\n");
+  return normalized !== contents && isManagedHook(normalized);
 }
 
 export interface ResolvedHooksDir {
@@ -207,11 +272,15 @@ export function renderPreCommitHook(withVaultGuard = false): string {
 
 /**
  * Install the Intent Guard pre-commit hook into the repository at projectRoot.
- * Refuses to clobber a foreign hook it did not write unless force is set.
+ * Refuses, unless force is set, to replace a hook it did not write (no
+ * managed header line) or a managed hook edited after install (not byte-equal
+ * to a rendered script). A refusal changes nothing.
  *
  * When a machine-wide `core.hooksPath` points outside this repo, defaults to
  * setting local `core.hooksPath=.git/hooks` so install does not overwrite a
- * shared hooks directory (common with global vault-guard installs).
+ * shared hooks directory (common with global vault-guard installs). That is
+ * done only after the ownership check passes, and the result names the
+ * directory whose hooks stop running here (previousHooksPath).
  */
 export function installPreCommitHook(
   projectRoot: string,
@@ -246,26 +315,15 @@ export function installPreCommitHook(
         hooksPathConfig: null,
       };
 
-  if (
+  // Decided here, acted on only after the ownership check below: a refused
+  // install changes nothing, core.hooksPath included.
+  const localize =
     usableGit &&
     preferLocal &&
-    resolved.hooksPathConfig &&
-    !isPathInside(projectRoot, resolved.hooksDir)
-  ) {
-    const localize = spawnSync(
-      "git",
-      ["config", "core.hooksPath", ".git/hooks"],
-      { cwd: projectRoot, env: gitSpawnEnv(), encoding: "utf8" },
-    );
-    if (localize.status !== 0) {
-      return {
-        installed: false,
-        path: join(resolved.hooksDir, "pre-commit"),
-        reason: "hooks_path_localize_failed",
-        withVaultGuard,
-      };
-    }
-    localizedHooksPath = true;
+    resolved.hooksPathConfig !== null &&
+    !isPathInside(projectRoot, resolved.hooksDir);
+  const previousHooksDir = resolved.hooksDir;
+  if (localize) {
     resolved = {
       hooksDir: join(gitDir, "hooks"),
       displayHookPath: ".git/hooks/pre-commit",
@@ -275,27 +333,92 @@ export function installPreCommitHook(
 
   const hookPath = join(resolved.hooksDir, "pre-commit");
 
-  if (existsSync(hookPath) && !options.force) {
-    const existing = readFileSync(hookPath, "utf8");
-    if (!existing.includes(CONDUCTOR_HOOK_MARKER)) {
-      return {
-        installed: false,
-        path: hookPath,
-        reason: "existing_hook_not_managed",
-        withVaultGuard,
-        localizedHooksPath,
-      };
+  let discardedEdits = false;
+  // The bytes and mode of the hook being replaced, kept so a failure after
+  // the write can put it back.
+  let previous: { bytes: Buffer; mode: number } | null = null;
+  if (existsSync(hookPath)) {
+    const bytes = readFileSync(hookPath);
+    previous = { bytes, mode: statSync(hookPath).mode & 0o7777 };
+    const existing = bytes.toString("utf8");
+    if (hasManagedHeaderWithOtherLineEndings(existing)) {
+      if (!options.force) {
+        return {
+          installed: false,
+          path: hookPath,
+          reason: "managed_hook_line_endings",
+          withVaultGuard,
+        };
+      }
+      discardedEdits = true;
+    } else if (!isManagedHook(existing)) {
+      if (!options.force) {
+        return {
+          installed: false,
+          path: hookPath,
+          reason: "existing_hook_not_managed",
+          withVaultGuard,
+        };
+      }
+    } else if (!isUneditedManagedHook(existing)) {
+      if (!options.force) {
+        return {
+          installed: false,
+          path: hookPath,
+          reason: "managed_hook_edited",
+          withVaultGuard,
+        };
+      }
+      discardedEdits = true;
     }
   }
 
-  mkdirSync(resolved.hooksDir, { recursive: true });
-  writeFileSync(hookPath, renderPreCommitHook(withVaultGuard), "utf8");
-  chmodSync(hookPath, 0o755);
+  // The hook is written first and core.hooksPath changed last, so a write
+  // that fails (a read-only hooks directory or hook file) is a refusal that
+  // has changed nothing, and core.hooksPath never points at a directory
+  // with no hook in it.
+  try {
+    mkdirSync(resolved.hooksDir, { recursive: true });
+    writeFileSync(hookPath, renderPreCommitHook(withVaultGuard), "utf8");
+    chmodSync(hookPath, 0o755);
+  } catch {
+    // A failed chmod after a successful write leaves the new bytes in
+    // place, so the old ones go back; a failed open wrote nothing.
+    restoreHook(hookPath, previous);
+    return {
+      installed: false,
+      path: hookPath,
+      reason: "hook_write_failed",
+      withVaultGuard,
+    };
+  }
+
+  if (localize) {
+    const localized = spawnSync(
+      "git",
+      ["config", "core.hooksPath", ".git/hooks"],
+      { cwd: projectRoot, env: gitSpawnEnv(), encoding: "utf8" },
+    );
+    if (localized.status !== 0) {
+      // Git still reads the shared directory, so the hook just written here
+      // would never run: put back what was there before.
+      restoreHook(hookPath, previous);
+      return {
+        installed: false,
+        path: join(previousHooksDir, "pre-commit"),
+        reason: "hooks_path_localize_failed",
+        withVaultGuard,
+      };
+    }
+    localizedHooksPath = true;
+  }
 
   return {
     installed: true,
     path: hookPath,
     withVaultGuard,
     localizedHooksPath,
+    ...(localizedHooksPath ? { previousHooksPath: previousHooksDir } : {}),
+    ...(discardedEdits ? { discardedEdits } : {}),
   };
 }

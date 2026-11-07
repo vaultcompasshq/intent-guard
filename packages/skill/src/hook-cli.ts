@@ -1,13 +1,21 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { installPreCommitHook } from "@vaultcompass/intent-guard-core";
 import { isHelpFlag, isVersionFlag, missingValue, printUsage, printVersion } from "./usage.js";
 
 const REASONS: Record<string, string> = {
   not_a_git_repo: "No .git directory found. Run this inside a git repository.",
   existing_hook_not_managed:
-    "A pre-commit hook already exists and was not created by Intent Guard. Re-run with --force to overwrite it.",
+    "A pre-commit hook already exists and was not created by Intent Guard. Nothing was changed. Re-run with --force to overwrite it.",
+  managed_hook_edited:
+    "The pre-commit hook carries the Intent Guard header but differs from the script this version writes (edited, or written by an older version), so it was not rewritten and nothing was changed. Re-run with --force to rewrite it (any edits are discarded), or remove the edits by hand and re-run.",
+  managed_hook_line_endings:
+    "The pre-commit hook carries the Intent Guard header, but its line endings differ (CRLF line endings or a byte-order mark), so it was not rewritten and nothing was changed. Convert it to LF line endings with no byte-order mark and re-run, or re-run with --force to rewrite it.",
+  hook_write_failed:
+    "The pre-commit hook could not be written (is the hooks directory or the hook file read-only?), so nothing was changed: not the hook, not core.hooksPath. Make it writable and re-run.",
   hooks_path_localize_failed:
-    "Could not set local core.hooksPath=.git/hooks (machine-wide hooksPath is outside this repo). Set it manually, then re-run.",
+    "Could not set local core.hooksPath=.git/hooks (machine-wide hooksPath is outside this repo), so nothing was changed. Set it manually, then re-run.",
 };
 
 const USAGE = `Usage: intent-guard hook install [flags]
@@ -20,7 +28,8 @@ refuses the commit rather than skipping.
 Flags:
   --project <dir>      Project root (default: .)
   --with-vault-guard   Also run vault-guard secret scanning in the hook
-  --force              Overwrite an existing hook Intent Guard did not write
+  --force              Overwrite an existing hook Intent Guard did not write,
+                       or one it wrote that was edited after install
   --json               Emit JSON (default)
   --human              Human-readable output
   --help, -h           Show this help
@@ -95,6 +104,19 @@ if (args.human) {
       console.log(
         "Set local core.hooksPath=.git/hooks so a machine-wide hooks directory is not overwritten.",
       );
+      if (result.previousHooksPath) {
+        // Saying so is the point: the shared hook stops running here, and
+        // nothing else would tell the user.
+        const sharedPreCommit = join(result.previousHooksPath, "pre-commit");
+        console.log(
+          existsSync(sharedPreCommit)
+            ? `The shared pre-commit hook at ${sharedPreCommit} no longer runs in this repository, nor do the other hooks in ${result.previousHooksPath}.`
+            : `The hooks in ${result.previousHooksPath} no longer run in this repository.`,
+        );
+      }
+    }
+    if (result.discardedEdits) {
+      console.log("The existing hook had been edited after install; those edits are discarded.");
     }
     if (result.withVaultGuard) console.log("Paired with vault-guard secret scanning.");
     console.log("Bypass a single commit with: git commit --no-verify");

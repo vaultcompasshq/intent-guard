@@ -341,6 +341,106 @@ describe("the basename safety net", () => {
   });
 });
 
+// The 2026-11-06 audit's B1: a possessive written with an apostrophe other
+// than ASCII or U+2019, or with an uppercase S, blocked in 1.9.0 and passed
+// in 1.10.1 through 1.10.4. Each glyph below is one people actually type for
+// an apostrophe: the left single quote, the modifier letter apostrophe, the
+// acute accent (a German keyboard's apostrophe key), the prime, the
+// fullwidth apostrophe and the backtick.
+const POSSESSIVE_APOSTROPHES: Array<[string, string]> = [
+  ["left single quote U+2018", cp(0x2018)],
+  ["modifier letter apostrophe U+02BC", cp(0x02bc)],
+  ["acute accent U+00B4", cp(0x00b4)],
+  ["prime U+2032", cp(0x2032)],
+  ["fullwidth apostrophe U+FF07", cp(0xff07)],
+  ["backtick", "`"],
+  // The review of the 2026-11-06 fix (N-C): each of these blocked in 1.9.0
+  // and passed in 1.10.4.
+  ["reversed-9 quote U+201B", cp(0x201b)],
+  ["modifier prime U+02B9", cp(0x02b9)],
+  ["Armenian apostrophe U+055A", cp(0x055a)],
+  ["saltillo U+A78C", cp(0xa78c)],
+  ["reversed prime U+2035", cp(0x2035)],
+  ["fullwidth grave U+FF40", cp(0xff40)],
+  ["modifier vertical line U+02C8", cp(0x02c8)],
+  ["apostrophe with a combining acute U+0301", `'${cp(0x0301)}`],
+];
+
+describe("a possessive with any apostrophe glyph or an uppercase S blocks (2026-11-06 audit B1)", () => {
+  it.each(POSSESSIVE_APOSTROPHES)("blocks PaymentProcessor's with the %s", (_label, glyph) => {
+    const rule = `Do not change PaymentProcessor${glyph}s retry logic`;
+    const path = "src/PaymentProcessor.ts";
+    expect(namesChangedFile(rule, [path])).toBe(true);
+    const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+    expect(result.action).toBe("soft_block");
+    expect(result.overall).toBe(71);
+  });
+
+  it.each(POSSESSIVE_APOSTROPHES)("blocks the router's with the %s", (_label, glyph) => {
+    const rule = `Do not change the router${glyph}s middleware`;
+    const result = scoreDrift(contractWith([rule]), { changedPaths: ["src/router.ts"] });
+    expect(result.action).toBe("soft_block");
+    expect(result.overall).toBe(71);
+  });
+
+  it.each([
+    ["Do not change PaymentProcessor'S retry logic", "src/PaymentProcessor.ts"],
+    [`Do not change PaymentProcessor${cp(0x2019)}S retry logic`, "src/PaymentProcessor.ts"],
+    ["DO NOT CHANGE THE ROUTER'S MIDDLEWARE", "src/ROUTER.ts"],
+  ])("blocks a possessive with an uppercase S: %j against %s", (rule, path) => {
+    expect(namesChangedFile(rule, [path])).toBe(true);
+    const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+    expect(result.action).toBe("soft_block");
+    expect(result.overall).toBe(71);
+  });
+
+  // The review of the 2026-11-06 fix (N-C): a fullwidth s after the apostrophe.
+  it.each([
+    [`Do not change PaymentProcessor'${cp(0xff53)} retry logic`, "src/PaymentProcessor.ts"],
+    [`Do not change PaymentProcessor'${cp(0xff33)} retry logic`, "src/PaymentProcessor.ts"],
+    [`Do not change the router${cp(0x2019)}${cp(0xff53)} middleware`, "src/router.ts"],
+  ])("blocks a possessive with a fullwidth s: %j against %s", (rule, path) => {
+    expect(namesChangedFile(rule, [path])).toBe(true);
+    const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+    expect(result.action).toBe("soft_block");
+    expect(result.overall).toBe(71);
+  });
+
+  it("reads a lone backtick as literal inside emphasis, so an italic backtick possessive blocks", () => {
+    for (const rule of ["Never touch _Dockerfile`s_ config", "Never touch __Dockerfile`S__. config"]) {
+      expect(namesChangedFile(rule, ["Dockerfile"]), rule).toBe(true);
+      expect(scoreDrift(contractWith([rule]), { changedPaths: ["Dockerfile"] }).action, rule).toBe("soft_block");
+    }
+  });
+
+  it("leaves a word that already holds a private-use character to the plain emphasis strip (2026-11-06 audit N7)", () => {
+    // The code-span reading masks each span as U+E000 onward and puts the
+    // spans back by that index. A private-use character already in the word
+    // would be read back as a span that does not exist, "undefined", and the
+    // possessive reduction would then name a file called undefined.
+    const rule = `Never touch _${cp(0xe001)}_\`s\``;
+    expect(namesChangedFile(rule, ["src/undefined.ts"])).toBe(false);
+    // The same shape with a real word names that file: the guard is what
+    // stops the first one, not the shape.
+    expect(namesChangedFile("Never touch _undefined_`s`", ["src/undefined.ts"])).toBe(true);
+  });
+
+  it.each([
+    ["Do not change the sync's state", "src/SyncStatus.tsx"],
+    ["Do not change the router's middleware", "src/routers.ts"],
+    // Not the backtick: removing a lone backtick is its own reduction, which
+    // reads "router`s" as "routers" and so names routers.ts, as it did
+    // before this change.
+    ...POSSESSIVE_APOSTROPHES.filter(([, glyph]) => glyph !== "`").map(
+      ([, glyph]): [string, string] => [`Do not change the router${glyph}s middleware`, "src/routers.ts"],
+    ),
+    ["Do not change the ROUTER'S middleware", "src/Router.ts"],
+  ])("keeps a look-alike a pass: %j against %s", (rule, path) => {
+    expect(namesChangedFile(rule, [path])).toBe(false);
+    expect(scoreDrift(contractWith([rule]), { changedPaths: [path] }).action).toBe("proceed");
+  });
+});
+
 // The 2026-10-28 audit's B1: the edge trim went straight through a name's own
 // leading symbol, so the stem of a SvelteKit route file ("+layout" for
 // +layout.svelte) inside quotes, parens or before a full stop reduced only
@@ -711,6 +811,13 @@ const SUFFIXES = [
 const applies = (wrapName: string, name: string): boolean =>
   !(name.startsWith("_") && wrapName.includes("underscore"));
 
+// Every possessive form the reader accepts: each apostrophe glyph, with a
+// lowercase, an uppercase and a fullwidth s (2026-11-01 and 2026-11-06
+// audits, B1, and the review of the 2026-11-06 fix, N-C).
+const POSSESSIVE_FORMS: string[] = ["'", cp(0x2019), ...POSSESSIVE_APOSTROPHES.map(([, glyph]) => glyph)].flatMap(
+  (glyph) => [`${glyph}s`, `${glyph}S`, `${glyph}${cp(0xff53)}`, `${glyph}${cp(0xff33)}`],
+);
+
 describe("a protected name in any combination of wrappers still names the file (property)", () => {
   it("names the file through every pair of wrappers, escaped or not, with a suffix", () => {
     const failures: string[] = [];
@@ -764,7 +871,7 @@ describe("a protected name in any combination of wrappers still names the file (
       if (name.startsWith("*")) continue;
       for (const [wrapName, wrap] of WRAPS) {
         if (!applies(wrapName, name)) continue;
-        for (const possessive of ["'s", `${cp(0x2019)}s`]) {
+        for (const possessive of POSSESSIVE_FORMS) {
           for (const suffix of ["", ".", ")."]) {
             const rule = `Never touch ${wrap(`${name}${possessive}`)}${suffix} config`;
             const after = `Never touch ${wrap(name)}${possessive}${suffix} config`;
