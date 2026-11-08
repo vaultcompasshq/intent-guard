@@ -105,25 +105,43 @@ function stripEmphasisOutsideCode(text: string): string | null {
   return stripped.replace(PRIVATE_USE_ALL_RE, (c) => spans[c.charCodeAt(0) - 0xe000]);
 }
 
-// A possessive "'s" after at least one other character, with the apostrophe
-// written as any glyph people type for one: ASCII, U+2019, U+2018, U+02BC
-// (modifier letter apostrophe), U+00B4 (acute accent), U+2032 (prime),
-// U+FF07 (fullwidth), a backtick, U+201B (reversed-9 quote), U+02B9
-// (modifier prime), U+055A (Armenian apostrophe), U+A78C (saltillo), U+2035
-// (reversed prime), U+FF40 (fullwidth grave), U+02C8 (modifier vertical
-// line), or an ASCII apostrophe with a combining acute (U+0301); and the s
-// in either case, ASCII or fullwidth (U+FF53, U+FF33).
-// The apostrophe may close a quote of its own: "'Dockerfile''s".
+// The glyphs read as a possessive's apostrophe, and only these, 31: ASCII,
+// U+2019, U+2018, U+02BC (modifier letter apostrophe), U+00B4 (acute),
+// U+2032 (prime), U+FF07 (fullwidth), a backtick, U+201B (reversed-9 quote),
+// U+02B9 (modifier prime), U+055A (Armenian), U+A78C and U+A78B (saltillo,
+// small and capital), U+2035 (reversed prime), U+FF40 (fullwidth grave),
+// U+02C8 (modifier vertical line), U+02BB and U+02BD (modifier turned and
+// reversed comma), U+05F3 (geresh), U+1FBF (psili), U+1FBD (koronis),
+// U+02EE (modifier double apostrophe), U+0313 and U+0343 (combining comma
+// above, combining koronis), U+2033 (double prime), U+275B and U+275C (comma
+// quote ornaments), U+FE10 (vertical comma), and U+1FFD, U+1FEF, U+0374, the
+// canonical equivalents of U+00B4, the backtick and U+02B9. Nothing else.
 // Built from code points so the source stays ASCII and no glyph is invisible.
 const fromPoints = (...points: number[]): string => String.fromCodePoint(...points);
 const POSSESSIVE_APOSTROPHES = fromPoints(
   0x27, 0x2019, 0x2018, 0x02bc, 0x00b4, 0x2032, 0xff07, 0x60,
   0x201b, 0x02b9, 0x055a, 0xa78c, 0x2035, 0xff40, 0x02c8,
+  0x02bb, 0x02bd, 0x05f3, 0x1fbf, 0x1fbd, 0x02ee, 0x0313, 0x2033,
+  0x275c, 0xfe10, 0xa78b, 0x0343, 0x1ffd, 0x1fef, 0x0374, 0x275b,
 );
+/** The possessive glyph set, one string per glyph; for the tests. */
+export const POSSESSIVE_APOSTROPHE_SET: readonly string[] = Object.freeze([...POSSESSIVE_APOSTROPHES]);
+// A singular possessive "'s" after at least one other character: one glyph
+// of the set, any combining marks after it (U+0301 and others), then the s
+// in either case, ASCII or fullwidth (U+FF53, U+FF33), and any combining
+// marks after that. The apostrophe may close a quote of its own:
+// "'Dockerfile''s".
 const POSSESSIVE_RE = new RegExp(
-  `(?<=.)(?:[${POSSESSIVE_APOSTROPHES}]|'${fromPoints(0x0301)})[sS${fromPoints(0xff53, 0xff33)}]$`,
+  `(?<=.)[${POSSESSIVE_APOSTROPHES}]\\p{M}*[sS${fromPoints(0xff53, 0xff33)}]\\p{M}*$`,
   "u",
 );
+// A plural or bare trailing possessive, "Payments'": one glyph of the set
+// and any combining marks after it, at the end, after at least one other
+// character. trimEdges already removes the glyphs that are punctuation or
+// symbols, but not the nine letters (U+02BC, U+02B9, U+02C8, U+A78C, U+A78B,
+// U+02BB, U+02BD, U+02EE, U+0374), the combining U+0313 and U+0343, or a
+// glyph with a combining mark after it; this reduction removes each of them.
+const TRAILING_APOSTROPHE_RE = new RegExp(`(?<=.)[${POSSESSIVE_APOSTROPHES}]\\p{M}*$`, "u");
 
 /**
  * The thing a rule prohibits: the rule with its list marker, emphasis and
@@ -497,12 +515,14 @@ function reductions(form: string): string[] {
   const outsideCode = stripEmphasisOutsideCode(form);
   if (outsideCode !== null) out.push(outsideCode);
   // A possessive: "PaymentProcessor's", "router" and U+2019 "s", or any other
-  // glyph POSSESSIVE_RE accepts, s or S. The form without it is
-  // one more candidate, so it names a file only when it is exactly that
-  // file's basename or stem, and a name that itself ends in "'s" is still
-  // read whole. A bare trailing apostrophe ("Payments'") is already an edge
-  // character, removed by trimEdges.
+  // glyph of POSSESSIVE_APOSTROPHES, s or S, with or without combining marks.
+  // The form without it is one more candidate, so it names a file only when
+  // it is exactly that file's basename or stem, and a name that itself ends
+  // in "'s" is still read whole. A plural or bare trailing possessive
+  // ("Payments'") drops the glyph alone, through TRAILING_APOSTROPHE_RE, for
+  // the glyphs trimEdges keeps.
   if (POSSESSIVE_RE.test(form)) out.push(form.replace(POSSESSIVE_RE, ""));
+  if (TRAILING_APOSTROPHE_RE.test(form)) out.push(form.replace(TRAILING_APOSTROPHE_RE, ""));
   // Emphasis inside a word: CommonMark reads "**Docker**file" and
   // "Docker*file*" as one word with a bold or italic part, which EMPHASIS_RE
   // (a pair off word boundaries) does not remove. A star touching a letter
@@ -521,8 +541,9 @@ function reductions(form: string): string[] {
  * symbol and format characters trimmed from both ends (EDGE_CHAR_RE, but
  * never a glob's own star); a "*.ext" glob out of its emphasis stars; one
  * layer of paired emphasis, read both with code spans removed and with code
- * spans literal; a trailing possessive "'s" with any apostrophe glyph in
- * POSSESSIVE_RE and either case of s; and the stars of
+ * spans literal; a trailing possessive "'s" with any glyph of
+ * POSSESSIVE_APOSTROPHES, either case of s and any combining marks, or that
+ * glyph alone at the end (a plural possessive); and the stars of
  * emphasis inside a word. Every
  * intermediate form is kept, so a later reduction never discards a form an
  * earlier one reached; but a name is matched only if some chain of

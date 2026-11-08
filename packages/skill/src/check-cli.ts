@@ -268,6 +268,12 @@ function warningLines(): string[] {
   return result.warnings.map((warning) => `  warning: ${warning}`);
 }
 
+// An ok over zero changed paths (an empty diff, or a base that is HEAD)
+// checked no change, and the text line says so rather than reading like an
+// ok over some (2026-11-08 re-grade N2). The JSON is unchanged, byte for
+// byte (gate-parity.test.ts); it already carries no drift on such a run.
+const changedPathCount = changedPaths.length;
+
 if (args.json) {
   console.log(JSON.stringify({ ...result, crossSessionDrift: crossSession }));
 } else if (result.status === "blocked") {
@@ -285,7 +291,7 @@ if (args.json) {
   for (const line of proposalLines()) console.log(line);
   for (const line of warningLines()) console.log(line);
 } else {
-  console.log("✓ Intent Guard gate: ok");
+  console.log(changedPathCount === 0 ? "✓ Intent Guard gate: ok, 0 changed paths judged" : "✓ Intent Guard gate: ok");
   for (const line of proposalLines()) console.log(line);
   for (const line of warningLines()) console.log(line);
   if (result.drift && result.drift.action !== "proceed") {

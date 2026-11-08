@@ -8,15 +8,17 @@ import {
   existsSync,
   chmodSync,
   rmSync,
+  realpathSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   CONDUCTOR_HOOK_MARKER,
   installPreCommitHook,
   renderPreCommitHook,
 } from "../src/hook.js";
+import { runDoctor } from "../src/doctor.js";
 
 function gitProject(): string {
   const dir = mkdtempSync(join(tmpdir(), "conductor-hook-"));
@@ -368,5 +370,166 @@ describe("installPreCommitHook refuses before it changes anything (2026-11-06 au
     const forced = installPreCommitHook(dir, { force: true });
     expect(forced.installed).toBe(true);
     expect(readFileSync(hookPath, "utf8")).toBe(renderPreCommitHook(false));
+  });
+});
+
+// The 2026-11-08 re-grade's N1. In a linked worktree `.git` is a file, so
+// the hooks directory is not `.git/hooks` under the worktree: git keeps one
+// hooks directory for every worktree, in the common git directory. Install
+// and doctor ask git where it is.
+describe("hook install and doctor in a linked worktree (2026-11-08 re-grade N1)", () => {
+  // A main checkout with one commit and a linked worktree beside it.
+  function linkedWorktree(): { main: string; linked: string } {
+    const main = realGitProject();
+    execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "init"], { cwd: main });
+    const linked = join(mkdtempSync(join(tmpdir(), "conductor-hook-wt-")), "linked");
+    execFileSync("git", ["worktree", "add", "-q", linked, "-b", "side"], { cwd: main });
+    return { main, linked };
+  }
+
+  function configuredHooksPath(dir: string): string {
+    try {
+      return execFileSync("git", ["config", "--get", "core.hooksPath"], { cwd: dir, encoding: "utf8" }).trim();
+    } catch {
+      return "";
+    }
+  }
+
+  // Where git itself runs hooks from in `dir`, as a real path.
+  function gitHooksDir(dir: string): string {
+    const out = execFileSync("git", ["rev-parse", "--git-path", "hooks"], { cwd: dir, encoding: "utf8" }).trim();
+    return realpathSync(resolve(dir, out));
+  }
+
+  // A commit attempt in `dir` with no intent-guard or npx on PATH: the
+  // managed hook, if git runs it, refuses with its own message.
+  function commitWithBareHook(dir: string): { status: number | null; stderr: string } {
+    const result = spawnSync("git", ["commit", "--allow-empty", "-m", "probe"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, PATH: "/usr/bin:/bin" },
+    });
+    return { status: result.status, stderr: result.stderr };
+  }
+
+  it("installs into the common hooks directory, where git runs it from the linked worktree", (ctx) => {
+    const { main, linked } = linkedWorktree();
+    if (configuredHooksPath(linked) !== "") {
+      ctx.skip("a machine-wide core.hooksPath is set; this case is the default hooks directory");
+      return;
+    }
+    const gitFile = readFileSync(join(linked, ".git"), "utf8");
+    const result = installPreCommitHook(linked);
+    expect(result.installed).toBe(true);
+    expect(result.localizedHooksPath).toBeFalsy();
+    expect(realpathSync(result.path)).toBe(join(realpathSync(join(main, ".git", "hooks")), "pre-commit"));
+    expect(realpathSync(result.path)).toBe(join(gitHooksDir(linked), "pre-commit"));
+    expect(readFileSync(result.path, "utf8")).toBe(renderPreCommitHook(false));
+    expect(configuredHooksPath(linked)).toBe("");
+    expect(readFileSync(join(linked, ".git"), "utf8")).toBe(gitFile);
+
+    const commit = commitWithBareHook(linked);
+    expect(commit.status).not.toBe(0);
+    expect(commit.stderr).toContain("pre-commit: intent-guard not found on PATH");
+    // A second install is the same unedited managed hook: idempotent.
+    expect(installPreCommitHook(linked).installed).toBe(true);
+  });
+
+  it("lets doctor see the hook install wrote from the linked worktree", (ctx) => {
+    const { linked } = linkedWorktree();
+    if (configuredHooksPath(linked) !== "") {
+      ctx.skip("a machine-wide core.hooksPath is set; this case is the default hooks directory");
+      return;
+    }
+    expect(runDoctor(linked).findings.some((f) => f.id === "git_pre_commit_missing")).toBe(true);
+    expect(installPreCommitHook(linked).installed).toBe(true);
+    const after = runDoctor(linked).findings;
+    expect(after.some((f) => f.id === "git_pre_commit_conductor")).toBe(true);
+    expect(after.some((f) => f.id === "git_pre_commit_missing")).toBe(false);
+  });
+
+  it("refuses a foreign hook in the common hooks directory from the linked worktree", () => {
+    const FOREIGN = "#!/bin/sh\nnpx lint-staged || exit 1\n";
+    const { main, linked } = linkedWorktree();
+    mkdirSync(join(main, ".git", "hooks"), { recursive: true });
+    const hook = join(main, ".git", "hooks", "pre-commit");
+    writeFileSync(hook, FOREIGN, "utf8");
+    const result = installPreCommitHook(linked);
+    expect(result.installed).toBe(false);
+    expect(result.reason).toBe("existing_hook_not_managed");
+    expect(readFileSync(hook, "utf8")).toBe(FOREIGN);
+  });
+
+  it("still installs into .git/hooks in the main checkout of the same repository", (ctx) => {
+    const { main } = linkedWorktree();
+    if (configuredHooksPath(main) !== "") {
+      ctx.skip("a machine-wide core.hooksPath is set; this case is the default hooks directory");
+      return;
+    }
+    const result = installPreCommitHook(main);
+    expect(result.installed).toBe(true);
+    expect(realpathSync(result.path)).toBe(join(realpathSync(join(main, ".git", "hooks")), "pre-commit"));
+  });
+
+  it("installs into an in-repo core.hooksPath of the linked worktree without localizing", () => {
+    const { linked } = linkedWorktree();
+    mkdirSync(join(linked, ".githooks"), { recursive: true });
+    execFileSync("git", ["config", "core.hooksPath", ".githooks"], { cwd: linked });
+    const result = installPreCommitHook(linked);
+    expect(result.installed).toBe(true);
+    expect(result.localizedHooksPath).toBeFalsy();
+    expect(existsSync(join(linked, ".githooks", "pre-commit"))).toBe(true);
+    expect(configuredHooksPath(linked)).toBe(".githooks");
+  });
+
+  it("localizes a machine-wide core.hooksPath to the common hooks directory, which runs in both checkouts", () => {
+    const { main, linked } = linkedWorktree();
+    const shared = mkdtempSync(join(tmpdir(), "shared-hooks-"));
+    writeFileSync(join(shared, "pre-commit"), "#!/bin/sh\necho shared\n", "utf8");
+    execFileSync("git", ["config", "core.hooksPath", shared], { cwd: main });
+
+    const result = installPreCommitHook(linked);
+    expect(result.installed).toBe(true);
+    expect(result.localizedHooksPath).toBe(true);
+    expect(result.previousHooksPath).toBe(shared);
+    const common = realpathSync(join(main, ".git", "hooks"));
+    expect(realpathSync(result.path)).toBe(join(common, "pre-commit"));
+    expect(result.hooksPathSetTo).toBe(configuredHooksPath(linked));
+    expect(readFileSync(join(shared, "pre-commit"), "utf8")).toBe("#!/bin/sh\necho shared\n");
+    // The value git now reads names the common hooks directory from either
+    // checkout, so the hook runs in both.
+    expect(gitHooksDir(linked)).toBe(common);
+    expect(gitHooksDir(main)).toBe(common);
+    for (const dir of [linked, main]) {
+      const commit = commitWithBareHook(dir);
+      expect(commit.status, dir).not.toBe(0);
+      expect(commit.stderr, dir).toContain("pre-commit: intent-guard not found on PATH");
+    }
+    // Installing again finds its own hooks directory configured: no second
+    // localization, nothing named as no longer running.
+    const again = installPreCommitHook(linked);
+    expect(again.installed).toBe(true);
+    expect(again.localizedHooksPath).toBeFalsy();
+    expect(again.previousHooksPath).toBeUndefined();
+  });
+
+  it("names the real cause when the configured hooks directory cannot exist in the linked worktree", () => {
+    // KNOWN GAP, pinned on purpose: this test pins the documented Not handled
+    // refusal (installed false, core.hooksPath left as .git/hooks). It is not
+    // a safety property. A fix that repairs a relative .git/hooks from a
+    // linked worktree is meant to turn it red; rewrite it then.
+    // A relative core.hooksPath of .git/hooks, as a main-checkout install
+    // writes it, names a path inside the worktree's .git file.
+    const { main, linked } = linkedWorktree();
+    execFileSync("git", ["config", "core.hooksPath", ".git/hooks"], { cwd: main });
+    const gitFile = readFileSync(join(linked, ".git"), "utf8");
+    const result = installPreCommitHook(linked);
+    expect(result.installed).toBe(false);
+    expect(result.reason).toBe("hook_write_failed");
+    expect(result.error).toMatch(/ENOTDIR|not a directory/);
+    expect(result.error).not.toMatch(/read-only|EACCES|EPERM/);
+    expect(readFileSync(join(linked, ".git"), "utf8")).toBe(gitFile);
+    expect(configuredHooksPath(linked)).toBe(".git/hooks");
+    expect(existsSync(join(main, ".git", "hooks", "pre-commit"))).toBe(false);
   });
 });

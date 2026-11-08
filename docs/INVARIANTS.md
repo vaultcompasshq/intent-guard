@@ -748,7 +748,7 @@ writes no budget`.
 
 Drift reads only the changed paths and the caller's `--signals`. The
 pre-commit hook runs `check --staged` with no signals
-(`packages/core/src/hook.ts:234`), and the GitHub Action builds its `check`
+(`packages/core/src/hook.ts:284`), and the GitHub Action builds its `check`
 arguments with `--paths` and no signals (`action.yml:675`, `action.yml:723`),
 so where the gate blocks, a path is the only evidence there is.
 
@@ -759,47 +759,50 @@ tokens are in it. For an out_of_scope item, the match is demoted to partial
 and not counted only when it has no evidence at all outside the file name: no
 token in that second set, no slash path, no word of the item naming the
 file under the closed rule in `namesChangedFile`
-(`packages/core/src/tokenize.ts:681`: exactly the basename, the basename
+(`packages/core/src/tokenize.ts:702`: exactly the basename, the basename
 without its final extension, or a `*.ext` word, case-sensitive), and no
 whole basename under the safety net `mentionsChangedBasename`
-(`packages/core/src/tokenize.ts:730`, called at
+(`packages/core/src/tokenize.ts:751`, called at
 `packages/core/src/drift.ts:304`).
 
 The closed rule's words come from several readings of the whole item
-(`ruleReadings`, `packages/core/src/tokenize.ts:632`): as written, with
+(`ruleReadings`, `packages/core/src/tokenize.ts:653`): as written, with
 markdown backslash escapes before ASCII punctuation undone
-(`MARKDOWN_ESCAPE_RE`, `packages/core/src/tokenize.ts:372`), and with HTML
-tags removed (every tag, `packages/core/src/tokenize.ts:375`, and separately
-only paired elements, `packages/core/src/tokenize.ts:379`), each also with
+(`MARKDOWN_ESCAPE_RE`, `packages/core/src/tokenize.ts:390`), and with HTML
+tags removed (every tag, `packages/core/src/tokenize.ts:393`, and separately
+only paired elements, `packages/core/src/tokenize.ts:397`), each also with
 emphasis that spans more than one word removed
-(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:571`, a single linear
+(`stripMultiwordOnce`, `packages/core/src/tokenize.ts:592`, a single linear
 scan per marker; at most `MAX_NESTING_PASSES` layers of nested emphasis or
-HTML elements, `packages/core/src/tokenize.ts:556`). The escape
+HTML elements, `packages/core/src/tokenize.ts:577`). The escape
 is undone before any backslash is read as a slash, so `payment\_methods`
 is payment_methods (1.10.1 read it as the path `payment/_methods`), while
 the as-written reading keeps a real Windows path (`.\Dockerfile`). Each
 word of every reading is compared in every form `wordForms`
-(`packages/core/src/tokenize.ts:534`) reaches: from the word as written,
+(`packages/core/src/tokenize.ts:555`) reaches: from the word as written,
 each single-step reduction in `reductions`
-(`packages/core/src/tokenize.ts:481`) is applied to every form found so far
+(`packages/core/src/tokenize.ts:499`) is applied to every form found so far
 until no new form appears, and every form is a candidate. The reductions
 are: backslashes read as slashes; a markdown link's text and target; a
 leading `./`, `../` or lone `/`; a trailing footnote or reference marker;
 a `*.ext` glob out of its emphasis stars; one layer of paired emphasis
-(`packages/core/src/tokenize.ts:495`); the same layer with code spans read
+(`packages/core/src/tokenize.ts:513`); the same layer with code spans read
 as literal text (`stripEmphasisOutsideCode`,
 `packages/core/src/tokenize.ts:93`, pushed at
-`packages/core/src/tokenize.ts:498`); a trailing possessive, any apostrophe
-glyph and `s` or `S` (`POSSESSIVE_RE`, `packages/core/src/tokenize.ts:123`, applied at
-`packages/core/src/tokenize.ts:505`); every star, when a star touches a
+`packages/core/src/tokenize.ts:516`); a trailing possessive, a glyph of
+`POSSESSIVE_APOSTROPHES` and `s` or `S`, each followed by any combining
+marks (`POSSESSIVE_RE`), and a trailing glyph of the same set alone, the
+plural possessive (`TRAILING_APOSTROPHE_RE`), both in
+`packages/core/src/tokenize.ts` and applied in `reductions`; every star,
+when a star touches a
 letter or digit, for emphasis inside a word such as `**Docker**file`
-(`packages/core/src/tokenize.ts:511`); and `trimEdges`
-(`packages/core/src/tokenize.ts:403`), which trims characters in the
+(`packages/core/src/tokenize.ts:531`); and `trimEdges`
+(`packages/core/src/tokenize.ts:421`), which trims characters in the
 Unicode punctuation, symbol and format classes (`EDGE_CHAR_RE`,
-`packages/core/src/tokenize.ts:362`) from the ends, except `_`, `/`, `\`,
-a leading `.` or `~` (`packages/core/src/tokenize.ts:367`,
-`packages/core/src/tokenize.ts:368`), and a leading star with a `.` right
-after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:414`).
+`packages/core/src/tokenize.ts:380`) from the ends, except `_`, `/`, `\`,
+a leading `.` or `~` (`packages/core/src/tokenize.ts:385`,
+`packages/core/src/tokenize.ts:386`), and a leading star with a `.` right
+after it, the star of a `*.ext` glob (`packages/core/src/tokenize.ts:432`).
 It gives three forms: the word trimmed all the way at both ends, and the
 word with one character trimmed at the start only or at the end only.
 Because every reduction is applied again to every form, the one-character
@@ -812,15 +815,15 @@ SvelteKit route stems in quotes, parens or before a full stop passed where
 1.10.1 blocked). A partial trim sits L + T steps deep, for L trimmable
 characters at the start and T at the end, and the search stops at the
 `MAX_WORD_FORMS` cap of 512 forms per word
-(`packages/core/src/tokenize.ts:382`), which is also what keeps one long
+(`packages/core/src/tokenize.ts:400`), which is also what keeps one long
 word linear. Deep wrapping reaches the cap first: in 44e4cd7, `+layout` in
 21 quotes on each side, in 14 parens around backticks, or in 10 `*"` pairs
 passed (the review of 44e4cd7, M1; 1.10.1 blocked the first two). So a word
 whose search stops at the cap with forms still unread is not read as naming
 nothing. `wordForms` reports it, and `namesChangedFile` also tests every
 form that word did reach with `edgeWraps`
-(`packages/core/src/tokenize.ts:464`, called at
-`packages/core/src/tokenize.ts:698`): true when the form is the basename or
+(`packages/core/src/tokenize.ts:482`, called at
+`packages/core/src/tokenize.ts:719`): true when the form is the basename or
 stem with only leading-trimmable characters before it and only
 trailing-trimmable characters after it, the same answer the one-character
 trims give, computed directly in time linear in the word. A name wrapped
@@ -868,17 +871,17 @@ and `__Makefile__` names `Makefile`. 1.10.1 never stripped a dunder, which
 made `__payment_methods__` a block-to-pass against 1.9.0. A
 slash fragment reads backslashes as slashes and drops trailing sentence
 punctuation from each segment (`slashJoinedFragments`,
-`packages/core/src/tokenize.ts:287`), so `src\Dockerfile` and
+`packages/core/src/tokenize.ts:305`), so `src\Dockerfile` and
 `src/Dockerfile.` are the path `src/Dockerfile`. A home-directory path
 (`~/Dockerfile`) names nothing, by ruling: it is outside the repository,
 which is why a leading `~` is never trimmed.
 
 The safety net `mentionsChangedBasename` folds the item and each changed
 basename the same way (NFKC, format characters removed, markdown escapes
-undone, lower case, `packages/core/src/tokenize.ts:711`) and is true when
+undone, lower case, `packages/core/src/tokenize.ts:732`) and is true when
 the whole basename, extension included, occurs with no letter, digit, `_`,
 `-` or path separator on either side and no `.` before it
-(`packages/core/src/tokenize.ts:708`, `packages/core/src/tokenize.ts:738`).
+(`packages/core/src/tokenize.ts:729`, `packages/core/src/tokenize.ts:759`).
 It never matches a basename without its extension, so `billing` against
 `src/Billing.tsx` stays a pass (ruled case-sensitive), and never a name
 behind a path separator (`~/Dockerfile`, `infra/Dockerfile`). It only stops
@@ -892,7 +895,7 @@ Constraints are never demoted and keep the 1.9.0 strength
 (`packages/core/src/drift.ts:346`).
 
 Matchers are built from `prohibitedSubject`
-(`packages/core/src/tokenize.ts:134`), the rule without its leading negation;
+(`packages/core/src/tokenize.ts:152`), the rule without its leading negation;
 `stripEmphasis` (`packages/core/src/tokenize.ts:61`) removes only paired
 emphasis markers and backticks, never an underscore inside an identifier:
 `EMPHASIS_RE` (`packages/core/src/tokenize.ts:55`) requires a non-alphanumeric
@@ -910,7 +913,7 @@ out_of_scope item or a constraint (`packages/core/src/drift.ts:277`,
 `packages/core/src/drift.ts:334`), and each such token is in `ruleTokens`
 (`packages/core/src/drift.ts:225`). An ask token joins the scope set only
 when no token of `ruleTokens` matches it (`packages/core/src/drift.ts:229`),
-and `tokensMatch` is symmetric (`packages/core/src/tokenize.ts:172`), so no
+and `tokensMatch` is symmetric (`packages/core/src/tokenize.ts:190`), so no
 ask token can match, and subtract, any token a rule is scored on, whether or
 not its sentence was filtered. The scope set has no other reader in
 drift.ts. The 2026-10-18 audit's mutant M1 (drop the filter) is therefore
@@ -1144,35 +1147,62 @@ version`).
 Two classes of name blocked in 1.9.0 and passed in every 1.10 release
 until the 2026-11-01 audit's B1, and the 1.10.2 "Not restored" list named
 neither. Both are now reductions in `reductions`
-(`packages/core/src/tokenize.ts:481`), so each only adds a candidate form
+(`packages/core/src/tokenize.ts:499`), so each only adds a candidate form
 and never removes one, and the closed rule still needs some form to equal
 a changed file's basename or stem exactly.
 
-- A possessive. `POSSESSIVE_RE` (`packages/core/src/tokenize.ts:123`,
-  applied at `packages/core/src/tokenize.ts:505`) gives the form without a
-  trailing apostrophe and `s` or `S` (ASCII, or fullwidth U+FF53 and
-  U+FF33), after at least one other character, whose apostrophe may close
-  a quote of its own (`'Dockerfile''s`). The apostrophe is any of the
-  glyphs people type for one: ASCII, U+2019, U+2018, U+02BC (modifier
-  letter apostrophe), U+00B4 (acute accent, a German keyboard's apostrophe
-  key), U+2032 (prime), U+FF07 (fullwidth), a backtick, U+201B (reversed-9
-  quote), U+02B9 (modifier prime), U+055A (Armenian apostrophe), U+A78C
-  (saltillo), U+2035 (reversed prime), U+FF40 (fullwidth grave), U+02C8
-  (modifier vertical line), or an ASCII apostrophe followed by a combining
-  acute U+0301 (the 2026-11-06 audit's B1 and the review of its fix, N-C:
-  1.10.4 took only the first two and a lowercase `s`, so the rest passed
-  where 1.9.0 blocked). The pattern is built from code points, so the
-  source holds no invisible glyph. The form it
+- A possessive. The apostrophe is one glyph of the fixed set
+  `POSSESSIVE_APOSTROPHES` in `packages/core/src/tokenize.ts`, 31 glyphs:
+  ASCII, U+2019, U+2018, U+02BC (modifier letter apostrophe), U+00B4
+  (acute accent, a German keyboard's apostrophe key), U+2032 (prime),
+  U+FF07 (fullwidth), a backtick, U+201B (reversed-9 quote), U+02B9
+  (modifier prime), U+055A (Armenian apostrophe), U+A78C (saltillo),
+  U+2035 (reversed prime), U+FF40 (fullwidth grave), U+02C8 (modifier
+  vertical line), U+02BB (modifier turned comma), U+02BD (modifier
+  reversed comma), U+05F3 (Hebrew geresh), U+1FBF (Greek psili), U+1FBD
+  (Greek koronis), U+02EE (modifier double apostrophe), U+0313 (combining
+  comma above), U+2033 (double prime), U+275C (heavy comma quote ornament)
+  and U+FE10 (vertical comma presentation form), plus U+1FFD (Greek oxia),
+  U+1FEF (Greek varia), U+0343 (combining koronis) and U+0374 (Greek
+  numeral sign), the canonical equivalents of U+00B4, the backtick, U+0313
+  and U+02B9, U+A78B (capital saltillo) and U+275B (heavy turned comma
+  quote ornament). It is a set, not a Unicode
+  property: a glyph outside it is not read as an apostrophe, and a
+  combining mark between the name and the glyph is not read past. Two
+  reductions in `reductions` use it. `POSSESSIVE_RE` gives the form without
+  a trailing glyph of the set, any combining marks, an `s` or `S` (ASCII,
+  or fullwidth U+FF53 and U+FF33) and any combining marks, after at least
+  one other character; the glyph may close a quote of its own
+  (`'Dockerfile''s`). `TRAILING_APOSTROPHE_RE` gives the form without a
+  trailing glyph of the set and any combining marks after it, the plural
+  possessive (`Payments'`). `trimEdges` already removed the glyphs that are
+  punctuation or symbols there, but not the nine that are Unicode letters
+  (U+02BC, U+02B9, U+02C8, U+A78C, U+A78B, U+02BB, U+02BD, U+02EE,
+  U+0374), the combining U+0313 and U+0343, or any glyph followed by a
+  combining mark. History: 1.10.4 took
+  only ASCII and U+2019 with a lowercase `s` (the 2026-11-06 audit's B1);
+  1.10.5 took the first fifteen glyphs above, a combining acute after ASCII
+  only, and no plural for the letter glyphs (the 2026-11-08 re-grade's B1);
+  each of those passed where 1.9.0 blocked. The pattern is built from code
+  points, so the source holds no invisible glyph. The form it
   came from is kept, so a file whose own name ends in `'s` is still read
   whole. Because every reduction is applied again to every form, the
   possessive comes off before or after the edge trim, a backtick span, a
   quote or a paren: `PaymentProcessor's`, `` `router`'s ``, `'+layout's`,
-  `(PaymentProcessor's)` and `PaymentProcessor's.` all reach the stem. A
-  bare trailing apostrophe (`Payments'`) needs no reduction: it is an edge
-  character and `trimEdges` removes it.
+  `(PaymentProcessor's)` and `PaymentProcessor's.` all reach the stem.
+  Pinned in `packages/core/tests/file-name-rule.test.ts`, whose own list of
+  the class is written apart from the source: `holds the same glyph set as
+  the class this file lists, no wider and no narrower` compares the two;
+  `names the file with every generated singular possessive` and `names the
+  file with every generated plural possessive` cross every glyph, bare and
+  with each of three combining marks, and every `s` with and without a
+  mark, with plain, code span, italic, bold, sentence-end, CRLF and
+  uppercase contexts; `keeps every generated look-alike a pass` holds the
+  controls (`router's` against `routers.ts`, `Payments'` against
+  `Payment.ts`, a glyph followed by `x` or `ss`).
 - A code span is literal. `stripEmphasisOutsideCode`
   (`packages/core/src/tokenize.ts:93`, pushed at
-  `packages/core/src/tokenize.ts:498`) masks each backtick pair with a
+  `packages/core/src/tokenize.ts:516`) masks each backtick pair with a
   private-use character, removes one layer of paired emphasis with
   `EMPHASIS_RE`, and puts each span back with its backticks. So in
   `` _`__init__`_ `` only the outer underscores are emphasis, the form
@@ -1225,14 +1255,33 @@ at 71), every case of `blocks a possessive with an uppercase S: %j against
 %s`, `reads a lone backtick as literal inside emphasis, so an italic backtick
 possessive blocks`, `leaves a word that already holds a private-use character
 to the plain emphasis strip (2026-11-06 audit N7)`, and every case of `keeps a
-look-alike a pass: %j against %s`. The property test `names the file with a
-possessive after every wrapper (2026-11-01 audit B1)` now runs every glyph with
-both `s` and `S` after every wrapper. Mutations run on 2026-11-06 against
+look-alike a pass: %j against %s`. Mutations run on 2026-11-06 against
 `file-name-rule.test.ts`, `audit-2026-11-01.test.ts` and `drift.test.ts`: the
 1.10.4 pattern turns 18 red (the 15 glyph and uppercase cases, the italic
 backtick case, the N7 case's positive half and the property test); dropping
 the lone-backtick reading turns the italic case and the property test red;
 dropping the private-use guard turns the N7 case red.
+
+The 2026-11-08 widening (the ten further glyphs, combining marks, and the
+trailing-glyph reduction) is pinned in the same file by the `a possessive
+with any glyph of the apostrophe class names the file (2026-11-08 re-grade
+B1, generated)` group described above, by `holds the same glyph set as the
+class this file lists, no wider and no narrower`, and by the property test
+`names the file with a possessive after every wrapper (2026-11-01 audit
+B1)`, which now runs, after every wrapper, every glyph of the class with an
+`s`, with a combining mark and an `s` with a dot above, and bare; the `s`
+and the mark rotate with the wrapper, so across the wrappers every glyph
+meets each `s` and each mark. Mutations run on 2026-11-08 against
+`file-name-rule.test.ts`: dropping the ten glyphs turns 39 red; dropping the
+combining marks from `POSSESSIVE_RE` turns 10 red (every singular context
+and the property test); dropping them from `TRAILING_APOSTROPHE_RE` turns 7
+red (every plural context); dropping the trailing-glyph reduction turns 9
+red (every plural context, the end-to-end case and the property test).
+The review of that fix added the six glyphs U+1FFD, U+1FEF, U+0343,
+U+0374, U+A78B and U+275B to the source set and to the test's own list;
+dropping those six from the source turns 31 red (each glyph's two named
+cases, the set comparison, every generated singular and plural context,
+the end-to-end case and the property test).
 
 ## A gate with no contract and require-frozen off says nothing was checked
 
@@ -1312,10 +1361,10 @@ the text-mode test red.
 
 A pre-commit hook is the tool's own only when its second line, right after
 the shebang, is `# conductor-managed-pre-commit` (`isManagedHook`,
-`packages/core/src/hook.ts:64`); a hand-written hook that mentions the marker
+`packages/core/src/hook.ts:73`); a hand-written hook that mentions the marker
 anywhere else is foreign. A managed hook is rewritten only when its bytes
 equal the script this version renders, with or without vault-guard
-(`isUneditedManagedHook`, `packages/core/src/hook.ts:74`); anything else,
+(`isUneditedManagedHook`, `packages/core/src/hook.ts:83`); anything else,
 including a hook an older version rendered differently, differs from what
 this version writes and is refused as `managed_hook_edited` unless
 `--force`, which rewrites it and sets `discardedEdits`. A hook whose header
@@ -1324,20 +1373,71 @@ dropped is refused the same way, as `managed_hook_line_endings`, so the
 message says the line endings differ rather than calling it foreign.
 
 Whether to localize a `core.hooksPath` outside the repository is decided
-first (`packages/core/src/hook.ts:320`) but acted on only after the ownership
-check (`packages/core/src/hook.ts:340` through `packages/core/src/hook.ts:374`)
-has passed, and after the hook is written, at `packages/core/src/hook.ts:399`.
+first (`packages/core/src/hook.ts:376`) but acted on only after the ownership
+check (`packages/core/src/hook.ts:402` through `packages/core/src/hook.ts:436`)
+has passed, and after the hook is written, at `packages/core/src/hook.ts:463`.
 So a refusal, foreign or edited, changes neither the hook file nor
 `core.hooksPath`. A write that fails (a read-only hooks directory or hook
-file, `--force` included) is a refusal too, `hook_write_failed`, before
-`core.hooksPath` is touched; and when localizing fails after the write, the
-hook file is put back as it was (`restoreHook`) and the result is
-`hooks_path_localize_failed`. So `core.hooksPath` never points at a
-directory install left without its hook. When it does
-localize, the result carries `previousHooksPath` (`packages/core/src/hook.ts:421`),
+file, or a hooks path that runs through a file, `--force` included) is a
+refusal too, `hook_write_failed`, before `core.hooksPath` is touched, and
+the result's `error` carries the file system's own message, which `--human`
+prints, so the user is told the real cause; and when localizing fails after
+the write, the hook file is put back as it was (`restoreHook`) and the
+result is `hooks_path_localize_failed`. So `core.hooksPath` never points at
+a directory install left without its hook. When it does
+localize, the result carries `previousHooksPath` (`packages/core/src/hook.ts:486`),
 and `--human` names the shared `pre-commit` that no longer runs in the
-repository (`packages/skill/src/hook-cli.ts:113`). The managed hook does not
+repository (`packages/skill/src/hook-cli.ts:111`). The managed hook does not
 chain to the shared one.
+
+The hooks directory comes from git, not from joining `.git/hooks` onto the
+project root (the 2026-11-08 re-grade's N1). With no `core.hooksPath`,
+`resolveGitHooksDir` asks `git rev-parse --git-path hooks`
+(`defaultGitHooksDir` in `packages/core/src/hook.ts`), which is `.git/hooks`
+in a main checkout and the common git directory's `hooks` in a linked
+worktree, whose `.git` is a file; `doctor` reads the same function. A
+`core.hooksPath` that is set is read and resolved against the project root
+as before. Localizing targets the repository's own hooks directory,
+`git rev-parse --git-common-dir` plus `hooks` (`ownGitHooksDir`), and sets
+`core.hooksPath` to `.git/hooks` when that is where it is relative to the
+project root (a main checkout) and to its absolute path otherwise (a linked
+worktree, where a relative value would be read against the worktree). A
+`core.hooksPath` that already names that directory is not localized again.
+Not handled: a relative `core.hooksPath` of `.git/hooks`, as a main-checkout
+install writes it, names a path through the `.git` file in every linked
+worktree, so git runs no hook there and install from a linked worktree is
+refused as `hook_write_failed` with `ENOTDIR` as the cause. There is no
+`hook uninstall`; removal is deleting the hook file.
+
+Pinned in `packages/core/tests/hook.test.ts`, in the `hook install and doctor
+in a linked worktree (2026-11-08 re-grade N1)` group, on real `git worktree
+add` repositories: `installs into the common hooks directory, where git runs
+it from the linked worktree` (a commit in the linked worktree with no
+intent-guard on PATH is then refused by the installed hook), `lets doctor see
+the hook install wrote from the linked worktree`, `refuses a foreign hook in
+the common hooks directory from the linked worktree`, `localizes a
+machine-wide core.hooksPath to the common hooks directory, which runs in both
+checkouts`, and `names the real cause when the configured hooks directory
+cannot exist in the linked worktree`, with the controls `still installs into
+.git/hooks in the main checkout of the same repository` and `installs into an
+in-repo core.hooksPath of the linked worktree without localizing`; and
+through the binary in `packages/skill/tests/cli.test.ts` by `installs from a
+linked worktree into the common hooks directory (2026-11-08 re-grade N1)`,
+`says the core.hooksPath value it set from a linked worktree (2026-11-08
+re-grade N1)` and `names the real cause, not read-only permissions, when the
+hooks path runs through the worktree's .git file (2026-11-08 re-grade N1)`.
+Mutations run on 2026-11-08 against `hook.test.ts`: falling back to
+`.git/hooks` instead of asking git turns 3 red; dropping the own-directory
+check turns the localize test red (a second install localizes again); a
+relative `.git/hooks` value from a linked worktree turns the localize test
+red; a guessed error message turns the real-cause test red. The two
+real-cause tests also pin the Not handled refusal itself, which is a known
+gap and not a property; each is marked so in a comment, and a fix that
+repairs a relative `.git/hooks` from a linked worktree is meant to change
+them. Also not handled: the absolute value is a path, so moving or renaming
+the repository directory leaves `core.hooksPath` naming the old one and git
+runs no hook until `hook install` is re-run from a linked worktree; doctor
+does not warn about it.
 
 Pinned in `packages/core/tests/hook.test.ts` by `names the shared hooks
 directory it stops using when it localizes` and, in the `installPreCommitHook
@@ -1384,12 +1484,12 @@ js/polynomial-redos) on text a gate reads from a diff, a spec or an
 agent-written file are single linear passes in
 `packages/core/src/linear-text.ts`: `trimTrailing`
 (`packages/core/src/linear-text.ts:34`) for the segment trim in
-`slashJoinedFragments` (`packages/core/src/tokenize.ts:297`), the token
+`slashJoinedFragments` (`packages/core/src/tokenize.ts:315`), the token
 trim (`packages/core/src/path-suggestions.ts:52`), the trailing-slash trim
 (`packages/core/src/budget.ts:67`) and the item trim
 (`packages/core/src/extract.ts:202`); `slashFragmentMatches`
 (`packages/core/src/linear-text.ts:71`) for the path-fragment scan
-(`packages/core/src/tokenize.ts:292`); `stripTrailingParenthetical` and
+(`packages/core/src/tokenize.ts:310`); `stripTrailingParenthetical` and
 `stripTrailingColon` (`packages/core/src/linear-text.ts:83`,
 `packages/core/src/linear-text.ts:95`) for the heading-key trims
 (`packages/core/src/extract.ts:556`); `matchAtxHeading`, `matchBoldHeading`

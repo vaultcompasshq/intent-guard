@@ -218,9 +218,9 @@ runs:
         # workflow file from the HEAD, so the `version:` input is written by
         # the pull request being judged. The shape check above proves the
         # input names a version and says nothing about WHICH one: every
-        # published version clears it, and eighteen are published, 1.2.0
-        # through 1.10.4. They sit below the tag this action ships (1.10.5)
-        # and are already refused by it, but only by coincidence -- nothing
+        # published version clears it, from 1.2.0 up to the tag this action
+        # ships (1.2.0 is the first release under this package name). The ones
+        # below that tag were refused by it only by coincidence -- nothing
         # before this block made that a rule.
         #
         # The day a 1.11.0 gate ships with new checks, a pull request could pin

@@ -5,7 +5,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { IntentContract } from "@vaultcompass/intent-guard-schema";
 import { scoreDrift } from "../src/drift.js";
-import { mentionsChangedBasename, namesChangedFile, stripEmphasis } from "../src/tokenize.js";
+import {
+  POSSESSIVE_APOSTROPHE_SET,
+  mentionsChangedBasename,
+  namesChangedFile,
+  stripEmphasis,
+} from "../src/tokenize.js";
 
 // Non-ASCII characters are built from code points, so this file stays ASCII
 // and an invisible one (a zero-width space, a soft hyphen) is visible here.
@@ -347,6 +352,12 @@ describe("the basename safety net", () => {
 // an apostrophe: the left single quote, the modifier letter apostrophe, the
 // acute accent (a German keyboard's apostrophe key), the prime, the
 // fullwidth apostrophe and the backtick.
+//
+// This list is the test's own, written apart from the source: it is the
+// class of glyphs people type for an apostrophe, not a copy of the source's
+// set. A glyph the source drops turns the tests below red, and the source's
+// set must equal this class plus ASCII and U+2019 (the last test in this
+// block), so a glyph added there without a line here is red too.
 const POSSESSIVE_APOSTROPHES: Array<[string, string]> = [
   ["left single quote U+2018", cp(0x2018)],
   ["modifier letter apostrophe U+02BC", cp(0x02bc)],
@@ -363,8 +374,48 @@ const POSSESSIVE_APOSTROPHES: Array<[string, string]> = [
   ["reversed prime U+2035", cp(0x2035)],
   ["fullwidth grave U+FF40", cp(0xff40)],
   ["modifier vertical line U+02C8", cp(0x02c8)],
-  ["apostrophe with a combining acute U+0301", `'${cp(0x0301)}`],
+  // The 2026-11-08 re-grade (B1): named by no report before, each blocked in
+  // 1.9.0 and passed in 1.10.5.
+  ["modifier turned comma U+02BB", cp(0x02bb)],
+  ["modifier reversed comma U+02BD", cp(0x02bd)],
+  ["Hebrew geresh U+05F3", cp(0x05f3)],
+  ["Greek psili U+1FBF", cp(0x1fbf)],
+  ["Greek koronis U+1FBD", cp(0x1fbd)],
+  ["modifier double apostrophe U+02EE", cp(0x02ee)],
+  ["combining comma above U+0313", cp(0x0313)],
+  ["double prime U+2033", cp(0x2033)],
+  ["heavy comma quote ornament U+275C", cp(0x275c)],
+  ["vertical comma presentation form U+FE10", cp(0xfe10)],
+  // The review of the 2026-11-08 fix (R1): the canonical equivalents of
+  // four glyphs in this class (Greek oxia, varia, koronis and numeral sign), the
+  // capital saltillo, and the turned partner of U+275C.
+  ["Greek oxia U+1FFD", cp(0x1ffd)],
+  ["Greek varia U+1FEF", cp(0x1fef)],
+  ["combining koronis U+0343", cp(0x0343)],
+  ["Greek numeral sign U+0374", cp(0x0374)],
+  ["capital saltillo U+A78B", cp(0xa78b)],
+  ["heavy turned comma quote ornament U+275B", cp(0x275b)],
 ];
+
+// The whole class: the glyphs above plus the two the reader always took.
+const APOSTROPHE_CLASS: string[] = ["'", cp(0x2019), ...POSSESSIVE_APOSTROPHES.map(([, glyph]) => glyph)];
+// Combining marks a keyboard or an autocorrect can leave after the glyph or
+// after the s: acute, grave, dot above.
+const COMBINING_MARKS: string[] = [cp(0x0301), cp(0x0300), cp(0x0307)];
+// The s in either case, ASCII or fullwidth.
+const POSSESSIVE_ESSES: string[] = ["s", "S", cp(0xff53), cp(0xff33)];
+// Each glyph of the class bare and followed by each combining mark.
+const MARKED_APOSTROPHES: string[] = APOSTROPHE_CLASS.flatMap((glyph) => [
+  glyph,
+  ...COMBINING_MARKS.map((mark) => `${glyph}${mark}`),
+]);
+// Every singular possessive tail the class generates: each marked glyph,
+// then each s, bare and with a combining dot above.
+const GENERATED_POSSESSIVES: string[] = MARKED_APOSTROPHES.flatMap((apostrophe) =>
+  POSSESSIVE_ESSES.flatMap((s) => [`${apostrophe}${s}`, `${apostrophe}${s}${cp(0x0307)}`]),
+);
+const escapeCodePoints = (text: string): string =>
+  text.replace(/[^\x20-\x7e]/gu, (c) => `U+${(c.codePointAt(0) as number).toString(16).toUpperCase().padStart(4, "0")}`);
 
 describe("a possessive with any apostrophe glyph or an uppercase S blocks (2026-11-06 audit B1)", () => {
   it.each(POSSESSIVE_APOSTROPHES)("blocks PaymentProcessor's with the %s", (_label, glyph) => {
@@ -438,6 +489,100 @@ describe("a possessive with any apostrophe glyph or an uppercase S blocks (2026-
   ])("keeps a look-alike a pass: %j against %s", (rule, path) => {
     expect(namesChangedFile(rule, [path])).toBe(false);
     expect(scoreDrift(contractWith([rule]), { changedPaths: [path] }).action).toBe("proceed");
+  });
+
+  it("holds the same glyph set as the class this file lists, no wider and no narrower", () => {
+    expect([...POSSESSIVE_APOSTROPHE_SET].sort()).toEqual([...APOSTROPHE_CLASS].sort());
+  });
+});
+
+// The 2026-11-08 re-grade's B1: the fix for the 2026-11-06 B1 listed the
+// glyphs that report named, so a plural possessive with a glyph that is a
+// Unicode letter, ten glyphs no report named, and combining marks after the
+// glyph or the s all passed where 1.9.0 blocked. These tests generate the
+// class instead of naming cases: every glyph, with and without each combining
+// mark, every s, in every context below, singular and plural.
+const PP = "src/PaymentProcessor.ts";
+const SINGULAR_CONTEXTS: Array<[string, (p: string) => [string, string]]> = [
+  ["plain", (p) => [`Do not change PaymentProcessor${p} retry logic`, PP]],
+  ["code span", (p) => [`Do not change \`PaymentProcessor\`${p} retry logic`, PP]],
+  ["italic around", (p) => [`Do not change _PaymentProcessor${p}_ retry logic`, PP]],
+  ["italic before", (p) => [`Do not change _PaymentProcessor_${p} retry logic`, PP]],
+  ["bold around", (p) => [`Do not change **PaymentProcessor${p}** retry logic`, PP]],
+  ["sentence end", (p) => [`Leave the retry logic of PaymentProcessor${p}.`, PP]],
+  ["CRLF", (p) => [`Do not change PaymentProcessor${p} retry logic\r\n`, PP]],
+  ["router", (p) => [`Do not change the router${p} middleware`, "src/router.ts"]],
+  ["uppercase", (p) => [`DO NOT CHANGE THE ROUTER${p} MIDDLEWARE`, "src/ROUTER.ts"]],
+];
+const PLURAL_CONTEXTS: Array<[string, (a: string) => [string, string]]> = [
+  ["plain", (a) => [`Do not change the Payments${a} ledger`, "src/Payments.ts"]],
+  ["router", (a) => [`Do not change the routers${a} middleware`, "src/routers.ts"]],
+  ["sentence end", (a) => [`Do not change Payments${a}.`, "src/Payments.ts"]],
+  ["code span", (a) => [`Do not change \`Payments\`${a} ledger`, "src/Payments.ts"]],
+  ["bold around", (a) => [`Do not change **Payments${a}** ledger`, "src/Payments.ts"]],
+  ["CRLF", (a) => [`Do not change the Payments${a} ledger\r\n`, "src/Payments.ts"]],
+  ["uppercase", (a) => [`DO NOT CHANGE THE PAYMENTS${a} LEDGER`, "src/PAYMENTS.ts"]],
+];
+
+describe("a possessive with any glyph of the apostrophe class names the file (2026-11-08 re-grade B1, generated)", () => {
+  it.each(SINGULAR_CONTEXTS)("names the file with every generated singular possessive: %s", (_label, make) => {
+    const failures: string[] = [];
+    for (const possessive of GENERATED_POSSESSIVES) {
+      const [rule, path] = make(possessive);
+      if (!namesChangedFile(rule, [path])) failures.push(`${escapeCodePoints(rule)} / ${path}`);
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it.each(PLURAL_CONTEXTS)("names the file with every generated plural possessive: %s", (_label, make) => {
+    const failures: string[] = [];
+    for (const apostrophe of MARKED_APOSTROPHES) {
+      const [rule, path] = make(apostrophe);
+      if (!namesChangedFile(rule, [path])) failures.push(`${escapeCodePoints(rule)} / ${path}`);
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("blocks at 71 end to end for one singular and one plural of every glyph", () => {
+    const failures: string[] = [];
+    for (const glyph of APOSTROPHE_CLASS) {
+      for (const [rule, path] of [
+        [`Do not change PaymentProcessor${glyph}s retry logic`, PP],
+        [`Do not change the Payments${glyph} ledger`, "src/Payments.ts"],
+      ]) {
+        const result = scoreDrift(contractWith([rule]), { changedPaths: [path] });
+        if (result.action !== "soft_block" || result.overall !== 71) {
+          failures.push(`${escapeCodePoints(rule)}: ${result.action}/${result.overall}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("keeps every generated look-alike a pass", () => {
+    const failures: string[] = [];
+    for (const apostrophe of MARKED_APOSTROPHES) {
+      const cases: Array<[string, string]> = [
+        // Something other than an s after the glyph, or two of them.
+        [`Do not change PaymentProcessor${apostrophe}x retry logic`, PP],
+        [`Do not change PaymentProcessor${apostrophe}ss retry logic`, PP],
+        // The stem before the possessive is not the file's stem.
+        [`Do not change Payment${apostrophe}s retry logic`, PP],
+        // A plural possessive names the plural, never the singular.
+        [`Do not change the Payments${apostrophe} ledger`, "src/Payment.ts"],
+        // Case still counts.
+        [`Do not change the ROUTER${apostrophe}S middleware`, "src/Router.ts"],
+      ];
+      // Not the backtick: removing a lone backtick is its own reduction,
+      // which reads "router`s" as "routers" (see the look-alikes above).
+      if (!apostrophe.startsWith("`")) {
+        cases.push([`Do not change the router${apostrophe}s middleware`, "src/routers.ts"]);
+      }
+      for (const [rule, path] of cases) {
+        if (namesChangedFile(rule, [path])) failures.push(`${escapeCodePoints(rule)} / ${path}`);
+      }
+    }
+    expect(failures).toEqual([]);
   });
 });
 
@@ -811,12 +956,19 @@ const SUFFIXES = [
 const applies = (wrapName: string, name: string): boolean =>
   !(name.startsWith("_") && wrapName.includes("underscore"));
 
-// Every possessive form the reader accepts: each apostrophe glyph, with a
-// lowercase, an uppercase and a fullwidth s (2026-11-01 and 2026-11-06
-// audits, B1, and the review of the 2026-11-06 fix, N-C).
-const POSSESSIVE_FORMS: string[] = ["'", cp(0x2019), ...POSSESSIVE_APOSTROPHES.map(([, glyph]) => glyph)].flatMap(
-  (glyph) => [`${glyph}s`, `${glyph}S`, `${glyph}${cp(0xff53)}`, `${glyph}${cp(0xff33)}`],
-);
+// Possessive forms generated from the apostrophe class for the wrapper at
+// index `j`: every glyph with an s (2026-11-01 and 2026-11-06 audits, B1, and
+// the review of the 2026-11-06 fix, N-C); every glyph with a combining mark
+// after it and a dot above after the s; and every glyph bare, the plural
+// possessive (2026-11-08 re-grade, B1). The s and the mark rotate with the
+// wrapper, so across the wrappers every glyph meets every s and every mark;
+// the full glyph-by-mark-by-s product is in the generated block above.
+const possessiveForms = (j: number): string[] =>
+  APOSTROPHE_CLASS.flatMap((glyph, i) => [
+    `${glyph}${POSSESSIVE_ESSES[(i + j) % POSSESSIVE_ESSES.length]}`,
+    `${glyph}${COMBINING_MARKS[(i + j) % COMBINING_MARKS.length]}s${cp(0x0307)}`,
+    glyph,
+  ]);
 
 describe("a protected name in any combination of wrappers still names the file (property)", () => {
   it("names the file through every pair of wrappers, escaped or not, with a suffix", () => {
@@ -869,9 +1021,9 @@ describe("a protected name in any combination of wrappers still names the file (
     for (const [name, path] of PROTECTED) {
       // A glob has no possessive.
       if (name.startsWith("*")) continue;
-      for (const [wrapName, wrap] of WRAPS) {
+      for (const [j, [wrapName, wrap]] of WRAPS.entries()) {
         if (!applies(wrapName, name)) continue;
-        for (const possessive of POSSESSIVE_FORMS) {
+        for (const possessive of possessiveForms(j)) {
           for (const suffix of ["", ".", ")."]) {
             const rule = `Never touch ${wrap(`${name}${possessive}`)}${suffix} config`;
             const after = `Never touch ${wrap(name)}${possessive}${suffix} config`;
@@ -883,7 +1035,9 @@ describe("a protected name in any combination of wrappers still names the file (
       }
     }
     expect(failures).toEqual([]);
-  });
+    // Every glyph of the class after every wrapper: about 9 s locally and
+    // slower on hosted runners, so it gets its own limit.
+  }, 60_000);
 
   it("names the file inside an italic code span, underscore-led names included (2026-11-01 audit B1)", () => {
     const failures: string[] = [];
