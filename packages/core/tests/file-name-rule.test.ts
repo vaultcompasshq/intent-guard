@@ -1035,7 +1035,9 @@ describe("a protected name in any combination of wrappers still names the file (
       }
     }
     expect(failures).toEqual([]);
-  });
+    // Every glyph of the class after every wrapper: about 9 s locally and
+    // slower on hosted runners, so it gets its own limit.
+  }, 60_000);
 
   it("names the file inside an italic code span, underscore-led names included (2026-11-01 audit B1)", () => {
     const failures: string[] = [];
