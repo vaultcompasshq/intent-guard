@@ -12,10 +12,8 @@ const REASONS: Record<string, string> = {
     "The pre-commit hook carries the Intent Guard header but differs from the script this version writes (edited, or written by an older version), so it was not rewritten and nothing was changed. Re-run with --force to rewrite it (any edits are discarded), or remove the edits by hand and re-run.",
   managed_hook_line_endings:
     "The pre-commit hook carries the Intent Guard header, but its line endings differ (CRLF line endings or a byte-order mark), so it was not rewritten and nothing was changed. Convert it to LF line endings with no byte-order mark and re-run, or re-run with --force to rewrite it.",
-  hook_write_failed:
-    "The pre-commit hook could not be written (is the hooks directory or the hook file read-only?), so nothing was changed: not the hook, not core.hooksPath. Make it writable and re-run.",
   hooks_path_localize_failed:
-    "Could not set local core.hooksPath=.git/hooks (machine-wide hooksPath is outside this repo), so nothing was changed. Set it manually, then re-run.",
+    "Could not set local core.hooksPath to this repository's own hooks directory (machine-wide hooksPath is outside this repo), so nothing was changed. Set it manually, then re-run.",
 };
 
 const USAGE = `Usage: intent-guard hook install [flags]
@@ -102,7 +100,7 @@ if (args.human) {
     console.log(`Installed Intent Guard pre-commit hook at ${result.path}`);
     if (result.localizedHooksPath) {
       console.log(
-        "Set local core.hooksPath=.git/hooks so a machine-wide hooks directory is not overwritten.",
+        `Set local core.hooksPath=${result.hooksPathSetTo ?? ".git/hooks"} so a machine-wide hooks directory is not overwritten.`,
       );
       if (result.previousHooksPath) {
         // Saying so is the point: the shared hook stops running here, and
@@ -120,6 +118,12 @@ if (args.human) {
     }
     if (result.withVaultGuard) console.log("Paired with vault-guard secret scanning.");
     console.log("Bypass a single commit with: git commit --no-verify");
+  } else if (result.reason === "hook_write_failed") {
+    // The file system's own error, so the message names the real cause: a
+    // read-only directory or file, or a hooks path that runs through a file.
+    console.error(
+      `The pre-commit hook could not be written to ${result.path} (${result.error ?? "unknown error"}), so nothing was changed: not the hook, not core.hooksPath. Fix the cause and re-run.`,
+    );
   } else {
     console.error(REASONS[result.reason ?? ""] ?? `Could not install hook: ${result.reason}`);
   }

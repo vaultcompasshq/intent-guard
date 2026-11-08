@@ -7,6 +7,58 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A possessive with any of 31 apostrophe glyphs names the file, with
+  combining marks and in the plural.** Each of these blocked in 1.9.0 and
+  blocks again, so it can newly block you: `Do not change the Payments`
+  followed by U+02BC, U+02B9, U+A78C, U+02C8, U+0374 or U+A78B and
+  ` ledger` against `src/Payments.ts` (a plural possessive whose glyph is
+  a Unicode letter); `Do not change PaymentProcessor` followed by U+02BB,
+  U+02BD, U+05F3, U+1FBF, U+1FBD, U+02EE, U+0313, U+2033, U+275C, U+FE10,
+  U+1FFD, U+1FEF, U+0343, U+0374, U+A78B or U+275B and `s retry logic`
+  against `src/PaymentProcessor.ts`, also in a code span, italic, bold,
+  uppercase or a CRLF line (U+1FFD, U+1FEF, U+0343 and U+0374 are the
+  canonical equivalents of U+00B4, the backtick, U+0313 and U+02B9; U+A78B
+  is the capital saltillo); and any of the 31 glyphs followed by a
+  combining mark, or by an `s` followed by one (`'` with U+0300 or
+  U+0307, U+2019 with U+0301). The 1.10.5 entry said a possessive names
+  the file "with any apostrophe glyph people type for one"; it named the
+  file only with the fifteen glyphs it listed, a combining acute only after
+  ASCII, and for four of those glyphs never in the plural. That entry now
+  says which glyphs it covered. The test of the glyph class is now generated
+  from the test's own list of the class: every glyph, bare and with each of
+  three combining marks, with every `s`, singular and plural, in plain,
+  code span, italic, bold, sentence-end, CRLF and uppercase contexts, plus
+  generated look-alike controls; and the source's set must equal that list.
+  Not restored in this release, as in the 1.10.2 list, still a pass where
+  1.9.0 blocked: a possessive whose apostrophe is a glyph outside the 31
+  (U+2034 triple prime, U+02BE and U+02BF half rings, a combining mark
+  written alone, among others), and a combining mark between the name and
+  the apostrophe.
+- **`hook install` works in a linked worktree.** In a worktree made with
+  `git worktree add`, whose `.git` is a file, install now asks git for the
+  hooks directory (`git rev-parse --git-path hooks`) and writes the hook
+  into the common hooks directory that every worktree of the repository
+  shares, where git runs it; `doctor` reads the same directory. It used to
+  refuse there as `hook_write_failed` and blame read-only permissions. With
+  a machine-wide `core.hooksPath`, install from a linked worktree sets
+  `core.hooksPath` to the absolute common hooks directory, which works from
+  every checkout, and says the value it set (`hooksPathSetTo` in the JSON).
+  Because that value is absolute, moving or renaming the repository
+  directory leaves `core.hooksPath` naming the old path, and git then runs
+  no hook; after a move, run `git worktree repair` if the worktrees need it
+  and re-run `hook install` from a linked worktree, which sets the new
+  path. A write that still fails reports the file system's own error
+  (`error` in the JSON, and in the `--human` message) instead of guessing
+  at permissions. Not handled: a relative `core.hooksPath` of `.git/hooks`
+  (what a main-checkout install sets) runs no hook in a linked worktree,
+  and install there is refused with `ENOTDIR` as the cause.
+- **`check` says when it judged no changed path.** A run with a contract
+  and nothing to judge (no `--paths`, an empty `--staged`, or a `--base`
+  with no difference) prints `Intent Guard gate: ok, 0 changed paths
+  judged` instead of the bare ok line. The `--json` output is unchanged.
+
 ## [1.10.5] - 2026-11-07
 
 ### Changed
@@ -42,13 +94,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- A possessive names the file with any apostrophe glyph people type for
-  one (ASCII, U+2019, U+2018, U+02BC, U+00B4, U+2032, U+FF07, a
-  backtick, U+201B, U+02B9, U+055A, U+A78C, U+2035, U+FF40, U+02C8, or
-  an ASCII apostrophe with a combining acute U+0301) and with an
-  uppercase or fullwidth S, as in 1.9.0: `PaymentProcessor's`
-  written with any of them, or `ROUTER'S` against `ROUTER.ts`, blocks
-  again. A lone backtick inside emphasis is read as literal text.
+- A possessive names the file with any of these apostrophe glyphs (ASCII,
+  U+2019, U+2018, U+02BC, U+00B4, U+2032, U+FF07, a backtick, U+201B,
+  U+02B9, U+055A, U+A78C, U+2035, U+FF40, U+02C8, or an ASCII apostrophe
+  with a combining acute U+0301) and with an uppercase or fullwidth S, as
+  in 1.9.0: `PaymentProcessor's` written with any of them, or `ROUTER'S`
+  against `ROUTER.ts`, blocks again. A lone backtick inside emphasis is
+  read as literal text. Corrected after release: this entry said "any
+  apostrophe glyph people type for one"; other glyphs, other combining
+  marks, and a plural with U+02BC, U+02B9, U+A78C or U+02C8 still passed
+  where 1.9.0 blocked. See Unreleased.
 - The Action no longer says `gate ok` when nothing was checked: with no
   contract and `require-frozen: false` its last line says the run was
   skipped and nothing was checked, with the reason, in text and

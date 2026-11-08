@@ -234,6 +234,55 @@ describe("hook install names what it changes and refuses before changing anythin
       chmodSync(hooksDir, 0o755);
     }
   });
+
+  // The 2026-11-08 re-grade's N1: a linked worktree, whose .git is a file.
+  function linkedWorktree(): { main: string; linked: string } {
+    const main = gitRepo();
+    execFileSync(
+      "git",
+      ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "init"],
+      { cwd: main },
+    );
+    const linked = join(tmpProject(), "linked");
+    execFileSync("git", ["worktree", "add", "-q", linked, "-b", "side"], { cwd: main });
+    return { main, linked };
+  }
+
+  it("installs from a linked worktree into the common hooks directory (2026-11-08 re-grade N1)", async () => {
+    const { main, linked } = linkedWorktree();
+    const res = await run("hook-cli.js", ["install", "--project", linked, "--human"]);
+    expect(res.code).toBe(0);
+    expect(res.stderr).toBe("");
+    expect(res.stdout).toMatch(/Installed Intent Guard pre-commit hook at /);
+    expect(readFileSync(join(main, ".git", "hooks", "pre-commit"), "utf8")).toContain(
+      "conductor-managed-pre-commit",
+    );
+  });
+
+  it("says the core.hooksPath value it set from a linked worktree (2026-11-08 re-grade N1)", async () => {
+    const { main, linked } = linkedWorktree();
+    withSharedHooks(main);
+    const res = await run("hook-cli.js", ["install", "--project", linked, "--human"]);
+    expect(res.code).toBe(0);
+    const value = localHooksPath(main);
+    expect(value).not.toBe(".git/hooks");
+    expect(res.stdout).toContain(`Set local core.hooksPath=${value} `);
+  });
+
+  it("names the real cause, not read-only permissions, when the hooks path runs through the worktree's .git file (2026-11-08 re-grade N1)", async () => {
+    // KNOWN GAP, pinned on purpose: the refusal itself is the documented Not
+    // handled case; only the honest cause is a property. A fix that repairs
+    // a relative .git/hooks from a linked worktree is meant to change this
+    // test; keep the no-read-only-blame assertion when it does.
+    const { main, linked } = linkedWorktree();
+    execFileSync("git", ["config", "core.hooksPath", ".git/hooks"], { cwd: main });
+    const res = await run("hook-cli.js", ["install", "--project", linked, "--human"]);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toMatch(/could not be written/i);
+    expect(res.stderr).toMatch(/not a directory/i);
+    expect(res.stderr).not.toMatch(/read-only/i);
+    expect(res.stderr).toMatch(/nothing was changed/i);
+  });
 });
 
 describe("conductor-extract", () => {
@@ -949,6 +998,30 @@ describe("conductor-check (enforcement gate)", () => {
     expect(
       out.warnings.some((w: string) => w.includes("protected_paths") && w.includes("../x") && w.includes("2.0.0")),
     ).toBe(true);
+  });
+
+  // The 2026-11-08 re-grade's N2: a run that judged no changed path said a
+  // bare "gate ok", the same as a run that judged some.
+  it("says ok with 0 changed paths judged when no path was given, consistent with the JSON (2026-11-08 re-grade N2)", async () => {
+    const dir = await frozenProjectWith("Add CSV export to the reports page. Do not change billing.");
+    const text = await run("check-cli.js", ["--project", dir]);
+    expect(text.code).toBe(0);
+    expect(text.stdout.split("\n")[0]).toBe("✓ Intent Guard gate: ok, 0 changed paths judged");
+    // The JSON is unchanged: status ok, and no drift scored, which is what
+    // the text line now says.
+    const json = JSON.parse((await run("check-cli.js", ["--project", dir, "--json"])).stdout);
+    expect(json.status).toBe("ok");
+    expect(json.drift ?? null).toBeNull();
+    expect("skipReason" in json).toBe(false);
+
+    const one = await run("check-cli.js", ["--project", dir, "--paths", "src/reports/export.ts"]);
+    expect(one.code).toBe(0);
+    expect(one.stdout.split("\n")[0]).toBe("✓ Intent Guard gate: ok");
+    const oneJson = JSON.parse(
+      (await run("check-cli.js", ["--project", dir, "--paths", "src/reports/export.ts", "--json"])).stdout,
+    );
+    expect(oneJson.drift).not.toBeNull();
+    expect(oneJson.drift).toBeDefined();
   });
 
   it("prints the budget-path warning in check's plain-text output", async () => {

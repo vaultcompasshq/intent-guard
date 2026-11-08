@@ -493,6 +493,11 @@ the result carries a `skipReason` saying nothing was checked; no other
 result has that field. `report` prints the reason on a `Skipped:` line
 after `Status: ok`, and `report --json` carries it as `gate.skipReason`.
 
+A run with a contract but no changed path to judge (no `--paths`, an empty
+`--staged`, or a `--base` with no difference, such as `HEAD`) prints
+`Intent Guard gate: ok, 0 changed paths judged` instead of the bare ok line.
+The `--json` output is unchanged: status `"ok"`, and no drift scored.
+
 Exit 0 = ok, 1 = blocked, 2 = could not run: `--base` or `--trust-base` would
 not resolve or its value starts with a single dash such as `-S` (git would read
 it as an option), a control file or an archived contract the trust base lists
@@ -1018,12 +1023,29 @@ older version that renders differently counts as edited. A managed hook whose
 line endings differ (CRLF, or a leading byte-order mark) is refused the same
 way as `managed_hook_line_endings`; convert it to LF with no byte-order mark,
 or pass `--force`. A hook that cannot be written (a read-only hooks directory
-or hook file, with or without `--force`) is refused as `hook_write_failed`,
-also with nothing changed. Bypass a single commit with `git commit --no-verify`.
+or hook file, or a hooks path that runs through a file, with or without
+`--force`) is refused as `hook_write_failed`, also with nothing changed; the
+JSON `error` and the `--human` message carry the file system's own error.
+Bypass a single commit with `git commit --no-verify`.
+
+With no `core.hooksPath`, install asks git for the hooks directory
+(`git rev-parse --git-path hooks`): `.git/hooks` in a main checkout, and in a
+linked worktree (`git worktree add`, whose `.git` is a file) the common hooks
+directory that every worktree of the repository shares. `doctor` reads the
+same directory.
 
 When `core.hooksPath` points **outside** this repository (machine-wide hooks),
-install sets local `core.hooksPath=.git/hooks` and writes there so Git actually
-runs the gate without overwriting a shared hooks directory. It does so only
+install sets local `core.hooksPath` to the repository's own hooks directory
+and writes there so Git actually runs the gate without overwriting a shared
+hooks directory: `.git/hooks` from a main checkout, and from a linked worktree
+the common hooks directory as an absolute path, which every checkout of the
+repository reads (the JSON `hooksPathSetTo` carries the value). Because it
+is absolute, moving or renaming the repository directory leaves
+`core.hooksPath` naming the old path and git runs no hook; after a move, run
+`git worktree repair` if the worktrees need it and re-run `hook install`
+from a linked worktree, which sets the new path. In a linked
+worktree `git config` writes the repository's shared config, so the setting
+applies to every checkout either way. It does so only
 after the ownership check above has passed and the hook has been written; if
 setting `core.hooksPath` fails, the hook file is put back as it was and the
 install is refused as `hooks_path_localize_failed`. The shared directory's hooks then

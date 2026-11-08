@@ -848,7 +848,8 @@ describe(".github/workflows/release.yml wiring", () => {
     // With no "if:" the job takes the default success() and waits on both
     // prepare and release. An "if: always()" or similar would let it cut a
     // Release page announcing a publish that failed.
-    expect(githubReleaseText).not.toMatch(/^ {4}if:/m);
+    // A quoted key ("if": or 'if':) is the same key to YAML and to GitHub.
+    expect(githubReleaseText).not.toMatch(/^ {4}(?:if|"if"|'if') *:/m);
   });
 
   it("calls the decision script from a step with the id the conditions read", () => {

@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -41,8 +42,16 @@ export interface InstallHookResult {
   path: string;
   reason?: string;
   withVaultGuard: boolean;
-  /** True when install rewrote local core.hooksPath to `.git/hooks`. */
+  /**
+   * True when install rewrote local core.hooksPath to the repository's own
+   * hooks directory: `.git/hooks` from a main checkout, the common hooks
+   * directory as an absolute path from a linked worktree.
+   */
   localizedHooksPath?: boolean;
+  /** Set with localizedHooksPath: the value core.hooksPath was set to. */
+  hooksPathSetTo?: string;
+  /** With reason hook_write_failed: the file system error, code and message. */
+  error?: string;
   /**
    * Set with localizedHooksPath: the hooks directory core.hooksPath pointed
    * at before, as an absolute path. Its hooks no longer run in this
@@ -119,25 +128,67 @@ function isPathInside(parent: string, child: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
+/** A real path when the path exists, the resolved path otherwise. */
+function realOrResolved(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/**
+ * The hooks directory git uses in `projectRoot` when core.hooksPath is not
+ * set, from `git rev-parse --git-path hooks`: `.git/hooks` in a main
+ * checkout, and the common git directory's `hooks` in a linked worktree,
+ * whose `.git` is a file (the 2026-11-08 re-grade's N1). Null when git does
+ * not answer.
+ */
+function defaultGitHooksDir(projectRoot: string): { hooksDir: string; display: string } | null {
+  const result = spawnSync("git", ["rev-parse", "--git-path", "hooks"], {
+    cwd: projectRoot,
+    env: gitSpawnEnv(),
+    encoding: "utf8",
+  });
+  const out = result.status === 0 ? result.stdout.trim() : "";
+  if (!out) return null;
+  return { hooksDir: resolve(projectRoot, out), display: `${out}/pre-commit`.replace(/\\/g, "/") };
+}
+
+/**
+ * The repository's own hooks directory whatever core.hooksPath says: the
+ * common git directory's `hooks`, the same directory for the main checkout
+ * and every linked worktree. Null when git does not answer.
+ */
+function ownGitHooksDir(projectRoot: string): string | null {
+  const result = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+    cwd: projectRoot,
+    env: gitSpawnEnv(),
+    encoding: "utf8",
+  });
+  const out = result.status === 0 ? result.stdout.trim() : "";
+  return out ? join(resolve(projectRoot, out), "hooks") : null;
+}
+
 /**
  * Resolve the directory Git uses for hooks in this repo, matching doctor.
  * Only consults `core.hooksPath` when `projectRoot` is a usable git work tree
  * (avoids inheriting a machine-wide hooksPath into bare test fixtures).
+ * Without core.hooksPath, git is asked for the directory, so a linked
+ * worktree gets the common one.
  */
 export function resolveGitHooksDir(projectRoot: string): ResolvedHooksDir {
-  const defaultDir = join(projectRoot, ".git", "hooks");
+  const fallback: ResolvedHooksDir = {
+    hooksDir: join(projectRoot, ".git", "hooks"),
+    displayHookPath: ".git/hooks/pre-commit",
+    hooksPathConfig: null,
+  };
   const inside = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
     cwd: projectRoot,
     env: gitSpawnEnv(),
     encoding: "utf8",
   });
-  if (inside.status !== 0) {
-    return {
-      hooksDir: defaultDir,
-      displayHookPath: ".git/hooks/pre-commit",
-      hooksPathConfig: null,
-    };
-  }
+  if (inside.status !== 0) return fallback;
 
   const result = spawnSync("git", ["config", "--get", "core.hooksPath"], {
     cwd: projectRoot,
@@ -146,11 +197,10 @@ export function resolveGitHooksDir(projectRoot: string): ResolvedHooksDir {
   });
   const hooksPath = result.stdout?.trim() || "";
   if (!hooksPath) {
-    return {
-      hooksDir: defaultDir,
-      displayHookPath: ".git/hooks/pre-commit",
-      hooksPathConfig: null,
-    };
+    const asked = defaultGitHooksDir(projectRoot);
+    return asked
+      ? { hooksDir: asked.hooksDir, displayHookPath: asked.display, hooksPathConfig: null }
+      : fallback;
   }
 
   const hooksDir = isAbsolute(hooksPath)
@@ -315,19 +365,31 @@ export function installPreCommitHook(
         hooksPathConfig: null,
       };
 
+  // The repository's own hooks directory, the target of a localization. In
+  // a linked worktree it is outside the worktree, so a core.hooksPath that
+  // already names it is not a shared directory to localize away from.
+  const ownHooksDir = (usableGit ? ownGitHooksDir(projectRoot) : null) ?? join(gitDir, "hooks");
+  const namesOwnHooksDir = realOrResolved(resolved.hooksDir) === realOrResolved(ownHooksDir);
+
   // Decided here, acted on only after the ownership check below: a refused
   // install changes nothing, core.hooksPath included.
   const localize =
     usableGit &&
     preferLocal &&
     resolved.hooksPathConfig !== null &&
+    !namesOwnHooksDir &&
     !isPathInside(projectRoot, resolved.hooksDir);
   const previousHooksDir = resolved.hooksDir;
   if (localize) {
+    // From a main checkout the value stays `.git/hooks`, as before. From a
+    // linked worktree a relative value would be read against the worktree,
+    // whose `.git` is a file, so it is the absolute common hooks directory.
+    const relativeOwn = relative(realOrResolved(projectRoot), realOrResolved(ownHooksDir)).replace(/\\/g, "/");
+    const value = relativeOwn === ".git/hooks" ? ".git/hooks" : ownHooksDir;
     resolved = {
-      hooksDir: join(gitDir, "hooks"),
-      displayHookPath: ".git/hooks/pre-commit",
-      hooksPathConfig: ".git/hooks",
+      hooksDir: ownHooksDir,
+      displayHookPath: `${value}/pre-commit`.replace(/\\/g, "/"),
+      hooksPathConfig: value,
     };
   }
 
@@ -374,14 +436,15 @@ export function installPreCommitHook(
   }
 
   // The hook is written first and core.hooksPath changed last, so a write
-  // that fails (a read-only hooks directory or hook file) is a refusal that
-  // has changed nothing, and core.hooksPath never points at a directory
-  // with no hook in it.
+  // that fails (a read-only hooks directory or hook file, or a hooks path
+  // that runs through a file) is a refusal that has changed nothing, and
+  // core.hooksPath never points at a directory with no hook in it. The
+  // error itself is returned, so the message names the real cause.
   try {
     mkdirSync(resolved.hooksDir, { recursive: true });
     writeFileSync(hookPath, renderPreCommitHook(withVaultGuard), "utf8");
     chmodSync(hookPath, 0o755);
-  } catch {
+  } catch (err) {
     // A failed chmod after a successful write leaves the new bytes in
     // place, so the old ones go back; a failed open wrote nothing.
     restoreHook(hookPath, previous);
@@ -389,6 +452,7 @@ export function installPreCommitHook(
       installed: false,
       path: hookPath,
       reason: "hook_write_failed",
+      error: err instanceof Error ? err.message : String(err),
       withVaultGuard,
     };
   }
@@ -396,7 +460,7 @@ export function installPreCommitHook(
   if (localize) {
     const localized = spawnSync(
       "git",
-      ["config", "core.hooksPath", ".git/hooks"],
+      ["config", "core.hooksPath", resolved.hooksPathConfig as string],
       { cwd: projectRoot, env: gitSpawnEnv(), encoding: "utf8" },
     );
     if (localized.status !== 0) {
@@ -418,7 +482,9 @@ export function installPreCommitHook(
     path: hookPath,
     withVaultGuard,
     localizedHooksPath,
-    ...(localizedHooksPath ? { previousHooksPath: previousHooksDir } : {}),
+    ...(localizedHooksPath
+      ? { previousHooksPath: previousHooksDir, hooksPathSetTo: resolved.hooksPathConfig as string }
+      : {}),
     ...(discardedEdits ? { discardedEdits } : {}),
   };
 }
