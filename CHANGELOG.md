@@ -7,6 +7,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.10.6] - 2026-11-09
+
 ### Fixed
 
 - **A possessive with any of 31 apostrophe glyphs names the file, with
@@ -103,7 +105,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   read as literal text. Corrected after release: this entry said "any
   apostrophe glyph people type for one"; other glyphs, other combining
   marks, and a plural with U+02BC, U+02B9, U+A78C or U+02C8 still passed
-  where 1.9.0 blocked. See Unreleased.
+  where 1.9.0 blocked. See 1.10.6.
 - The Action no longer says `gate ok` when nothing was checked: with no
   contract and `require-frozen: false` its last line says the run was
   skipped and nothing was checked, with the reason, in text and
