@@ -40,11 +40,11 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "@vaultcompass/conductor": "0.18.0",
-    "@vaultcompass/dep-guard": "0.18.2",
+    "@vaultcompass/conductor": "0.18.1",
+    "@vaultcompass/dep-guard": "0.20.0",
     "@vaultcompass/intent-guard": "1.10.6",
     "@vaultcompass/intent-guard-schema": "workspace:*",
-    "@vaultcompass/vault-guard": "1.13.1",
+    "@vaultcompass/vault-guard": "1.13.3",
     "vitest": "^4.1.12",
     "yaml": "^2.9.1"
   }

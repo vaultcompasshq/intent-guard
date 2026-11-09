@@ -10,6 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - The CI gate pin and the intent-guard devDependency move to intent-guard 1.10.6. The conductor, dep-guard and vault-guard pins are unchanged.
+- The CI conductor action pin and the @vaultcompass/conductor devDependency move to 0.18.1, and the dep-guard and vault-guard devDependencies move to 0.20.0 and 1.13.3, the versions conductor 0.18.1 expects on a push run.
 
 ## [1.10.6] - 2026-11-09
 
