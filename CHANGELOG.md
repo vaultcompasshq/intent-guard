@@ -7,6 +7,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+
+- The CI gate pin and the intent-guard devDependency move to intent-guard 1.10.6. The conductor, dep-guard and vault-guard pins are unchanged.
+
 ## [1.10.6] - 2026-11-09
 
 ### Fixed

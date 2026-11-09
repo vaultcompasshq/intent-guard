@@ -22,8 +22,8 @@ importers:
         specifier: 0.18.2
         version: 0.18.2
       '@vaultcompass/intent-guard':
-        specifier: 1.10.4
-        version: 1.10.4
+        specifier: 1.10.6
+        version: 1.10.6
       '@vaultcompass/intent-guard-schema':
         specifier: workspace:*
         version: link:packages/schema
@@ -276,7 +276,6 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-android-arm-eabi@4.64.10':
     resolution: {integrity: sha512-oJ9ZfVIZjSjts0ZIYA48+5T0vurE5fQfX/Liad2U52Y6EN99x/OCdjGGuKMDP6jSk2i2lY6jwwA3X0drEc4PBg==}
@@ -312,79 +311,66 @@ packages:
     resolution: {integrity: sha512-ble2WR7kWfzZFJUd3ODMGCJn1XDszptfRC0QvWc0h9/EA6MxnrQ1mvbjPZifEdgHyfHhDrwWeKeJONDITcrHSg==}
     cpu: [arm]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-arm-musleabihf@4.64.10':
     resolution: {integrity: sha512-DMCYegihxBMKvLpODdk4OsvIgxtHTi+Oddf1Pm3d6wMVNjcBiG2pqyXjMPy55HgG1gCdEFr9VfhB1CmvuKn1lw==}
     cpu: [arm]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-arm64-gnu@4.64.10':
     resolution: {integrity: sha512-HQ6HuVH9TmhvPWIas7MA/KeAROgdwqH3REpUU6hZq47NW7m1b1QCrHgM+M3+N/B8DfMt88x1/z79ppRc9RflCQ==}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-arm64-musl@4.64.10':
     resolution: {integrity: sha512-avBhxba1DdctX0kxKkN3JWdTSg72QsxSn6FdfhZ9MkL3TTYDOXqxY1GqbC7VNttlgviK7tCe2No5btfRkFgeIg==}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-loong64-gnu@4.64.10':
     resolution: {integrity: sha512-UtQMex7fiXq0W/GqcWRpy6XKqUbXgQeGKB+Bd5rJngmHzpI+3kjwpWFLAhKg02onFsIMSh+Zx0zp9JIMQ7/05A==}
     cpu: [loong64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-loong64-musl@4.64.10':
     resolution: {integrity: sha512-0Aum2pUsCSuOopi6oka+nR1DTj/nfvc1xjL979lvh6kXUjNa30TCX7sKFjyMsrX7bK3bNVs0FsJwQcE2HCWX1Q==}
     cpu: [loong64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-ppc64-gnu@4.64.10':
     resolution: {integrity: sha512-4dgsouKal3qfMFORgtNigLPt7K3HXiO6jTr7+nFJv1GWu1OkZx0kvQIXbK4sjrIGnaLBk0s80eQCQ9hPIelLrw==}
     cpu: [ppc64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-ppc64-musl@4.64.10':
     resolution: {integrity: sha512-d7NE89try3jisYzBD7J9M5iwfgcrXYC4dwHEjQ3HIWBftvwch1U/cy3iZ26SthtUOyClKiu7iqYiFjQEwiOlqQ==}
     cpu: [ppc64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-riscv64-gnu@4.64.10':
     resolution: {integrity: sha512-dqB5ChSBp91JWXxpCKAS5ZVAE38esKQvdfyqANm0lF5JPiQrXnYwgG3oVBQmuNRcQ1WHkA3j5qYLsrl2CtfhCA==}
     cpu: [riscv64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-riscv64-musl@4.64.10':
     resolution: {integrity: sha512-7GMf3vbQQslorWLmfsbi5fdt9RVnglk205XpOMFvW6UY5jE5oJc6JLieQJPHtsYlZ2EO0PtC06nY9Hz/IG8guw==}
     cpu: [riscv64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-linux-s390x-gnu@4.64.10':
     resolution: {integrity: sha512-tuKbkB23DKc5LG+irPSUnZZztRHqC3CNmyxeWloueBteHB+i+1HkRCMzAE41lseLDlarybeLhqfibFitKOxKMg==}
     cpu: [s390x]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-x64-gnu@4.64.10':
     resolution: {integrity: sha512-ntHtQOMw7oIshHRF1swV3vyBw+beQt9PeZ04O3D32EeDZUMoHMJuZKp4/fDllH/+xogeK0GUCONVfjjKusqKLg==}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@rollup/rollup-linux-x64-musl@4.64.10':
     resolution: {integrity: sha512-Dlh8q8r145aYgh+N3gNIG1dz35Fz/FCxe5hs/43orDsffjP8S1P4Xz5I4FpSJsDS4LpQw1QmswZkQlUbkCldjQ==}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@rollup/rollup-openbsd-x64@4.64.10':
     resolution: {integrity: sha512-VBJhHWz/55u45CWFv9OmfSRDgJDVENESgFxSAn13gIKJpTuFJbP4/7ymMZhDfeKFx1zGn1XBsLnNB7Ryy71qww==}
@@ -445,18 +431,18 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
-  '@vaultcompass/intent-guard-core@1.10.4':
-    resolution: {integrity: sha512-GbFdRmLNtESsJ89CCb9+11XaDO662b0wW1tnL1ybeH8S/TxgSRyAv//50vjFz0bBBiFXtgV4jY+z7MZZA/D2Ww==}
+  '@vaultcompass/intent-guard-core@1.10.6':
+    resolution: {integrity: sha512-eguY2kCBLZPscCYSfPLt4LN/FEYfRSQE4JiPYZ+IKCGtIvOsIEvKFjdmP/NMpTzxjpGCflBiW2U+a1W/Y2wSOA==}
 
-  '@vaultcompass/intent-guard-schema@1.10.4':
-    resolution: {integrity: sha512-/+jhh4/x3WAgXegIUy/9BzMVI7R25Xn6qkEOvB94oPTmxzto+NA6o88wWgONlqMGVoiPDsXzlClFWH2lxjWrfA==}
+  '@vaultcompass/intent-guard-schema@1.10.6':
+    resolution: {integrity: sha512-seyN68/jeuefVGuq+PsEYCvkx7RiG6l2RK15LeiGQ+KPN3XbC/TVpDZEyI09Y9Uyv9NLimvK8J6Z7qK631F+ZQ==}
 
-  '@vaultcompass/intent-guard-skill@1.10.4':
-    resolution: {integrity: sha512-OLZL4yqjbzyRZLrbJfRLZnum5F1GrNT9aseBKIuQrEsZ3wbfXMZEOr0DPLEZHwAOKeNnPQd68ge3KbogOOXu7A==}
+  '@vaultcompass/intent-guard-skill@1.10.6':
+    resolution: {integrity: sha512-0I0O4/YNyL7XAP/m2a09hCUeyZ18Zh5TEh6SUuIIHCSFk7IhEv+c3ol8WB08UXSRz2S0UR5QYXUJOTlrr7zlEA==}
     hasBin: true
 
-  '@vaultcompass/intent-guard@1.10.4':
-    resolution: {integrity: sha512-Q23cer4p0QSoWeGgvVveN9qqD99EsotFveB1Vzlh/SUloJaLdbgFaLwPHll27exM2jO+x1ZUkPHEuFO9/rPG+Q==}
+  '@vaultcompass/intent-guard@1.10.6':
+    resolution: {integrity: sha512-kCWV12fTct3ZKJJxECLV+OQ6QY/BlqbMvfycBSQ8Co+1wwa+fUWm3Tkl+vnMiEUn4fAFliieMN2EIphkHCdAAg==}
     hasBin: true
 
   '@vaultcompass/vault-guard-core@1.13.1':
@@ -957,25 +943,25 @@ snapshots:
       '@vaultcompass/dep-guard-core': 0.18.2
       commander: 12.1.0
 
-  '@vaultcompass/intent-guard-core@1.10.4':
+  '@vaultcompass/intent-guard-core@1.10.6':
     dependencies:
-      '@vaultcompass/intent-guard-schema': 1.10.4
+      '@vaultcompass/intent-guard-schema': 1.10.6
       yaml: 2.9.1
 
-  '@vaultcompass/intent-guard-schema@1.10.4':
+  '@vaultcompass/intent-guard-schema@1.10.6':
     dependencies:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
 
-  '@vaultcompass/intent-guard-skill@1.10.4':
+  '@vaultcompass/intent-guard-skill@1.10.6':
     dependencies:
-      '@vaultcompass/intent-guard-core': 1.10.4
-      '@vaultcompass/intent-guard-schema': 1.10.4
+      '@vaultcompass/intent-guard-core': 1.10.6
+      '@vaultcompass/intent-guard-schema': 1.10.6
       yaml: 2.9.1
 
-  '@vaultcompass/intent-guard@1.10.4':
+  '@vaultcompass/intent-guard@1.10.6':
     dependencies:
-      '@vaultcompass/intent-guard-skill': 1.10.4
+      '@vaultcompass/intent-guard-skill': 1.10.6
 
   '@vaultcompass/vault-guard-core@1.13.1':
     dependencies:
